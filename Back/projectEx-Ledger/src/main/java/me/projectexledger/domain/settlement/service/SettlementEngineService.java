@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,7 +39,6 @@ public class SettlementEngineService {
 
     public DashboardSummaryDTO getDashboardSummary() {
         BigDecimal totalAmount = settlementRepository.sumTotalSettlementAmountByStatus(SettlementStatus.COMPLETED);
-        // 🚨 DashboardSummaryDTO의 빌더를 사용하여 데이터를 조립합니다.
         return DashboardSummaryDTO.builder()
                 .totalPaymentAmount(totalAmount != null ? totalAmount : BigDecimal.ZERO)
                 .totalRemittanceCount(settlementRepository.count())
@@ -46,33 +46,51 @@ public class SettlementEngineService {
                 .pendingRemittanceCount(settlementRepository.countByStatus(SettlementStatus.PENDING))
                 .failedRemittanceCount(settlementRepository.countByStatus(SettlementStatus.FAILED))
                 .discrepancyCount(settlementRepository.countByStatus(SettlementStatus.DISCREPANCY))
+                .inProgressRemittanceCount(settlementRepository.countByStatus(SettlementStatus.IN_PROGRESS))
+                .waitingRemittanceCount(settlementRepository.countByStatus(SettlementStatus.WAITING))
                 .build();
     }
 
     @Transactional
     public void processDailySettlement(String targetDate) {
+        log.info("[Settlement] {} 일자 포트원 정산 데이터 동기화 시작", targetDate);
         PortOnePaymentResponse response = portOneClient.getPayments(targetDate, targetDate, 0, 100);
 
+        BigDecimal liveUsdRate = exchangeRateCalculator.getUsdExchangeRate();
+        log.info("[Settlement] 오늘자 실시간 USD 환율 적용: {}원", liveUsdRate);
+
         response.getItems().forEach(item -> {
-            // 🚨 [해결] item.getId()로 호출 (DTO가 클래스 방식일 때 가장 안정적)
             if (settlementRepository.existsByOrderId(item.getId())) return;
 
             String clientName = (item.getCustomer() != null && item.getCustomer().getName() != null)
                     ? item.getCustomer().getName() : "익명 고객";
 
             BigDecimal totalAmount = item.getAmount().getTotal();
-            BigDecimal settlementAmount = totalAmount.multiply(new BigDecimal("1350.50"));
+            String currency = item.getCurrency();
+            BigDecimal settlementAmount;
+
+            if ("USD".equalsIgnoreCase(currency)) {
+                settlementAmount = totalAmount.multiply(liveUsdRate).setScale(0, RoundingMode.HALF_UP);
+                log.info("[Settlement] USD 결제 변환: {} USD -> {} KRW (주문번호: {})", totalAmount, settlementAmount, item.getId());
+            } else {
+                settlementAmount = totalAmount;
+            }
 
             settlementRepository.save(Settlement.builder()
                     .orderId(item.getId())
                     .transactionId(item.getId())
                     .clientName(clientName)
                     .amount(totalAmount)
-                    .currency(item.getCurrency())
+                    .currency(currency)
                     .settlementAmount(settlementAmount)
+                    .baseRate(liveUsdRate)
+                    .finalAppliedRate(liveUsdRate)
+                    .preferredRate(BigDecimal.ZERO)
+                    .spreadFee(BigDecimal.ZERO)
                     .status(SettlementStatus.PENDING)
                     .build());
         });
+        log.info("[Settlement] 정산 데이터 동기화 완료");
     }
 
     public List<ReconciliationListDTO> getReconciliationList(int page, int size) {
@@ -82,8 +100,8 @@ public class SettlementEngineService {
         return settlements.stream().map(s -> ReconciliationListDTO.builder()
                 .id(s.getId())
                 .orderId(s.getOrderId())
-                .clientName(s.getClientName())      // 🚨 TSX 틀 유지
-                .originalAmount(s.getAmount())      // 🚨 TSX 틀 유지
+                .clientName(s.getClientName())
+                .originalAmount(s.getAmount())
                 .settlementAmount(s.getSettlementAmount())
                 .status(s.getStatus().name())
                 .updatedAt(s.getUpdatedAt() != null ?
@@ -108,5 +126,25 @@ public class SettlementEngineService {
             settlement.updateStatus(SettlementStatus.FAILED);
             remittanceHistoryRepository.save(RemittanceHistory.builder().settlement(settlement).status("FAILED").errorMessage(e.getMessage()).attemptCount(2).build());
         }
+    }
+
+    // 🚨 [핵심 추가] 테스트 결제 데이터를 강제로 DB에 밀어넣는 메서드입니다!
+    @Transactional
+    public void createTestSettlement(String orderId, String clientName, BigDecimal amount, String currency, SettlementStatus status) {
+        // DB 제약조건(NOT NULL)을 피하기 위해 환율 관련 필드들에 기본값을 꽉꽉 채웠습니다.
+        settlementRepository.save(Settlement.builder()
+                .orderId(orderId)
+                .transactionId("TX-" + System.currentTimeMillis())
+                .clientName(clientName)
+                .amount(amount)
+                .currency(currency)
+                .settlementAmount(amount)
+                .baseRate(BigDecimal.ONE)
+                .finalAppliedRate(BigDecimal.ONE)
+                .preferredRate(BigDecimal.ZERO)
+                .spreadFee(BigDecimal.ZERO)
+                .status(status)
+                .build());
+        log.info("[Test] 테스트 결제 데이터 저장 완료: {}", orderId);
     }
 }

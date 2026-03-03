@@ -39,5 +39,3 @@ out/
 # Ignore secret application properties
 secret.properties
 
-#test (A = maando)
-test.html

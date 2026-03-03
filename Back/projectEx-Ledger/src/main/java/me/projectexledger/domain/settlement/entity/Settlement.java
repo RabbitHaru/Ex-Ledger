@@ -35,6 +35,19 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal settlementAmount;
 
+    @Column(name = "base_rate", precision = 19, scale = 4)
+    private BigDecimal baseRate;
+
+    @Column(name = "final_applied_rate", precision = 19, scale = 4)
+    private BigDecimal finalAppliedRate;
+
+    @Column(name = "preferred_rate", precision = 19, scale = 4)
+    private BigDecimal preferredRate;
+
+    // 🚨 [추가] 환전 수수료(스프레드) 저장 변수
+    @Column(name = "spread_fee", precision = 19, scale = 4)
+    private BigDecimal spreadFee;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SettlementStatus status;
@@ -42,9 +55,11 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
     @Column(name = "resolution_reason", length = 500)
     private String resolutionReason;
 
+    // 🚨 [수정] 빌더에 spreadFee 추가
     @Builder
     public Settlement(String orderId, String transactionId, String clientName, BigDecimal amount,
-                      String currency, BigDecimal settlementAmount, SettlementStatus status) {
+                      String currency, BigDecimal settlementAmount, SettlementStatus status,
+                      BigDecimal baseRate, BigDecimal finalAppliedRate, BigDecimal preferredRate, BigDecimal spreadFee) {
         this.orderId = orderId;
         this.transactionId = transactionId;
         this.clientName = clientName;
@@ -52,6 +67,10 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
         this.currency = currency;
         this.settlementAmount = settlementAmount;
         this.status = status;
+        this.baseRate = baseRate;
+        this.finalAppliedRate = finalAppliedRate;
+        this.preferredRate = preferredRate;
+        this.spreadFee = spreadFee; // 🚨 추가
     }
 
     @Override public String getTransactionId() { return this.orderId; }

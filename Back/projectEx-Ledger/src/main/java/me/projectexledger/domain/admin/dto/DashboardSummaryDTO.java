@@ -14,4 +14,6 @@ public class DashboardSummaryDTO {
     private long pendingRemittanceCount;
     private long failedRemittanceCount;
     private long discrepancyCount;
+    private long inProgressRemittanceCount; // 송금 중
+    private long waitingRemittanceCount;    // 승인 대기
 }

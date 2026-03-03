@@ -6,6 +6,7 @@ import me.projectexledger.common.dto.ApiResponse;
 import me.projectexledger.domain.admin.dto.DashboardSummaryDTO;
 import me.projectexledger.domain.settlement.dto.ReconciliationListDTO;
 import me.projectexledger.domain.settlement.dto.SettlementPolicyUpdateRequest;
+import me.projectexledger.domain.settlement.entity.SettlementStatus;
 import me.projectexledger.domain.settlement.service.SettlementEngineService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -70,5 +71,14 @@ public class AdminSettlementController {
             @RequestBody SettlementPolicyUpdateRequest request) {
         log.info("[Admin] {} 가맹점의 정산 수수료 정책 업데이트 요청", merchantId);
         return ResponseEntity.ok(ApiResponse.success("수수료 정책이 성공적으로 반영되었습니다.", null));
+    }
+    @PostMapping("/test-data")
+    public ResponseEntity<ApiResponse<String>> createTestData(@RequestParam SettlementStatus status) {
+        String uniqueOrderId = "T-ORDER-" + System.currentTimeMillis();
+        // 1004원 결제건을 강제로 DB에 넣는 테스트 로직
+        settlementEngineService.createTestSettlement(
+                uniqueOrderId, "익명 기업", new BigDecimal("1004"), "KRW", status
+        );
+        return ResponseEntity.ok(ApiResponse.success("테스트 데이터 생성 완료!", null));
     }
 }

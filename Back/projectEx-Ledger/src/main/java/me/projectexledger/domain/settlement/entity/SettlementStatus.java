@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum SettlementStatus {
-
+    WAITING("승인 대기"),
     PENDING("송금 대기"),
     IN_PROGRESS("송금 중"),
     COMPLETED("정산 완료"),
