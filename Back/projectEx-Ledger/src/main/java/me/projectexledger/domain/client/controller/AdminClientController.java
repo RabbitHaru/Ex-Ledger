@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
-@RequestMapping("/admin/clients")
+@RequestMapping("/api/admin/clients")
 @RequiredArgsConstructor
 // @PreAuthorize("hasRole('ADMIN')") // 임시 추석 처리
 public class AdminClientController {

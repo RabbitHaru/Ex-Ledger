@@ -17,12 +17,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor // 안전한 직렬화/역직렬화를 위한 기본 생성자
 @AllArgsConstructor // Builder 패턴이 정상 동작하기 위한 전체 생성자
 public class ReconciliationListDTO {
-
+    private Long id;
     private String orderId;          // 포트원 대조용 주문번호
-    private String clientName;       // 기업명
+    private String clientName;// 기업명
     private BigDecimal amount;       // 내부 DB 결제 원금 (정산 시스템 필수 타입)
+    private BigDecimal originalAmount;
+    private BigDecimal settlementAmount;
     private String status;           // 내부 결제 상태 (COMPLETED, FAILED 등)
-    private String reconResult;      // 대조 결과 (MATCH: 일치, DISCREPANCY: 불일치)
-    private LocalDateTime createdAt; // 결제 발생 일시
+    private String updatedAt;
 
 }

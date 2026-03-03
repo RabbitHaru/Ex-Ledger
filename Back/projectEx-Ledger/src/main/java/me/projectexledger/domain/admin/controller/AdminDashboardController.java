@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
  * AdminDashboard.tsx에 전체 결제 합계 및 송금 현황 요약을 전달합니다.
  */
 @RestController
-@RequestMapping("/admin/dashboard")
+@RequestMapping("/api/admin/dashboard")
 @RequiredArgsConstructor
 public class AdminDashboardController {
 

@@ -1,35 +1,40 @@
 package me.projectexledger.domain.settlement.api;
 
+import lombok.extern.slf4j.Slf4j;
 import me.projectexledger.infrastructure.external.portone.dto.PortOnePaymentResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-// 💡 팁: 이제 UriComponentsBuilder는 아예 import 할 필요도 없습니다!
-
+@Slf4j
 @Component
 public class PortOneClient {
 
     private final RestClient restClient;
-    private final String apiUrl;
 
-    // 1. 빨간줄 해결: Builder 주입 대신 RestClient.create()로 직접 생성합니다.
-    public PortOneClient(@Value("${external.portone.api-url}") String apiUrl) {
-        this.restClient = RestClient.create();
-        this.apiUrl = apiUrl;
+    public PortOneClient(
+            @Value("${external.portone.api-url}") String apiUrl,
+            @Value("${portone.api.secret}") String apiSecret) {
+
+        // 🚨 시크릿 키 공백 제거 및 헤더 고정 설정 (401 에러 원천 차단)
+        this.restClient = RestClient.builder()
+                .baseUrl(apiUrl)
+                .defaultHeader("Authorization", "PortOne " + apiSecret.trim())
+                .build();
     }
 
-    public PortOnePaymentResponse getPayments(String authToken, String from, String to, int page, int size) {
+    public PortOnePaymentResponse getPayments(String from, String to, int page, int size) {
+        log.info("[PortOneClient] 결제 내역 조회 요청 - From: {}", from);
 
-        // 2. 빨간줄 해결: fromHttpUrl 대신 RestClient가 자체 지원하는 내장 uri 빌더를 씁니다.
         return restClient.get()
-                .uri(apiUrl + "/payments", uriBuilder -> uriBuilder
-                        .queryParam("from", from)
-                        .queryParam("to", to)
+                .uri(uriBuilder -> uriBuilder
+                        .path("/payments")
+                        // 🚨 포트원 V2 날짜 규격 강제 지정
+                        .queryParam("from", from + "T00:00:00Z")
+                        .queryParam("to", to + "T23:59:59Z")
                         .queryParam("page", page)
                         .queryParam("size", size)
                         .build())
-                .header("Authorization", authToken) // "Bearer {secret_key}"
                 .retrieve()
                 .body(PortOnePaymentResponse.class);
     }

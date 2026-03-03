@@ -14,28 +14,33 @@ import MFASetup from '../components/pages/auth/MFASetup';
 // Admin System Pages
 import AdminLogList from '../components/pages/admin/system/AdminLogList';
 import SystemHealth from '../components/pages/admin/system/SystemHealth';
+import AdminDashboard from '../pages/admin/AdminDashboard';
+import ReconciliationList from '../pages/admin/ReconciliationList';
 
-// 임시 페이지 컴포넌트
-const DummyHome = () => <div className="p-4">Home (Dashboard)</div>;
 
 const AppRoutes = () => {
     return (
         <Routes>
             {/* 누구나 접근 가능한 기본 렌딩 페이지 */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/dashboard" element={<AdminDashboard />} />
+            <Route path="/list" element={<ReconciliationList />} />
 
             {/* 인증 불필요 라우트 */}
             <Route element={<AuthLayout />}>
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignupPage />} />
                 <Route path="/auth/mfa" element={<MFASetup />} />
+                
+                
             </Route>
 
             {/* 보안/인증 필요 라우트 */}
             <Route element={<ProtectedRoute />}>
                 <Route element={<RootLayout />}>
                     {/* 일반 로그인 사용자 접근 가능 (User, Company Admin, Integrated Admin) */}
-                    <Route path="/dashboard" element={<DummyHome />} />
+                   
+                    
                     <Route path="/settlement" element={<div className="p-4">Settlement</div>} />
 
                     {/* 관리자(Admin) 전용 라우트 */}

@@ -1,34 +1,50 @@
 package me.projectexledger.infrastructure.external.portone.dto;
 
-import lombok.Builder;
+import lombok.*;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * 포트원 V2 결제 내역 조회 응답 DTO
- */
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
-public record PortOnePaymentResponse(
-        List<PortOnePaymentData> items,
-        PageInfo page
-) {
-    public record PortOnePaymentData(
-            String paymentId,      // 포트원 결제 고유 ID (우리 쪽 orderId와 매핑)
-            BigDecimal amount,     // 결제 금액 (BigDecimal 필수)
-            String currency,       // 통화 (USD, KRW 등)
-            String status,         // 결제 상태
-            String requestedAt,    // 결제 요청 시각
-            CustomerInfo customer  // 가맹점/고객 정보
-    ) {}
+public class PortOnePaymentResponse {
+    private List<PortOnePaymentData> items;
+    private PageInfo page;
 
-    public record CustomerInfo(
-            String name,
-            String email
-    ) {}
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class PortOnePaymentData {
+        private String id; // 🚨 이제 getId()로 인식됩니다.
+        private Amount amount;
+        private String currency;
+        private String status;
+        private CustomerInfo customer;
+    }
 
-    public record PageInfo(
-            int totalCount,
-            int page,
-            int size
-    ) {}
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Amount {
+        private BigDecimal total; // 🚨 getTotal() 인식용
+        private BigDecimal paid;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CustomerInfo {
+        private String name;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PageInfo {
+        private Integer totalCount;
+        private Integer page;
+        private Integer size;
+    }
 }
