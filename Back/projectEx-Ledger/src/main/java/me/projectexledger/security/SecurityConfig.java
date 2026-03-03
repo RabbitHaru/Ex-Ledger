@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/auth/**", "/api/exchange/**", "/test.html",  "/api/admin/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/v1/exchange/**", "/api/connect/**", "/test.html",  "/api/admin/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 

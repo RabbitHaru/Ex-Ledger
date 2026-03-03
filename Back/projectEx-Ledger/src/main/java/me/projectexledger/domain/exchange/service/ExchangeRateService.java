@@ -193,4 +193,12 @@ public class ExchangeRateService {
             backfillHistoricalData();
         }
     }
+
+    public BigDecimal getLatestRate(String currency) {
+        return getLatestRatesFromCacheOrDb().stream()
+                .filter(dto -> dto.getCurUnit().equals(currency))
+                .map(ExchangeRateDTO::getRate)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 통화입니다: " + currency));
+    }
 }
