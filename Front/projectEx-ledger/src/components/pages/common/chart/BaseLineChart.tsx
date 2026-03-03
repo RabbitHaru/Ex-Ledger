@@ -62,6 +62,8 @@ const BaseLineChart: React.FC<BaseLineChartProps> = ({
             axisLine={false}
           />
           <YAxis
+            hide={false}
+            domain={["auto", "auto"]}
             tick={{ fontSize: 12 }}
             tickLine={false}
             axisLine={false}

@@ -14,7 +14,8 @@ public class ExchangeRateResponseDTO {
     private String curNm;
     private BigDecimal rate;
     private String provider;
-    private String updatedAt; // ISO 8601 문자열로 변환하여 전달
+    private String updatedAt;
+    private String date;
 
     public static ExchangeRateResponseDTO from(ExchangeRate entity) {
         return ExchangeRateResponseDTO.builder()
@@ -24,6 +25,7 @@ public class ExchangeRateResponseDTO {
                 .rate(entity.getRate())
                 .provider(entity.getProvider())
                 .updatedAt(entity.getUpdatedAt().toString())
+                .date(entity.getUpdatedAt().format(java.time.format.DateTimeFormatter.ofPattern("MM-dd")))
                 .build();
     }
 }
