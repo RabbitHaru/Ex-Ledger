@@ -39,33 +39,31 @@ public class ExchangeRateService {
     private static final String REDIS_KEY = "LATEST_RATES";
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-
-    // 1. 실시간 업데이트 및 캐시 갱신 (Scheduler에서 호출하는 핵심 메서드)
-
     @Transactional
     public List<ExchangeRateDTO> updateAndCacheRates() {
         LocalDate today = LocalDate.now();
 
-        // 이미 오늘 데이터가 있으면 수집 생략하고 현재 최신 데이터 반환
-        if (isDataAlreadyExists(today)) {
-            log.info("⏩ 오늘자 환율 데이터가 이미 존재합니다. 캐시를 유지하거나 DB에서 가져옵니다.");
+        if (isEximDataAlreadyExists(today)) {
+            log.info("⏩ 오늘자 KOREAEXIM 데이터가 이미 존재합니다.");
             return getLatestRatesFromCacheOrDb();
         }
 
-        // 최신 데이터 수집
         List<ExchangeRateDTO> dtos = fetchFromBestSource(today.toString());
 
         if (dtos != null && !dtos.isEmpty()) {
+            deleteRatesByDate(today); // 기존 하위 우선순위 데이터 삭제
             saveToDatabaseTransactional(dtos);
-            // 저장 직후 Redis 캐시 강제 갱신을 위해 DB에서 다시 읽어 반환
-            log.info("✅ 오늘자 최신 환율 수집 및 캐시 갱신 완료");
+            log.info("✅ 환율 데이터 업데이트 성공 (Provider: {})", dtos.get(0).getProvider());
             return getLatestRatesFromCacheOrDb();
         }
 
         return new ArrayList<>();
     }
 
-    // 2. 전광판용 최신 환율 조회 (캐시 우선)
+    @Transactional
+    public void cleanupOldRates(LocalDateTime threshold) {
+        exchangeRateRepository.deleteOldRates(threshold);
+    }
 
     public List<ExchangeRateDTO> getLatestRatesFromCacheOrDb() {
         try {
@@ -77,13 +75,11 @@ public class ExchangeRateService {
         }
 
         List<ExchangeRate> entities = exchangeRateRepository.findAllLatestRates();
-        List<ExchangeRateDTO> dtos = calculateChangeStats(entities);
+        List<ExchangeRateDTO> dtos = calculateChangeStats(entities); // 🌟 에러 발생 지점 해결!
 
         if (!dtos.isEmpty()) saveToCache(dtos);
         return dtos;
     }
-
-    // 3. 차트용 히스토리 조회
 
     @Transactional(readOnly = true)
     public List<ExchangeRateResponseDTO> getExchangeRateHistory(String curUnit, int days) {
@@ -94,26 +90,36 @@ public class ExchangeRateService {
                 .collect(Collectors.toList());
     }
 
-    // 4. 데이터 수집 공통 로직
-
     public void backfillHistoricalData() {
-        log.info("=== 📂 데이터 백필 프로세스 시작 ===");
-        for (int i = 10; i >= 0; i--) {
+        log.info("=== 📂 데이터 백필/업그레이드 프로세스 시작 (14일) ===");
+        for (int i = 14; i >= 0; i--) {
             LocalDate targetDate = LocalDate.now().minusDays(i);
-            if (isDataAlreadyExists(targetDate)) continue;
+            if (isEximDataAlreadyExists(targetDate)) continue;
 
             List<ExchangeRateDTO> finalDtos = fetchFromBestSource(targetDate.toString());
             if (!finalDtos.isEmpty()) {
+                deleteRatesByDate(targetDate);
                 saveToDatabaseTransactional(finalDtos);
+                log.info("📥 [{}] 데이터 확보/업그레이드 완료 ({})", targetDate, finalDtos.get(0).getProvider());
             }
         }
     }
 
-    // --- 내부 지원 메서드 (Private) ---
+    // --- 내부 지원 메서드 (Private Helpers) ---
 
-    private boolean isDataAlreadyExists(LocalDate date) {
-        return exchangeRateRepository.existsByCurUnitAndUpdatedAtBetween(
-                "USD", date.atStartOfDay(), date.atTime(LocalTime.MAX));
+    private boolean isEximDataAlreadyExists(LocalDate date) {
+        // "USD" 기준으로 해당 날짜에 KOREAEXIM 데이터가 있는지 확인
+        return exchangeRateRepository.findFirstByCurUnitOrderByUpdatedAtDesc("USD")
+                .map(rate -> "KOREAEXIM".equals(rate.getProvider()) &&
+                        rate.getUpdatedAt().toLocalDate().equals(date))
+                .orElse(false);
+    }
+
+    @Transactional
+    public void deleteRatesByDate(LocalDate date) {
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(LocalTime.MAX);
+        exchangeRateRepository.deleteByUpdatedAtBetween(start, end); // Repository에 추가한 메서드 사용
     }
 
     private List<ExchangeRateDTO> fetchFromBestSource(String dateStr) {
@@ -121,16 +127,18 @@ public class ExchangeRateService {
             List<ExchangeRateDTO> eximDtos = koreaEximClient.fetchHistoricalRates(dateStr);
             if (eximDtos != null && !eximDtos.isEmpty()) return eximDtos;
         } catch (Exception e) {
-            log.warn("⚠️ 소스 API 실패 [{}]: {}", dateStr, e.getMessage());
+            log.warn("⚠️ KOREAEXIM 호출 실패: {}", e.getMessage());
         }
         return frankfurterClient.fetchHistoricalRates(dateStr).stream()
                 .filter(dto -> CurrencyMapper.isSupported(dto.getCurUnit()))
                 .collect(Collectors.toList());
     }
 
+    // 🌟 [핵심 복구] 전일 대비 등락 통계 계산 메서드
     private List<ExchangeRateDTO> calculateChangeStats(List<ExchangeRate> entities) {
         List<ExchangeRateDTO> dtos = new ArrayList<>();
         for (ExchangeRate today : entities) {
+            // 해당 통화의 최신 2개 데이터를 가져옴 (오늘, 어제)
             List<ExchangeRate> history = exchangeRateRepository.findRecentByCurUnit(
                     today.getCurUnit(), PageRequest.of(0, 2));
 
@@ -141,7 +149,8 @@ public class ExchangeRateService {
                 ExchangeRate yesterday = history.get(1);
                 changeAmount = today.getRate().subtract(yesterday.getRate());
                 if (yesterday.getRate().compareTo(BigDecimal.ZERO) != 0) {
-                    changeRate = changeAmount.divide(yesterday.getRate(), 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100"));
+                    changeRate = changeAmount.divide(yesterday.getRate(), 4, RoundingMode.HALF_UP)
+                            .multiply(new BigDecimal("100"));
                 }
             }
 
@@ -180,16 +189,12 @@ public class ExchangeRateService {
     private void saveToCache(List<ExchangeRateDTO> rates) {
         try {
             redisTemplate.opsForValue().set(REDIS_KEY, rates, Duration.ofMinutes(10));
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
     }
 
     @PostConstruct
     public void init() {
-        log.info("🚀 서버 기동: 환율 데이터 존재 여부 확인 중...");
-        // DB에 데이터가 하나도 없거나 오늘 데이터가 없으면 백필 실행
-        if (!isDataAlreadyExists(LocalDate.now())) {
-            log.info("⚠️ 데이터가 부족하여 자동으로 백필을 시작합니다.");
+        if (!isEximDataAlreadyExists(LocalDate.now())) {
             backfillHistoricalData();
         }
     }
