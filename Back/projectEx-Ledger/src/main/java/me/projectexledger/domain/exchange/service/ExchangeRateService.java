@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,6 +44,12 @@ public class ExchangeRateService {
     public List<ExchangeRateDTO> updateAndCacheRates() {
         LocalDate today = LocalDate.now();
 
+        // 🌟 [추가] 오늘이 주말이면 수집을 진행하지 않습니다.
+        if (isWeekend(today)) {
+            log.info("⏩ 주말(토/일)이므로 오늘의 환율 수집을 건너뜁니다.");
+            return getLatestRatesFromCacheOrDb();
+        }
+
         if (isEximDataAlreadyExists(today)) {
             log.info("⏩ 오늘자 KOREAEXIM 데이터가 이미 존재합니다.");
             return getLatestRatesFromCacheOrDb();
@@ -51,9 +58,9 @@ public class ExchangeRateService {
         List<ExchangeRateDTO> dtos = fetchFromBestSource(today.toString());
 
         if (dtos != null && !dtos.isEmpty()) {
-            deleteRatesByDate(today); // 기존 하위 우선순위 데이터 삭제
+            deleteRatesByDate(today);
             saveToDatabaseTransactional(dtos);
-            log.info("✅ 환율 데이터 업데이트 성공 (Provider: {})", dtos.get(0).getProvider());
+            log.info("✅ 환율 데이터 업데이트 성공 (수집된 통화 수: {})", dtos.size());
             return getLatestRatesFromCacheOrDb();
         }
 
@@ -75,7 +82,7 @@ public class ExchangeRateService {
         }
 
         List<ExchangeRate> entities = exchangeRateRepository.findAllLatestRates();
-        List<ExchangeRateDTO> dtos = calculateChangeStats(entities); // 🌟 에러 발생 지점 해결!
+        List<ExchangeRateDTO> dtos = calculateChangeStats(entities);
 
         if (!dtos.isEmpty()) saveToCache(dtos);
         return dtos;
@@ -91,24 +98,33 @@ public class ExchangeRateService {
     }
 
     public void backfillHistoricalData() {
-        log.info("=== 📂 데이터 백필/업그레이드 프로세스 시작 (14일) ===");
+        log.info("=== 📂 데이터 백필 프로세스 시작 (영업일 기준 14일치 확보) ===");
         for (int i = 14; i >= 0; i--) {
             LocalDate targetDate = LocalDate.now().minusDays(i);
+
+            // 🌟 [추가] 과거 데이터를 채울 때도 주말은 건너뜁니다.
+            if (isWeekend(targetDate)) continue;
+
             if (isEximDataAlreadyExists(targetDate)) continue;
 
             List<ExchangeRateDTO> finalDtos = fetchFromBestSource(targetDate.toString());
             if (!finalDtos.isEmpty()) {
                 deleteRatesByDate(targetDate);
                 saveToDatabaseTransactional(finalDtos);
-                log.info("📥 [{}] 데이터 확보/업그레이드 완료 ({})", targetDate, finalDtos.get(0).getProvider());
+                log.info("📥 [{}] 데이터 확보 완료", targetDate);
             }
         }
     }
 
     // --- 내부 지원 메서드 (Private Helpers) ---
 
+    // 🌟 [추가] 주말 판별 헬퍼 메서드
+    private boolean isWeekend(LocalDate date) {
+        DayOfWeek day = date.getDayOfWeek();
+        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
+    }
+
     private boolean isEximDataAlreadyExists(LocalDate date) {
-        // "USD" 기준으로 해당 날짜에 KOREAEXIM 데이터가 있는지 확인
         return exchangeRateRepository.findFirstByCurUnitOrderByUpdatedAtDesc("USD")
                 .map(rate -> "KOREAEXIM".equals(rate.getProvider()) &&
                         rate.getUpdatedAt().toLocalDate().equals(date))
@@ -119,26 +135,27 @@ public class ExchangeRateService {
     public void deleteRatesByDate(LocalDate date) {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.atTime(LocalTime.MAX);
-        exchangeRateRepository.deleteByUpdatedAtBetween(start, end); // Repository에 추가한 메서드 사용
+        exchangeRateRepository.deleteByUpdatedAtBetween(start, end);
     }
 
     private List<ExchangeRateDTO> fetchFromBestSource(String dateStr) {
         try {
             List<ExchangeRateDTO> eximDtos = koreaEximClient.fetchHistoricalRates(dateStr);
-            if (eximDtos != null && !eximDtos.isEmpty()) return eximDtos;
+            if (eximDtos != null && !eximDtos.isEmpty()) {
+                return eximDtos;
+            }
         } catch (Exception e) {
             log.warn("⚠️ KOREAEXIM 호출 실패: {}", e.getMessage());
         }
+
         return frankfurterClient.fetchHistoricalRates(dateStr).stream()
                 .filter(dto -> CurrencyMapper.isSupported(dto.getCurUnit()))
                 .collect(Collectors.toList());
     }
 
-    // 🌟 [핵심 복구] 전일 대비 등락 통계 계산 메서드
     private List<ExchangeRateDTO> calculateChangeStats(List<ExchangeRate> entities) {
         List<ExchangeRateDTO> dtos = new ArrayList<>();
         for (ExchangeRate today : entities) {
-            // 해당 통화의 최신 2개 데이터를 가져옴 (오늘, 어제)
             List<ExchangeRate> history = exchangeRateRepository.findRecentByCurUnit(
                     today.getCurUnit(), PageRequest.of(0, 2));
 
