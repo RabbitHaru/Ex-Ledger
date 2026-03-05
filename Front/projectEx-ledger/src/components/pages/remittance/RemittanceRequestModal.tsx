@@ -1,149 +1,80 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import axios from "axios";
-import { X, Info } from "lucide-react";
+import { CheckCircle, AlertCircle, X } from "lucide-react";
 
-interface ModalProps {
+interface ConsentProps {
   isOpen: boolean;
   onClose: () => void;
-  initialReceiverName: string;
+  transactionId: string;
+  adjustedAmount: number; // 관리자가 수정한 최종 원화 금액
+  onSuccess: () => void; // 동의 완료 후 호출될 콜백
 }
 
-const RemittanceRequestModal: React.FC<ModalProps> = ({
+const RemittanceConsentModal: React.FC<ConsentProps> = ({
   isOpen,
   onClose,
-  initialReceiverName,
+  transactionId,
+  adjustedAmount,
+  onSuccess,
 }) => {
-  const [amount, setAmount] = useState(0);
-  const [recipientName, setRecipientName] = useState("");
-  const [feeInfo, setFeeInfo] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  if (!isOpen) return null;
 
-  useEffect(() => {
-    if (isOpen && initialReceiverName) {
-      setRecipientName(initialReceiverName);
-    }
-  }, [isOpen, initialReceiverName]);
-
-  useEffect(() => {
-    if (amount > 0) {
-      const fetchFee = async () => {
-        try {
-          const res = await axios.post("/api/v1/remittance/fee/calculate", {
-            amount,
-            currency: "USD",
-            exchangeRate: 1450,
-            clientGrade: "VIP",
-          });
-          setFeeInfo(res.data);
-        } catch (err) {
-          console.error("수수료 계산 실패", err);
-        }
-      };
-      fetchFee();
-    }
-  }, [amount]);
-
-  // 🌟 실제 API 연동 핸들러 추가
-  const handleRemittanceSubmit = async () => {
-    if (amount <= 0 || !recipientName)
-      return alert("금액과 수취인 정보를 확인해주세요.");
-
-    setLoading(true);
+  const handleConsent = async () => {
     try {
-      await axios.post("/api/v1/remittance/request", {
-        recipientName,
-        amount,
-        currency: "USD",
-        exchangeRate: 1450,
-        feeAmount: feeInfo?.totalFeeAmount,
-        totalPayment: feeInfo?.totalPayment,
-      });
-      alert("송금 신청이 완료되었습니다. 승인 대기 상태로 전환됩니다.");
+      // 🌟 셀러가 수정 금액에 동의하여 PENDING 상태로 넘기는 API 호출
+      await axios.post(`/api/v1/remittance/${transactionId}/consent`);
+      alert("금액 동의가 완료되었습니다. 송금 대기 상태로 전환됩니다.");
+      onSuccess();
       onClose();
-    } catch (err) {
-      alert("송금 신청 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      alert("처리 중 오류가 발생했습니다.");
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-lg rounded-[40px] p-10 shadow-2xl relative animate-in zoom-in duration-300">
-        <button
-          onClick={onClose}
-          className="absolute text-gray-400 transition-colors top-8 right-8 hover:text-gray-600"
-        >
-          <X size={24} />
-        </button>
-
-        <h2 className="mb-2 text-2xl font-black text-gray-800">새 송금 신청</h2>
-        <p className="mb-8 text-sm font-medium text-gray-400">
-          안전하고 빠른 해외 송금을 시작합니다.
-        </p>
-
-        <div className="space-y-6">
-          <div>
-            <label className="block mb-2 ml-1 text-sm font-bold text-gray-500">
-              수취인 성명
-            </label>
-            <input
-              type="text"
-              value={recipientName}
-              readOnly={!!initialReceiverName}
-              className={`w-full p-4 border-none rounded-2xl text-lg font-bold outline-none ${initialReceiverName ? "bg-blue-50 text-blue-700" : "bg-gray-50 text-gray-800"}`}
-              placeholder="계좌 실명 조회를 먼저 진행해주세요"
-            />
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md">
+      <div className="bg-white w-full max-w-md rounded-[32px] p-8 shadow-2xl relative animate-in fade-in zoom-in duration-300">
+        <div className="flex flex-col items-center text-center">
+          <div className="flex items-center justify-center w-16 h-16 mb-6 rounded-full bg-amber-100 text-amber-600">
+            <AlertCircle size={32} />
           </div>
 
-          <div>
-            <label className="block mb-2 ml-1 text-sm font-bold text-gray-500">
-              송금 금액 (USD)
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                className="w-full p-5 text-2xl font-black border-none outline-none bg-gray-50 rounded-2xl focus:ring-2 focus:ring-blue-500"
-                placeholder="0.00"
-                onChange={(e) => setAmount(Number(e.target.value))}
-              />
-              <span className="absolute font-black text-gray-400 -translate-y-1/2 right-5 top-1/2">
-                USD
-              </span>
-            </div>
+          <h2 className="mb-2 text-2xl font-black text-gray-900">
+            정산 금액 수정 확인
+          </h2>
+          <p className="mb-8 text-sm font-medium text-gray-500">
+            포트원 대조 결과 오차가 발견되어 관리자가 금액을 수정하였습니다.
+            아래 최종 금액에 동의하십니까?
+          </p>
+
+          <div className="w-full p-6 mb-8 border border-gray-100 bg-gray-50 rounded-2xl">
+            <span className="block mb-1 text-xs font-bold text-gray-400">
+              최종 정산 예정 금액
+            </span>
+            <span className="text-3xl font-black text-blue-600">
+              {adjustedAmount.toLocaleString()}{" "}
+              <small className="text-sm">KRW</small>
+            </span>
           </div>
 
-          {feeInfo && (
-            <div className="p-6 bg-slate-900 rounded-[24px] text-white space-y-3">
-              <div className="flex justify-between text-xs font-bold text-slate-400">
-                <span>적용 환율</span>
-                <span>1,450.00 KRW / USD</span>
-              </div>
-              <div className="flex items-end justify-between pt-2 border-t border-white/10">
-                <span className="text-sm font-bold text-slate-300">
-                  최종 결제 금액
-                </span>
-                <span className="text-2xl font-black text-blue-400">
-                  {feeInfo.totalPayment.toLocaleString()}{" "}
-                  <small className="text-xs text-white">KRW</small>
-                </span>
-              </div>
-            </div>
-          )}
-
-          <button
-            onClick={handleRemittanceSubmit}
-            disabled={loading}
-            className="w-full py-5 text-lg font-black text-white transition-all bg-blue-600 shadow-xl rounded-2xl shadow-blue-100 hover:bg-blue-700 hover:-translate-y-1 active:scale-95 disabled:bg-gray-400"
-          >
-            {loading ? "처리 중..." : "송금 신청 확정"}
-          </button>
+          <div className="flex w-full gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-4 font-bold text-gray-500 transition-all bg-gray-100 rounded-2xl hover:bg-gray-200"
+            >
+              나중에 하기
+            </button>
+            <button
+              onClick={handleConsent}
+              className="flex items-center justify-center gap-2 py-4 font-black text-white transition-all bg-blue-600 shadow-lg flex-2 rounded-2xl shadow-blue-100 hover:bg-blue-700"
+            >
+              <CheckCircle size={18} /> 동의 및 송금 요청
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default RemittanceRequestModal;
+export default RemittanceConsentModal;

@@ -3,54 +3,57 @@ import ExchangeRateChart from "../../widgets/finance/ExchangeRateChart";
 import AccountVerification from "./AccountVerification";
 import RemittanceTracking from "./Tracking/RemittanceTracking";
 import RemittanceRequestModal from "./RemittanceRequestModal";
-import { ArrowUpRight, Wallet, History, Bell } from "lucide-react";
+import RemittanceConsentModal from "./RemittanceConsentModal";
+import { ArrowUpRight, Wallet, History, Bell, AlertCircle } from "lucide-react";
 
-// 송금 상태 타입 정의
 type RemittanceStatus =
-  | "REQUESTED"
+  | "WAITING"
+  | "DISCREPANCY"
+  | "WAITING_USER_CONSENT"
   | "PENDING"
   | "COMPLETED"
-  | "FAILED"
-  | "REJECTED";
+  | "FAILED";
 
 const SellerDashboard = () => {
-  // 상태 관리
   const [currentStatus, setCurrentStatus] =
-    useState<RemittanceStatus>("PENDING");
+    useState<RemittanceStatus>("WAITING");
   const [notifications, setNotifications] = useState<string[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false); // 모달 열림 상태
-  const [verifiedName, setVerifiedName] = useState(""); // 인증된 예금주 성명
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
+  const [verifiedName, setVerifiedName] = useState("");
 
-  // 계좌 인증 성공 시 호출될 핸들러
   const handleVerificationSuccess = (ownerName: string) => {
-    console.log("✅ 대시보드에서 수신된 인증 성명:", ownerName);
     setVerifiedName(ownerName);
   };
 
   useEffect(() => {
-    // SSE(Server-Sent Events) 실시간 구독
     const eventSource = new EventSource(
       "http://localhost:8080/api/v1/notifications/subscribe",
     );
 
     eventSource.addEventListener("connect", (e: any) => {
-      console.log("✅ 알림 서버와 실시간 통로 연결 성공:", e.data);
+      console.log("✅ 알림 서버 연결 성공:", e.data);
     });
 
     eventSource.addEventListener("remittance_update", (e: any) => {
       const newStatus = e.data as RemittanceStatus;
-      if (
-        ["REQUESTED", "PENDING", "COMPLETED", "FAILED", "REJECTED"].includes(
-          newStatus,
-        )
-      ) {
+      const validStatuses: RemittanceStatus[] = [
+        "WAITING",
+        "DISCREPANCY",
+        "WAITING_USER_CONSENT",
+        "PENDING",
+        "COMPLETED",
+        "FAILED",
+      ];
+
+      if (validStatuses.includes(newStatus)) {
         setCurrentStatus(newStatus);
       }
       setNotifications((prev) => [e.data, ...prev].slice(0, 5));
     });
 
     eventSource.onerror = (e) => {
-      console.error("❌ SSE 연결 오류 발생", e);
+      console.error("❌ SSE 연결 오류", e);
       eventSource.close();
     };
 
@@ -59,7 +62,6 @@ const SellerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-6 lg:p-10">
-      {/* 1. 상단 헤더 영역 */}
       <div className="flex flex-col justify-between gap-4 mb-10 md:flex-row md:items-center">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-gray-900">
@@ -76,8 +78,6 @@ const SellerDashboard = () => {
               <span className="absolute w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full top-2 right-2 animate-ping"></span>
             )}
           </button>
-
-          {/* 버튼 클릭 시 송금 신청 모달 오픈 */}
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-6 py-3 font-bold text-white transition-all bg-blue-600 shadow-lg rounded-2xl hover:bg-blue-700 shadow-blue-100"
@@ -88,19 +88,41 @@ const SellerDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        {/* 2. 좌측 영역 */}
         <div className="space-y-8 lg:col-span-2">
           <div className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100 h-[450px]">
             <ExchangeRateChart selectedCurrency="USD" />
           </div>
-
           <AccountVerification
             onVerificationSuccess={handleVerificationSuccess}
           />
         </div>
 
-        {/* 3. 우측 영역 */}
         <div className="space-y-8">
+          {currentStatus === "WAITING_USER_CONSENT" && (
+            <div className="p-5 bg-amber-50 border border-amber-100 rounded-[24px] flex flex-col gap-4 animate-in slide-in-from-right-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 text-white rounded-lg bg-amber-500">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-amber-900">
+                    정산 금액 수정됨
+                  </p>
+                  <p className="text-[11px] font-bold text-amber-700 opacity-80 leading-tight">
+                    관리자가 오차를 확인하여 금액을 수정했습니다. 확인이
+                    필요합니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsConsentModalOpen(true)}
+                className="w-full py-3 text-xs font-black text-white transition-all shadow-lg bg-amber-500 rounded-xl hover:bg-amber-600 shadow-amber-100"
+              >
+                수정 금액 확인 및 동의
+              </button>
+            </div>
+          )}
+
           <RemittanceTracking
             status={currentStatus}
             transactionId="TRX-20260305-88A2"
@@ -125,11 +147,19 @@ const SellerDashboard = () => {
         </div>
       </div>
 
-      {/* 4. 송금 신청 모달 컴포넌트 */}
       <RemittanceRequestModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialReceiverName={verifiedName}
+      />
+
+      <RemittanceConsentModal
+        isOpen={isConsentModalOpen}
+        onClose={() => setIsConsentModalOpen(false)}
+        transactionId="TRX-20260305-88A2"
+        initialReceiverName={verifiedName} 
+        adjustedAmount={18130000}
+        onSuccess={() => setCurrentStatus("PENDING")}
       />
     </div>
   );
