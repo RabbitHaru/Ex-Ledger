@@ -44,6 +44,15 @@ public class Client extends BaseEntity {
     @Column(name = "preference_rate", precision = 5, scale = 4)
     private BigDecimal preferenceRate; // 환율 우대율 (예: 0.90)
 
+    // 🌟 [VIP 로직 추가] 가맹점 고유 식별자 및 등급 관리
+    @Column(name = "merchant_id", unique = true)
+    private String merchantId;
+
+    @Builder.Default // 빌더를 사용할 때 초기값이 무시되지 않도록 방어
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ClientGrade grade = ClientGrade.GENERAL;
+
     // 가입 승인 로직
     public void approve() {
         this.status = ClientStatus.APPROVED;
@@ -52,5 +61,10 @@ public class Client extends BaseEntity {
     // 수수료율 업데이트 로직 (관리자 기능)
     public void updateFeeRate(BigDecimal newRate) {
         this.feeRate = newRate;
+    }
+
+    // 🌟 등급 업데이트 메서드
+    public void setGrade(ClientGrade grade) {
+        this.grade = grade;
     }
 }

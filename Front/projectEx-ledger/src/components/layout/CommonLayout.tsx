@@ -47,7 +47,7 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
           {/* 중앙 메뉴 (Desktop) */}
           <nav className="items-center hidden gap-8 text-sm font-semibold md:flex text-slate-600">
             <a href="/dashboard" className="transition-colors hover:text-teal-600">정산요약</a>
-            <a href="/list" className="transition-colors hover:text-teal-600">정산리스트</a>
+            <a href="/admin/list" className="transition-colors hover:text-teal-600">정산리스트</a>
           </nav>
 
           {/* 우측 버튼 */}
@@ -58,7 +58,7 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
                   localStorage.removeItem('access_token');
                   window.location.href = '/';
                 }}
-                className="px-5 py-2 text-sm font-bold text-white transition-all bg-slate-600 rounded-md shadow-sm hover:bg-slate-700"
+                className="px-5 py-2 text-sm font-bold text-white transition-all rounded-md shadow-sm bg-slate-600 hover:bg-slate-700"
               >
                 로그아웃
               </button>
