@@ -14,7 +14,6 @@ import me.projectexledger.domain.settlement.entity.SettlementStatus;
 import me.projectexledger.domain.settlement.repository.SettlementRepository;
 import me.projectexledger.domain.settlement.util.ExchangeRateCalculator;
 import me.projectexledger.domain.exchange.service.CurrencyCalculator;
-// 🌟 [추가] 가맹점 DB 조회를 위한 의존성 주입
 import me.projectexledger.domain.client.dto.repository.ClientRepository;
 import me.projectexledger.domain.client.entity.Client;
 
@@ -41,7 +40,7 @@ public class SettlementEngineService {
     private final PortOneClient portOneClient;
     private final RemittanceHistoryRepository remittanceHistoryRepository;
     private final CurrencyCalculator currencyCalculator;
-    private final ClientRepository clientRepository; // 🌟 가맹점 DB 조회기 추가!
+    private final ClientRepository clientRepository;
 
     public DashboardSummaryDTO getDashboardSummary() {
         BigDecimal totalAmount = settlementRepository.sumTotalSettlementAmountByStatus(SettlementStatus.COMPLETED);
@@ -62,8 +61,30 @@ public class SettlementEngineService {
         log.info("[Settlement] {} 일자 포트원 정산 데이터 동기화 시작", targetDate);
         PortOnePaymentResponse response = portOneClient.getPayments(targetDate, targetDate, 0, 100);
 
-        BigDecimal liveUsdRate = exchangeRateCalculator.getUsdExchangeRate();
-        log.info("[Settlement] 오늘자 실시간 USD 환율 적용: {}원", liveUsdRate);
+        // 🌟 1. 일단 계산용 임시 변수에 환율을 받습니다.
+        BigDecimal tempRate = exchangeRateCalculator.getUsdExchangeRate();
+
+        // 2순위 방어 로직
+        if (tempRate == null || tempRate.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("⚠️ [Exchange] 실시간 API 응답 없음(주말/11시). 2순위 일일 고시 API를 호출합니다.");
+            tempRate = exchangeRateCalculator.getDailyStandardRate();
+
+            // 3순위 방어 로직
+            if (tempRate == null || tempRate.compareTo(BigDecimal.ZERO) <= 0) {
+                log.error("🚨 [Exchange] 모든 외부 API 응답 실패. DB의 최신 저장 환율을 적용합니다.");
+                tempRate = exchangeRateCalculator.getLatestStoredRate();
+            }
+        }
+
+        // 안전장치
+        if (tempRate == null || tempRate.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("유효한 환율 데이터를 확보하지 못해 정산 배치를 중단합니다.");
+        }
+
+        // 🌟 2. 람다식(forEach) 안에서 에러 없이 쓰기 위해 final 변수로 '고정'시킵니다! (빨간줄 해결)
+        final BigDecimal finalLiveUsdRate = tempRate;
+
+        log.info("[Settlement] 오늘자 최종 적용 USD 환율: {}원", finalLiveUsdRate);
 
         BigDecimal networkFee = new BigDecimal("2000");
         BigDecimal spread = new BigDecimal("20.0");
@@ -74,7 +95,6 @@ public class SettlementEngineService {
             String clientName = (item.getCustomer() != null && item.getCustomer().getName() != null)
                     ? item.getCustomer().getName() : "익명 고객";
 
-            // 🌟 [하드코딩 탈출!] DB에서 가맹점 정보 조회 (없으면 기본값 세팅)
             Client client = clientRepository.findByName(clientName).orElse(null);
 
             BigDecimal platformFeeRate;
@@ -83,14 +103,12 @@ public class SettlementEngineService {
             String targetAccount;
 
             if (client != null && client.getFeeRate() != null) {
-                // DB에 등록된 기업이면 해당 기업의 정책을 적용
                 platformFeeRate = client.getFeeRate();
                 preferenceRate = client.getPreferenceRate() != null ? client.getPreferenceRate() : new BigDecimal("0.90");
                 targetBank = client.getBankName();
                 targetAccount = client.getAccountNumber();
                 log.info("[Settlement] 🏢 DB 가맹점 정책 적용: {} (수수료 {}, 우대 {})", clientName, platformFeeRate, preferenceRate);
             } else {
-                // 미등록 기업은 1.5% 수수료 등 기본 정책 적용
                 platformFeeRate = new BigDecimal("0.015");
                 preferenceRate = new BigDecimal("0.90");
                 targetBank = "미등록은행";
@@ -101,13 +119,15 @@ public class SettlementEngineService {
             BigDecimal totalAmount = item.getAmount().getTotal();
             String currency = item.getCurrency();
             BigDecimal settlementAmount = totalAmount;
-            BigDecimal finalAppliedRate = liveUsdRate;
+
+            // 🌟 3. 여기서 고정된 환율 변수(finalLiveUsdRate)를 사용합니다!
+            BigDecimal finalAppliedRate = finalLiveUsdRate;
 
             if ("USD".equalsIgnoreCase(currency)) {
                 settlementAmount = currencyCalculator.calculateFinalSettlementAmount(
-                        totalAmount, liveUsdRate, platformFeeRate, networkFee, spread, preferenceRate
+                        totalAmount, finalLiveUsdRate, platformFeeRate, networkFee, spread, preferenceRate
                 );
-                finalAppliedRate = currencyCalculator.calculateFinalRate(liveUsdRate, spread, preferenceRate);
+                finalAppliedRate = currencyCalculator.calculateFinalRate(finalLiveUsdRate, spread, preferenceRate);
                 log.info("[Settlement] 수수료 적용 완료: {} USD -> {} KRW (주문번호: {})", totalAmount, settlementAmount, item.getId());
             }
 
@@ -115,12 +135,12 @@ public class SettlementEngineService {
                     .orderId(item.getId())
                     .transactionId(item.getId())
                     .clientName(clientName)
-                    .bankName(targetBank)           // 🌟 DB에서 가져온 진짜 은행
-                    .accountNumber(targetAccount)   // 🌟 DB에서 가져온 진짜 계좌
+                    .bankName(targetBank)
+                    .accountNumber(targetAccount)
                     .amount(totalAmount)
                     .currency(currency)
                     .settlementAmount(settlementAmount)
-                    .baseRate(liveUsdRate)
+                    .baseRate(finalLiveUsdRate) // 고정값 세팅
                     .finalAppliedRate(finalAppliedRate)
                     .preferredRate(preferenceRate)
                     .spreadFee(spread)

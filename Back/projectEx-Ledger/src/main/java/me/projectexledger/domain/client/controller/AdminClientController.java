@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/clients")
 @RequiredArgsConstructor
-// @PreAuthorize("hasRole('ADMIN')") // 임시 추석 처리
+// @PreAuthorize("hasRole('ADMIN')") // 임시 주석 처리
 public class AdminClientController {
 
     private final ClientService clientService;

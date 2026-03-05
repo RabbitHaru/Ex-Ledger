@@ -2,9 +2,9 @@ package me.projectexledger;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-// import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
-//@EnableFeignClients // 프로젝트 내 FeignClient 스캔 활성화 잠시 주석 처리
+@EnableScheduling
 @SpringBootApplication
 public class ExLedgerApplication {
     public static void main(String[] args) {

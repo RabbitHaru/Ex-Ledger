@@ -34,9 +34,9 @@ public class SettlementScheduler {
             log.info("✅ [Scheduler] 자동 정산 배치가 성공적으로 완료되었습니다.");
 
         } catch (Exception e) {
-            // 🚨 스케줄러가 돌다가 에러가 나면 서버가 죽지 않도록 예외 처리가 필수입니다!
+            //  스케줄러가 돌다가 에러가 나면 서버가 죽지 않도록 예외 처리가 필수입니다!
             log.error("❌ [Scheduler] 자동 정산 배치 중 치명적인 오류 발생: {}", e.getMessage(), e);
-            // TODO: (선택) 여기에 슬랙(Slack)이나 이메일 알림 로직을 넣으면 즉시 보고받을 수 있습니다.
+
         }
     }
 }
