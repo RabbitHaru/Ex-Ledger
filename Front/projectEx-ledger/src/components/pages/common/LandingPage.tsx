@@ -2,7 +2,7 @@ import type { ExchangeRate } from "../../../types/exchange";
 import React, { Suspense, lazy, useState, useEffect } from "react";
 import CommonLayout from "../../layout/CommonLayout";
 import FXTicker from "../../widgets/finance/FXTicker";
-import MiniConverter from "../../widgets/finance/MiniConverter";
+import MiniConverter from "../../widgets/finance/MiniConverter"; // 🌟 복구
 import ExchangeRateTable from "../../widgets/finance/ExchangeRateTable";
 
 const ExchangeRateChart = lazy(
@@ -15,13 +15,16 @@ const ChartSkeleton = () => (
 
 const LandingPage: React.FC = () => {
   const [rates, setRates] = useState<ExchangeRate[]>([]);
+  const [selectedCurrency, setSelectedCurrency] = useState("USD");
 
   useEffect(() => {
+    // 실시간 최신 환율 로드
     fetch("http://localhost:8080/api/exchange/latest")
       .then((res) => res.json())
       .then((data) => setRates(data))
       .catch((err) => console.error("데이터 로드 실패:", err));
 
+    // SSE 연결
     const eventSource = new EventSource("http://localhost:8080/api/connect");
     eventSource.addEventListener("exchange-update", (event: any) => {
       setRates(JSON.parse(event.data));
@@ -43,7 +46,7 @@ const LandingPage: React.FC = () => {
           </h2>
           <div className="w-full h-96">
             <Suspense fallback={<ChartSkeleton />}>
-              <ExchangeRateChart rates={rates} />
+              <ExchangeRateChart selectedCurrency={selectedCurrency} />
             </Suspense>
           </div>
         </section>
@@ -53,7 +56,14 @@ const LandingPage: React.FC = () => {
         </section>
 
         <section className="p-6 bg-white border border-gray-200 shadow-sm rounded-xl">
-          <ExchangeRateTable rates={rates} />
+          <h2 className="mb-6 text-xl font-bold text-gray-800">
+            상세 환율 정보
+          </h2>
+          <ExchangeRateTable
+            rates={rates}
+            selectedCurrency={selectedCurrency}
+            onRowClick={setSelectedCurrency}
+          />
         </section>
       </main>
     </CommonLayout>
