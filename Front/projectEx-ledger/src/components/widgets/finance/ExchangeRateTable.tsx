@@ -48,7 +48,6 @@ const ExchangeRateTable: React.FC<ExchangeRateTableProps> = ({
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-col">
-                    {/* 🌟 DB에 저장된 실제 이름(curNm)을 우선 사용 */}
                     <span className="font-bold text-gray-800">
                       {rate.curNm || getCurrencyName(rate.curUnit)}
                     </span>

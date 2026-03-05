@@ -68,13 +68,12 @@ public class KoreaEximClient implements ExchangeRateProvider {
 
     private ExchangeRateDTO convertToDto(Map<String, Object> map, String timestamp) {
         String curUnit = map.get("cur_unit").toString();
-
         String rateStr = map.get("deal_bas_r").toString().replace(",", "");
         BigDecimal rate = new BigDecimal(rateStr);
 
         return ExchangeRateDTO.builder()
                 .curUnit(curUnit)
-                .curNm(map.get("cur_nm").toString()) // API에서 주는 이름을 우선 사용
+                .curNm(CurrencyMapper.getName(curUnit))
                 .rate(rate)
                 .provider(getProviderName())
                 .updatedAt(timestamp)

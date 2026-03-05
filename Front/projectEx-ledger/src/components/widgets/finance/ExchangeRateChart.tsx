@@ -5,11 +5,12 @@ import BaseLineChart from "../../pages/common/chart/BaseLineChart";
 interface WeeklyRate {
   date: string;
   rate: number;
+  updatedAt: string; // 🌟 요일 판별을 위해 추가
   [key: string]: string | number;
 }
 
 interface ExchangeRateChartProps {
-  selectedCurrency: string; // 부모로부터 주입받은 값
+  selectedCurrency: string;
 }
 
 const ExchangeRateChart: React.FC<ExchangeRateChartProps> = ({
@@ -22,20 +23,23 @@ const ExchangeRateChart: React.FC<ExchangeRateChartProps> = ({
     const loadRealData = async () => {
       try {
         setLoading(true);
+        // 14개 영업일 확보를 위해 30일치 요청
         const response = await axios.get(
           `http://localhost:8080/api/v1/exchange/history/${selectedCurrency}`,
-          { params: { days: 14 } },
+          { params: { days: 30 } },
         );
 
         if (response.data && response.data.length > 0) {
-          // 🌟 [핵심] 주말(토, 일) 데이터를 필터링하여 영업일만 남깁니다.
+          // 🌟 [핵심 수정] 연도가 포함된 updatedAt 필드로 정확한 요일을 계산합니다.
           const businessDayData = response.data.filter((item: any) => {
-            const date = new Date(item.date);
+            const date = new Date(item.updatedAt);
             const day = date.getDay(); // 0: 일요일, 6: 토요일
+
+            // 이제 2026년 기준 화(2), 수(3)요일을 주말로 오해하지 않습니다.
             return day !== 0 && day !== 6;
           });
 
-          // 필터링된 영업일 데이터 중 최신 14일(영업일 기준 약 3주)을 유지합니다.
+          // 중복 제거 후 최신 14개만 선택
           setWeeklyHistory(businessDayData.slice(-14));
         }
       } catch (error) {
@@ -56,7 +60,7 @@ const ExchangeRateChart: React.FC<ExchangeRateChartProps> = ({
         <h3 className="text-lg font-black tracking-tight text-gray-800">
           {selectedCurrency} 환율 트렌드{" "}
           <span className="ml-1 text-sm font-medium text-gray-400">
-            (영업일 기준) {/* 시각적으로 영업일 전용임을 명시 */}
+            (최근 14 영업일)
           </span>
         </h3>
       </div>
@@ -75,8 +79,9 @@ const ExchangeRateChart: React.FC<ExchangeRateChartProps> = ({
             unit="원"
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-sm text-gray-400 border-2 border-gray-100 border-dashed rounded-3xl">
-            해당 통화의 데이터가 존재하지 않습니다.
+          <div className="flex items-center justify-center h-full px-4 text-sm text-center text-gray-400 border-2 border-gray-100 border-dashed rounded-3xl">
+            데이터 수집 중입니다. <br /> (영업일 기준 데이터가 쌓이면 그래프가
+            표시됩니다)
           </div>
         )}
       </div>

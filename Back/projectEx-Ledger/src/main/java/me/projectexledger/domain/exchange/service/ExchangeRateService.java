@@ -25,6 +25,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -44,7 +45,6 @@ public class ExchangeRateService {
     public List<ExchangeRateDTO> updateAndCacheRates() {
         LocalDate today = LocalDate.now();
 
-        // 🌟 [추가] 오늘이 주말이면 수집을 진행하지 않습니다.
         if (isWeekend(today)) {
             log.info("⏩ 주말(토/일)이므로 오늘의 환율 수집을 건너뜁니다.");
             return getLatestRatesFromCacheOrDb();
@@ -90,45 +90,57 @@ public class ExchangeRateService {
 
     @Transactional(readOnly = true)
     public List<ExchangeRateResponseDTO> getExchangeRateHistory(String curUnit, int days) {
-        LocalDateTime startDate = LocalDateTime.now().minusDays(days);
-        return exchangeRateRepository.findByCurUnitAndUpdatedAtAfterOrderByUpdatedAtAsc(curUnit, startDate)
-                .stream()
+        LocalDateTime startDate = LocalDateTime.now().minusDays(days + 15);
+        List<ExchangeRate> rates = exchangeRateRepository.findByCurUnitAndUpdatedAtAfterOrderByUpdatedAtAsc(curUnit, startDate);
+
+         return rates.stream()
+                .collect(Collectors.toMap(
+                        rate -> rate.getUpdatedAt().toLocalDate(),
+                        rate -> rate,
+                        (existing, replacement) -> replacement,
+                        TreeMap::new
+                ))
+                .values().stream()
                 .map(ExchangeRateResponseDTO::from)
                 .collect(Collectors.toList());
     }
 
     public void backfillHistoricalData() {
-        log.info("=== 📂 데이터 백필 프로세스 시작 (영업일 기준 14일치 확보) ===");
-        for (int i = 14; i >= 0; i--) {
+        log.info("=== 📂 지능형 데이터 점검 및 업그레이드 시작 (최근 20일) ===");
+
+        for (int i = 20; i >= 0; i--) {
             LocalDate targetDate = LocalDate.now().minusDays(i);
 
-            // 🌟 [추가] 과거 데이터를 채울 때도 주말은 건너뜁니다.
             if (isWeekend(targetDate)) continue;
 
-            if (isEximDataAlreadyExists(targetDate)) continue;
+            // 🌟 [수정] 해당 날짜에 KOREAEXIM 데이터가 이미 있는지 핀포인트로 확인합니다.
+            // 데이터가 있다면 API를 호출하지 않고 건너뛰어 호출 횟수를 아끼고 ID 증가를 방지합니다.
+            if (isEximDataAlreadyExists(targetDate)) {
+                continue;
+            }
 
-            List<ExchangeRateDTO> finalDtos = fetchFromBestSource(targetDate.toString());
-            if (!finalDtos.isEmpty()) {
-                deleteRatesByDate(targetDate);
-                saveToDatabaseTransactional(finalDtos);
-                log.info("📥 [{}] 데이터 확보 완료", targetDate);
+            // 데이터가 없거나, Frankfurter 데이터만 있는 경우에만 API를 호출합니다.
+            List<ExchangeRateDTO> eximDtos = koreaEximClient.fetchHistoricalRates(targetDate.toString());
+
+            if (eximDtos != null && !eximDtos.isEmpty()) {
+                deleteRatesByDate(targetDate); // 기존 데이터(Frankfurter 등) 삭제
+                saveToDatabaseTransactional(eximDtos);
+                log.info("🚀 [{}] 데이터 수집/업그레이드 완료", targetDate);
             }
         }
     }
 
-    // --- 내부 지원 메서드 (Private Helpers) ---
+    // 🌟 [수정] 인자로 받은 '특정 날짜'의 데이터 존재 여부를 정확히 확인합니다.
+    private boolean isEximDataAlreadyExists(LocalDate date) {
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(LocalTime.MAX);
+        return exchangeRateRepository.existsByCurUnitAndProviderAndUpdatedAtBetween(
+                "USD", "KOREAEXIM", start, end);
+    }
 
-    // 🌟 [추가] 주말 판별 헬퍼 메서드
     private boolean isWeekend(LocalDate date) {
         DayOfWeek day = date.getDayOfWeek();
         return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
-    }
-
-    private boolean isEximDataAlreadyExists(LocalDate date) {
-        return exchangeRateRepository.findFirstByCurUnitOrderByUpdatedAtDesc("USD")
-                .map(rate -> "KOREAEXIM".equals(rate.getProvider()) &&
-                        rate.getUpdatedAt().toLocalDate().equals(date))
-                .orElse(false);
     }
 
     @Transactional
@@ -206,14 +218,13 @@ public class ExchangeRateService {
     private void saveToCache(List<ExchangeRateDTO> rates) {
         try {
             redisTemplate.opsForValue().set(REDIS_KEY, rates, Duration.ofMinutes(10));
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     @PostConstruct
     public void init() {
-        if (!isEximDataAlreadyExists(LocalDate.now())) {
-            backfillHistoricalData();
-        }
+        backfillHistoricalData();
     }
 
     public BigDecimal getLatestRate(String currency) {
@@ -221,6 +232,6 @@ public class ExchangeRateService {
                 .filter(dto -> dto.getCurUnit().equals(currency))
                 .map(ExchangeRateDTO::getRate)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 통화입니다: " + currency));
+                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 통화입니다: " + currency + ""));
     }
 }
