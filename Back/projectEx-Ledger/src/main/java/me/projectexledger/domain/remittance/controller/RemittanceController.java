@@ -41,6 +41,7 @@ public class RemittanceController {
         FeeDTO.Response feeResponse = remittanceService.calculateRemittanceFee(
                 requestDTO.getAmount(),
                 requestDTO.getExchangeRate(),
+                requestDTO.getCurrency(),
                 requestDTO.getClientGrade()
         );
 

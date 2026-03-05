@@ -6,11 +6,8 @@ import me.projectexledger.domain.remittance.dto.RemittanceDTO;
 import me.projectexledger.domain.remittance.entity.Remittance;
 import me.projectexledger.domain.remittance.entity.RemittanceStatus;
 import me.projectexledger.domain.remittance.repository.RemittanceRepository;
-
-// 🌟 1. 이 두 가지가 반드시 import 되어야 합니다!
 import me.projectexledger.domain.exchange.service.CurrencyCalculator;
 import me.projectexledger.domain.config.service.SystemConfigService;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +25,12 @@ public class RemittanceService {
 
     private final RemittanceRepository remittanceRepository;
     private final CurrencyCalculator currencyCalculator;
-
     private final SystemConfigService configService;
 
     @Transactional
     public RemittanceDTO.Response processRemittanceRequest(String requesterId, RemittanceDTO.Request requestDTO) {
 
+        // 🌟 1단계: 승인 대기(WAITING_APPROVAL) 상태로 초기화하여 저장
         Remittance remittance = Remittance.builder()
                 .requesterId(requesterId)
                 .receiverName(requestDTO.getRecipientName())
@@ -44,7 +41,7 @@ public class RemittanceService {
                 .exchangeRate(requestDTO.getExchangeRate())
                 .remittanceFee(requestDTO.getFeeAmount())
                 .krwAmount(requestDTO.getTotalPayment())
-                .status(RemittanceStatus.REQUESTED)
+                .status(RemittanceStatus.WAITING_APPROVAL)
                 .build();
 
         remittanceRepository.save(remittance);
@@ -58,18 +55,14 @@ public class RemittanceService {
                 .build();
     }
 
-    // 💸 🌟 3. 숫자가 아니라 DB(configService)에서 값을 꺼내오도록 바뀐 로직!
     public FeeDTO.Response calculateRemittanceFee(BigDecimal foreignAmount, BigDecimal baseRate, String currency, String clientGrade) {
-        boolean is100Unit = currency.contains("(10  0)") || currency.equals("JPY") || currency.equals("IDR");
+        boolean is100Unit = currency.contains("(100)") || currency.equals("JPY") || currency.equals("IDR");
 
-        // 공통 스프레드 마진
         BigDecimal spread = configService.getBigDecimalConfig("BANK_SPREAD_RATE", "20.0");
-
         BigDecimal preferenceRate;
         BigDecimal telegraphicFee;
         BigDecimal processingFeeRate;
 
-        // 등급별 정책 DB 연동
         if ("VIP".equalsIgnoreCase(clientGrade) || (clientGrade != null && clientGrade.contains("기업"))) {
             preferenceRate = configService.getBigDecimalConfig("REMITTANCE_VIP_PREF_RATE", "1.00");
             telegraphicFee = BigDecimal.ZERO;
@@ -81,14 +74,10 @@ public class RemittanceService {
         }
 
         BigDecimal finalAppliedRate = currencyCalculator.calculateFinalRate(baseRate, spread, preferenceRate);
-
-        BigDecimal adjustedAmount = is100Unit ?
-                foreignAmount.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP) :
-                foreignAmount;
+        BigDecimal adjustedAmount = is100Unit ? foreignAmount.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP) : foreignAmount;
 
         BigDecimal baseKrwAmount = adjustedAmount.multiply(finalAppliedRate).setScale(0, RoundingMode.HALF_UP);
         BigDecimal processingFee = baseKrwAmount.multiply(processingFeeRate).setScale(0, RoundingMode.HALF_UP);
-
         BigDecimal totalFeeAmount = telegraphicFee.add(processingFee);
         BigDecimal totalPayment = baseKrwAmount.add(totalFeeAmount);
 

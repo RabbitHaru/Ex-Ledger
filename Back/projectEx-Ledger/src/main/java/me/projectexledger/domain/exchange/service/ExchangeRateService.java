@@ -215,10 +215,12 @@ public class ExchangeRateService {
         }
     }
 
-        private void saveToCache(List<ExchangeRateDTO> rates) {
+    private void saveToCache(List<ExchangeRateDTO> rates) {
         try {
             redisTemplate.opsForValue().set(REDIS_KEY, rates, Duration.ofHours(1));
-        } catch (Exception ignored) {
+            log.info("💾 [Redis] 환율 데이터 캐싱 완료 (유효시간: 1시간)");
+        } catch (Exception e) {
+            log.error("⚠️ [Redis] 캐싱 실패: {}", e.getMessage());
         }
     }
 
