@@ -23,7 +23,7 @@ export default function ReconciliationDetail() {
 
     try {
       // 엔드포인트를 유저 동의 요청용으로 변경 (예: /resolve -> /request-consent)
-      const response = await fetch(`http://localhost:8080/api/admin/settlements/${id}/request-consent`, {
+const response = await fetch(`http://localhost:8080/api/admin/settlements/${id}/resolve`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -55,7 +55,7 @@ export default function ReconciliationDetail() {
 
     try {
       // 엔드포인트를 승인 및 동의 요청용으로 변경
-      const response = await fetch(`http://localhost:8080/api/admin/settlements/${id}/request-approve-consent`, {
+    const response = await fetch(`http://localhost:8080/api/admin/settlements/${id}/approve`, {
         method: 'POST',
       });
 

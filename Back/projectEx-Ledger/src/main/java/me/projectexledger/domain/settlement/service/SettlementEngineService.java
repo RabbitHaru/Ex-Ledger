@@ -51,7 +51,6 @@ public class SettlementEngineService {
                 .pendingRemittanceCount(settlementRepository.countByStatus(SettlementStatus.PENDING))
                 .failedRemittanceCount(settlementRepository.countByStatus(SettlementStatus.FAILED))
                 .discrepancyCount(settlementRepository.countByStatus(SettlementStatus.DISCREPANCY))
-                .inProgressRemittanceCount(settlementRepository.countByStatus(SettlementStatus.IN_PROGRESS))
                 .waitingRemittanceCount(settlementRepository.countByStatus(SettlementStatus.WAITING))
                 .build();
     }
@@ -259,7 +258,22 @@ public class SettlementEngineService {
             throw new IllegalStateException("승인 대기(WAITING) 상태의 건만 승인할 수 있습니다.");
         }
 
-        settlement.updateStatus(SettlementStatus.PENDING);
-        log.info("✅ [Settlement] 관리자 수동 승인 완료. 송금 대기(PENDING) 상태로 전환됨 (ID: {})", settlementId);
+        // 🌟 수정: PENDING이 아닌 WAITING_USER_CONSENT로 변경
+        settlement.updateStatus(SettlementStatus.WAITING_USER_CONSENT);
+        log.info("✅ [Settlement] 관리자 수동 승인 완료. 유저 동의 대기 상태로 전환됨 (ID: {})", settlementId);
+    }
+    public List<ReconciliationListDTO> getMySettlementHistory(String clientName, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        // 🌟 전체가 아닌 본인 회사 데이터만 필터링
+        Page<Settlement> settlements = settlementRepository.findByClientName(clientName, pageable);
+
+        return settlements.stream().map(s -> ReconciliationListDTO.builder()
+                .id(s.getId())
+                .orderId(s.getOrderId())
+                .clientName(s.getClientName())
+                .settlementAmount(s.getSettlementAmount())
+                .status(s.getStatus().name())
+                .updatedAt(s.getUpdatedAt().toString())
+                .build()).collect(Collectors.toList());
     }
 }

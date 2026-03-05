@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CommonLayout from "../../components/layout/CommonLayout"; 
 
 export interface ReconciliationData {
@@ -14,6 +15,7 @@ export interface ReconciliationData {
 }
 
 const ReconciliationList: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<ReconciliationData[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   
@@ -41,6 +43,7 @@ const ReconciliationList: React.FC = () => {
     WAITING: '승인 대기',
     FAILED: '송금 실패',
     DISCREPANCY: '오차 발생',
+    WAITING_USER_CONSENT: '유저 동의 대기',
   };
 
   const filterMap: { [key: string]: string } = {
@@ -89,7 +92,7 @@ const ReconciliationList: React.FC = () => {
     if (!window.confirm(`대사 ID #${id} 건의 송금을 승인하시겠습니까?\n승인 시 '송금 대기' 상태로 전환됩니다.`)) return;
     
     try {
-      const response = await fetch(`/api/admin/settlements/reconciliations/${id}/approve`, { method: 'POST' });
+      const response = await fetch(`/api/admin/settlements/${id}/approve`, { method: 'POST' });
       if (response.ok) {
         alert("✅ 성공적으로 승인되었습니다.");
         fetchReconciliationData(); 
@@ -130,12 +133,29 @@ const ReconciliationList: React.FC = () => {
       case 'PENDING': return <span className="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-200 rounded-full">송금 대기</span>;
       case 'FAILED': return <span className="px-3 py-1 text-xs font-bold text-red-700 bg-red-100 rounded-full">송금 실패</span>;
       case 'WAITING': return <span className="px-3 py-1 text-xs font-bold text-purple-700 bg-purple-100 rounded-full">승인 대기</span>;
+      case 'WAITING_USER_CONSENT': return <span className="px-3 py-1 text-xs font-bold text-yellow-700 bg-yellow-100 rounded-full">유저 동의 대기</span>;
       default: return <span className="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-200 rounded-full">{status}</span>;
     }
   };
 
-  const handleDetailClick = (id: number) => {
-    alert(`대사 상세 내역 #${id} 건을 조회합니다.`);
+  // 🌟 [수정] 오차 발생/실패 시 수정 페이지로 이동, 단순 조회 시 임시 경로로 이동하도록 분기
+  const handleDetailClick = (row: ReconciliationData) => {
+    if (row.status === 'DISCREPANCY' || row.status === 'FAILED') {
+      // Member A의 오차 수정 페이지로 이동
+      navigate(`/admin/settlement/${row.id}`);
+    } else {
+      // =========================================================================
+      // 💡 [TO. Member C님]
+      // 여기서부터가 C님이 만드실 '상세보기 페이지'로 넘어가는 경로입니다.
+      // 완성된 상세보기 페이지의 라우터 경로(예: `/seller/settlement/detail/${row.id}`)를 
+      // 아래 '/temp-detail-path/' 대신 넣어주시면 됩니다!
+      // =========================================================================
+      
+      const TARGET_DETAIL_PATH = `/temp-detail-path/${row.id}`; 
+      navigate(TARGET_DETAIL_PATH);
+      
+      // =========================================================================
+    }
   };
 
   // 🌟 선택된 조건에 맞춘 필터링 로직
@@ -348,12 +368,13 @@ const ReconciliationList: React.FC = () => {
                     <td className="px-2 py-5 font-semibold text-center text-gray-800">{row.settlementAmount?.toLocaleString()}원</td>
                     <td className="px-2 py-5 text-center">{getStatusBadge(row.status)}</td>
                     <td className="px-2 py-5 text-center">
+                      {/* 🌟 수정 부분: onClick 시 row 전체를 전달 */}
                       {row.status === 'DISCREPANCY' || row.status === 'FAILED' ? (
-                        <button onClick={() => handleDetailClick(row.id)} className="px-3 py-1.5 text-xs font-bold text-white bg-[#e02424] rounded shadow-sm hover:bg-red-700 transition whitespace-nowrap">원인 분석 / 수정</button>
+                        <button onClick={() => handleDetailClick(row)} className="px-3 py-1.5 text-xs font-bold text-white bg-[#e02424] rounded shadow-sm hover:bg-red-700 transition whitespace-nowrap">원인 분석 / 수정</button>
                       ) : row.status === 'WAITING' ? (
                         <button onClick={() => handleApprove(row.id)} className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded shadow-sm hover:bg-purple-800 transition whitespace-nowrap">승인하기 ✅</button>
                       ) : (
-                        <button onClick={() => handleDetailClick(row.id)} className="px-4 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded hover:bg-teal-100 transition whitespace-nowrap">조회</button>
+                        <button onClick={() => handleDetailClick(row)} className="px-4 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded hover:bg-teal-100 transition whitespace-nowrap">조회</button>
                       )}
                     </td>
                   </tr>
