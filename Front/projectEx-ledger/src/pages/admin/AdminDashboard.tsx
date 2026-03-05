@@ -79,7 +79,7 @@ const AdminDashboard: React.FC = () => {
                 <p className="text-sm font-medium text-gray-400">건</p>
               </div>
               <div className="pt-6 mt-6 border-t border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-500">누적 결제 금액</h3>
+                <h3 className="text-sm font-semibold text-gray-500">누적 정산 금액</h3>
                 <p className="mt-2 text-4xl font-extrabold text-gray-900 tabular-nums">
                   {summary.totalPaymentAmount?.toLocaleString()} <span className="ml-1 text-xl font-medium text-gray-400">원</span>
                 </p>

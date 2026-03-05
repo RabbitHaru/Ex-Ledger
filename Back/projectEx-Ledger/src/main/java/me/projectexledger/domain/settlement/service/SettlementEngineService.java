@@ -61,7 +61,7 @@ public class SettlementEngineService {
         log.info("[Settlement] {} 일자 포트원 정산 데이터 동기화 시작", targetDate);
         PortOnePaymentResponse response = portOneClient.getPayments(targetDate, targetDate, 0, 100);
 
-        // 🌟 1. 일단 계산용 임시 변수에 환율을 받습니다.
+        // 🌟 1. 계산용 임시 변수에 환율 확보
         BigDecimal tempRate = exchangeRateCalculator.getUsdExchangeRate();
 
         // 2순위 방어 로직
@@ -81,19 +81,24 @@ public class SettlementEngineService {
             throw new IllegalStateException("유효한 환율 데이터를 확보하지 못해 정산 배치를 중단합니다.");
         }
 
-        // 🌟 2. 람다식(forEach) 안에서 에러 없이 쓰기 위해 final 변수로 '고정'시킵니다! (빨간줄 해결)
         final BigDecimal finalLiveUsdRate = tempRate;
-
         log.info("[Settlement] 오늘자 최종 적용 USD 환율: {}원", finalLiveUsdRate);
 
         BigDecimal networkFee = new BigDecimal("2000");
         BigDecimal spread = new BigDecimal("20.0");
 
         response.getItems().forEach(item -> {
-            if (settlementRepository.existsByOrderId(item.getId())) return;
 
             String clientName = (item.getCustomer() != null && item.getCustomer().getName() != null)
-                    ? item.getCustomer().getName() : "익명 고객";
+                    ? item.getCustomer().getName() : "익명 기업";
+
+            // 🚨 [필터 추가] 금액이 1004원이고 가맹점이 '익명 기업'인 경우 동기화에서 제외!
+            if (item.getAmount().getTotal().intValue() == 1004 && "익명 기업".equals(clientName)) {
+                log.info("[Skip] 테스트용 1004원 결제건은 정산에서 제외합니다. (ID: {})", item.getId());
+                return; // forEach문에서는 continue 대신 return을 사용합니다.
+            }
+
+            if (settlementRepository.existsByOrderId(item.getId())) return;
 
             Client client = clientRepository.findByName(clientName).orElse(null);
 
@@ -120,7 +125,6 @@ public class SettlementEngineService {
             String currency = item.getCurrency();
             BigDecimal settlementAmount = totalAmount;
 
-            // 🌟 3. 여기서 고정된 환율 변수(finalLiveUsdRate)를 사용합니다!
             BigDecimal finalAppliedRate = finalLiveUsdRate;
 
             if ("USD".equalsIgnoreCase(currency)) {
@@ -140,7 +144,7 @@ public class SettlementEngineService {
                     .amount(totalAmount)
                     .currency(currency)
                     .settlementAmount(settlementAmount)
-                    .baseRate(finalLiveUsdRate) // 고정값 세팅
+                    .baseRate(finalLiveUsdRate)
                     .finalAppliedRate(finalAppliedRate)
                     .preferredRate(preferenceRate)
                     .spreadFee(spread)
@@ -188,24 +192,62 @@ public class SettlementEngineService {
         }
     }
 
+    // 🌟 [수정됨] 이름, 은행, 계좌, 돈 모두 100% 랜덤 생성!
     @Transactional
     public void createTestSettlement(String orderId, String clientName, BigDecimal amount, String currency, SettlementStatus status) {
+
+        // 🏢 1. 발표용 랜덤 이름 리스트
+        String[] clientList = {"(주)무신사", "우아한형제들", "당근마켓", "쿠팡페이", "오늘의집", "(주)로켓상사", "글로벌페이", "초록마켓", "야놀자", "네이버페이"};
+        String finalClientName = clientList[(int)(Math.random() * clientList.length)];
+
+        // 🏦 2. 발표용 랜덤 은행 리스트
+        String[] bankList = {"국민은행", "농협은행", "카카오뱅크", "우리은행", "토스뱅크", "신한은행", "기업은행", "하나은행", "케이뱅크"};
+        String finalBank = bankList[(int)(Math.random() * bankList.length)];
+
+        // 💳 3. 랜덤 계좌번호 생성
+        String finalAccount = (int)(Math.random() * 900 + 100) + "-123-" + (int)(Math.random() * 9000 + 1000);
+
+        // 💰 4. 원본 결제 금액 (1만원 ~ 300만원 사이 랜덤, 100원 단위로 딱 떨어지게)
+        int randomMoney = ((int)(Math.random() * 30000) + 100) * 100;
+        BigDecimal originalAmount = new BigDecimal(randomMoney);
+
+        // 🌍 5. 실시간 환율 API 호출!
+        BigDecimal realUsdRate = exchangeRateCalculator.getUsdExchangeRate();
+        if (realUsdRate == null) {
+            realUsdRate = new BigDecimal("1400.00");
+        }
+
+        // 🧮 6. 수수료 계산 및 🌟소수점 버림(DOWN) 처리🌟
+        BigDecimal feeRate = new BigDecimal("0.015"); // 수수료율 1.5% 고정
+        BigDecimal platformFee = originalAmount.multiply(feeRate);
+        BigDecimal networkFee = new BigDecimal("2000");
+
+        // 원금 - 플랫폼수수료 - 망이용료 계산 후 소수점 이하는 가차없이 버림!
+        BigDecimal finalSettlementAmount = originalAmount.subtract(platformFee).subtract(networkFee)
+                .setScale(0, java.math.RoundingMode.DOWN);
+
+        if (finalSettlementAmount.compareTo(BigDecimal.ZERO) < 0) {
+            finalSettlementAmount = BigDecimal.ZERO;
+        }
+
         settlementRepository.save(Settlement.builder()
                 .orderId(orderId)
                 .transactionId("TX-" + System.currentTimeMillis())
-                .clientName(clientName)
-                .bankName("신한은행")
-                .accountNumber("110-123-" + (int)(Math.random() * 9000 + 1000))
-                .amount(amount)
+                .clientName(finalClientName)     // 완전 랜덤 이름
+                .bankName(finalBank)             // 완전 랜덤 은행
+                .accountNumber(finalAccount)     // 완전 랜덤 계좌
+                .amount(originalAmount)          // 완전 랜덤 돈
                 .currency(currency)
-                .settlementAmount(amount)
-                .baseRate(BigDecimal.ONE)
-                .finalAppliedRate(BigDecimal.ONE)
-                .preferredRate(BigDecimal.ZERO)
-                .spreadFee(BigDecimal.ZERO)
+                .settlementAmount(finalSettlementAmount) // 💰 소수점 짤린 깔끔한 정산금
+                .baseRate(realUsdRate)
+                .finalAppliedRate(realUsdRate.subtract(new BigDecimal("10.00")))
+                .preferredRate(new BigDecimal("0.02"))
+                .spreadFee(new BigDecimal("10.00"))
                 .status(status)
                 .build());
-        log.info("[Test] 테스트 결제 데이터 저장 완료: {}", orderId);
+
+        log.info("[Test] 랜덤 데이터 주입 완료: {} (가맹점: {}, 은행: {}, 원금: {}, 정산금: {}원)",
+                orderId, finalClientName, finalBank, originalAmount, finalSettlementAmount);
     }
 
     @Transactional

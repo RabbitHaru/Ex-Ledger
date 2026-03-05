@@ -35,7 +35,6 @@ public class AdminSettlementController {
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<DashboardSummaryDTO>> getDashboardSummary() {
         log.info("[Admin] 대시보드 요약 데이터 요청");
-        // 🚨 서비스의 getDashboardSummary()와 타입을 맞췄습니다.
         DashboardSummaryDTO summaryData = settlementEngineService.getDashboardSummary();
         return ResponseEntity.ok(ApiResponse.success("대시보드 데이터 조회 성공", summaryData));
     }
@@ -49,14 +48,18 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("리스트 조회 성공", data));
     }
 
-    @PostMapping("/{settlementId}/resolve")
+    // 🚨 1. 오차 수정 API (React 연동을 위해 @PatchMapping 및 @RequestBody로 개선)
+    @PatchMapping("/{settlementId}/resolve")
     public ResponseEntity<ApiResponse<Void>> resolveDiscrepancy(
             @PathVariable Long settlementId,
-            @RequestParam BigDecimal correctedAmount,
-            @RequestParam String reason) {
-        log.info("[Admin] 오차 발생 건 수동 승인 처리 요청. ID: {}", settlementId);
+            @RequestBody Map<String, Object> request) {
+
+        BigDecimal correctedAmount = new BigDecimal(request.get("correctedAmount").toString());
+        String reason = request.get("reason").toString();
+
+        log.info("[Admin] 오차 발생 건 수동 수정 처리 요청. ID: {}, 수정금액: {}, 사유: {}", settlementId, correctedAmount, reason);
         settlementEngineService.resolveDiscrepancy(settlementId, correctedAmount, reason);
-        return ResponseEntity.ok(ApiResponse.success("수동 승인 처리가 완료되었습니다.", null));
+        return ResponseEntity.ok(ApiResponse.success("수동 오차 수정 처리가 완료되었습니다.", null));
     }
 
     @PostMapping("/{settlementId}/retry-remittance")
@@ -73,22 +76,34 @@ public class AdminSettlementController {
         log.info("[Admin] {} 가맹점의 정산 수수료 정책 업데이트 요청", merchantId);
         return ResponseEntity.ok(ApiResponse.success("수수료 정책이 성공적으로 반영되었습니다.", null));
     }
+
     @PostMapping("/test-data")
     public ResponseEntity<ApiResponse<String>> createTestData(@RequestParam SettlementStatus status) {
-        String uniqueOrderId = "T-ORDER-" + System.currentTimeMillis();
-        // 1004원 결제건을 강제로 DB에 넣는 테스트 로직
+        // 이제 서비스가 알아서 랜덤으로 만들 거니까, 여기서는 그냥 '실행'만 시킵니다!
+        log.info("[Admin] 발표용 랜덤 테스트 데이터 생성 요청 (상태: {})", status);
+
+        // 파라미터는 아무거나 넣어도 서비스가 무시하고 랜덤으로 생성할 겁니다.
         settlementEngineService.createTestSettlement(
-                uniqueOrderId, "익명 기업", new BigDecimal("1004"), "KRW", status
+                "T-ORDER-" + System.currentTimeMillis(),
+                "RANDOM",
+                BigDecimal.ZERO,
+                "KRW",
+                status
         );
-        return ResponseEntity.ok(ApiResponse.success("테스트 데이터 생성 완료!", null));
+
+        return ResponseEntity.ok(ApiResponse.success("랜덤 테스트 데이터가 생성되었습니다!", null));
     }
-    @PostMapping("/reconciliations/{id}/approve")
-    public ResponseEntity<?> approveSettlement(@PathVariable Long id) {
+
+    // 🚨 2. 수동 승인 API (공통 응답 포맷인 ApiResponse 적용 및 주소 단순화)
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<ApiResponse<Void>> approveSettlement(@PathVariable Long id) {
+        log.info("[Admin] 정산 건 수동 승인 처리 요청. ID: {}", id);
         try {
             settlementEngineService.approveSettlement(id);
-            return ResponseEntity.ok().body(Map.of("message", "승인이 완료되었습니다. 송금 대기 상태로 전환됩니다."));
+            return ResponseEntity.ok(ApiResponse.success("승인이 완료되었습니다. 송금 대기 상태로 전환됩니다.", null));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            // 예외 발생 시 에러 메시지를 프론트엔드로 전달
+            return ResponseEntity.badRequest().body(ApiResponse.fail(e.getMessage()));
         }
     }
 }
