@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
+import Header from "../../components/layout/Header"; 
+import Footer from "../../components/layout/Footer"; 
 
-// 1. 타입 정의 (모든 상태 필드 포함)
 export interface DashboardSummary {
   totalPaymentAmount: number;
   totalRemittanceCount: number;
@@ -8,8 +9,7 @@ export interface DashboardSummary {
   pendingRemittanceCount: number;
   failedRemittanceCount: number;
   discrepancyCount: number;
-  inProgressRemittanceCount: number; // 송금 중
-  waitingRemittanceCount: number;    // 승인 대기
+  waitingRemittanceCount: number;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -45,24 +45,14 @@ const AdminDashboard: React.FC = () => {
     fetchDashboardSummary();
   }, []);
 
-  return (
-    <div className="min-h-screen font-sans bg-slate-50">
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between h-16 px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-6 h-6 font-bold text-white bg-[#007b70] rounded">E</div>
-            <span className="text-xl font-bold text-gray-900">
-              Ex-Ledger <span className="ml-2 text-sm font-normal text-[#007b70]">관리자 센터</span>
-            </span>
-          </div>
-          <button className="px-4 py-2 text-sm font-medium text-white bg-[#007b70] rounded-md hover:bg-teal-800 transition">
-            로그아웃
-          </button>
-        </div>
-      </header>
+  const normalProcessCount = summary ? (summary.completedRemittanceCount + summary.pendingRemittanceCount + summary.waitingRemittanceCount) : 0;
+  const actionRequiredCount = summary ? (summary.discrepancyCount + summary.failedRemittanceCount) : 0;
 
-      <main className="px-4 py-8 mx-auto space-y-6 max-w-7xl sm:px-6 lg:px-8">
-        {/* 상단 타이틀 섹션 */}
+  return (
+    <div className="flex flex-col min-h-screen font-sans bg-slate-50">
+      <Header />
+
+      <main className="flex-grow w-full px-4 py-8 mx-auto space-y-6 max-w-7xl sm:px-6 lg:px-8">
         <section className="flex items-center justify-between p-6 bg-white border border-gray-100 shadow-sm rounded-xl">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">오늘의 정산 요약</h2>
@@ -70,67 +60,88 @@ const AdminDashboard: React.FC = () => {
           </div>
           <button
             onClick={handleSync}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-[#007b70] rounded-lg hover:bg-teal-800 transition shadow-sm"
+            disabled={isSyncing}
+            className={`flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-[#007b70] rounded-lg hover:bg-teal-800 transition shadow-sm ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            🔄 실시간 동기화
+            {isSyncing ? "🔄 동기화 중..." : "🔄 실시간 동기화"}
           </button>
         </section>
 
         {summary ? (
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* 카드 1: 누적 결제 금액 */}
+          <section className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* 1. 전체 건수 & 누적 결제 금액 카드 */}
+            {/* 🌟 수정: flex-col justify-center 제거하여 옆 카드들과 시작 높이 동일하게 맞춤! */}
             <div className="p-8 bg-white border border-gray-100 shadow-sm rounded-xl">
-              <h3 className="text-sm font-semibold text-gray-500">누적 결제 금액</h3>
-              <p className="mt-4 text-4xl font-extrabold text-gray-900">
-                {summary.totalPaymentAmount?.toLocaleString()} <span className="text-xl font-medium text-gray-400 ml-1">원</span>
-              </p>
-            </div>
-
-            {/* 카드 2: 정산 프로세스 현황 (송금 중 건수 반영!) */}
-            <div className="p-8 bg-white border border-gray-100 shadow-sm rounded-xl">
-              <h3 className="text-sm font-semibold text-gray-500">정산 프로세스 현황</h3>
+              <h3 className="text-sm font-semibold text-gray-500">전체 처리 건수</h3>
+              {/* 🌟 수정: mt-2 -> mt-4 로 변경하여 "45"의 높이를 "37", "3"과 완벽히 일치시킴! */}
               <div className="flex items-baseline gap-2 mt-4">
-                <p className="text-4xl font-extrabold text-gray-900">{summary.totalRemittanceCount}</p>
-                <p className="text-sm font-medium text-gray-400">건 (전체)</p>
+                <p className="text-4xl font-extrabold text-gray-900 tabular-nums">{summary.totalRemittanceCount}</p>
+                <p className="text-sm font-medium text-gray-400">건</p>
               </div>
-              <div className="mt-6 space-y-3">
+              <div className="pt-6 mt-6 border-t border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-500">누적 결제 금액</h3>
+                <p className="mt-2 text-4xl font-extrabold text-gray-900 tabular-nums">
+                  {summary.totalPaymentAmount?.toLocaleString()} <span className="ml-1 text-xl font-medium text-gray-400">원</span>
+                </p>
+              </div>
+            </div>
+
+            {/* 2. 정상 프로세스 현황 카드 */}
+            <div className="p-8 bg-white border border-gray-100 shadow-sm rounded-xl">
+              <h3 className="text-sm font-semibold text-gray-500">정상 프로세스 진행</h3>
+              <div className="flex items-baseline gap-2 mt-4">
+                <p className="text-4xl font-extrabold text-gray-900 tabular-nums">{normalProcessCount}</p>
+                <p className="text-sm font-medium text-gray-400">건 (정상)</p>
+              </div>
+              <div className="pt-6 mt-6 space-y-4 border-t border-gray-100">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 font-medium flex items-center gap-1">✅ 정산 완료</span>
-                  <span className="font-bold text-green-600">{summary.completedRemittanceCount} 건</span>
+                  <span className="font-medium text-gray-600">✅ 정산 완료</span>
+                  <div className="flex items-center">
+                    <span className="w-12 font-bold text-right text-green-600 tabular-nums">{summary.completedRemittanceCount}</span>
+                    <span className="ml-1 font-bold text-green-600">건</span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 font-medium flex items-center gap-1">🌀 송금 중</span>
-                  {/* 🚨 여기에 숫자가 나오게 수정했습니다! */}
-                  <span className="font-bold text-blue-600">{summary.inProgressRemittanceCount} 건</span>
+                  <span className="font-medium text-gray-600">⏳ 송금 대기</span>
+                  <div className="flex items-center">
+                    <span className="w-12 font-bold text-right text-gray-800 tabular-nums">{summary.pendingRemittanceCount}</span>
+                    <span className="ml-1 font-bold text-gray-800">건</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-600">📑 승인 대기</span>
+                  <div className="flex items-center">
+                    <span className="w-12 font-bold text-right text-purple-600 tabular-nums">{summary.waitingRemittanceCount}</span>
+                    <span className="ml-1 font-bold text-purple-600">건</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 카드 3: 조치 필요 항목 (승인 대기 건수 반영!) */}
-            <div className="p-8 bg-red-50/30 border border-red-100 shadow-sm rounded-xl">
+            {/* 3. 조치 필요 항목 카드 */}
+            <div className="p-8 border border-red-100 shadow-sm bg-red-50/30 rounded-xl">
               <h3 className="text-sm font-semibold text-red-800">조치 필요 항목</h3>
-              <div className="mt-4 space-y-4">
+              <div className="flex items-baseline gap-2 mt-4">
+                <p className="text-4xl font-extrabold text-red-700 tabular-nums">{actionRequiredCount}</p>
+                <p className="text-sm font-medium text-red-400">건 (확인 요망)</p>
+              </div>
+              <div className="pt-6 mt-6 space-y-4 border-t border-red-100">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-red-600 font-medium flex items-center gap-1">🚨 오차 발생</span>
-                  <span className="font-bold text-red-700">{summary.discrepancyCount} 건</span>
+                  <span className="font-medium text-red-600">🚨 오차 발생</span>
+                  <div className="flex items-center">
+                    <span className="w-12 font-bold text-right text-red-700 tabular-nums">{summary.discrepancyCount}</span>
+                    <span className="ml-1 font-bold text-red-700">건</span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-orange-600 font-medium flex items-center gap-1">❌ 송금 실패</span>
-                  <span className="font-bold text-orange-700">{summary.failedRemittanceCount} 건</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-yellow-600 font-medium flex items-center gap-1">⏳ 송금 대기</span>
-                  <span className="font-bold text-yellow-700">{summary.pendingRemittanceCount} 건</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-purple-600 font-medium flex items-center gap-1">📑 승인 대기</span>
-                  {/* 🚨 여기에 숫자가 나오게 수정했습니다! */}
-                  <span className="font-bold text-purple-700">{summary.waitingRemittanceCount} 건</span>
+                  <span className="font-medium text-orange-600">❌ 송금 실패</span>
+                  <div className="flex items-center">
+                    <span className="w-12 font-bold text-right text-orange-700 tabular-nums">{summary.failedRemittanceCount}</span>
+                    <span className="ml-1 font-bold text-orange-700">건</span>
+                  </div>
                 </div>
               </div>
             </div>
-
           </section>
         ) : (
           <div className="p-12 text-center text-gray-500 bg-white border border-gray-100 rounded-xl">
@@ -144,6 +155,8 @@ const AdminDashboard: React.FC = () => {
           </a>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 };

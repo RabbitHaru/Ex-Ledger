@@ -26,7 +26,7 @@ public class ExchangeRateCalculator {
     private String dataType;
 
     /**
-     * 한국수출입은행 API를 호출하여 오늘자 USD 실시간 매매기준율을 가져옵니다.
+     * [1순위] 한국수출입은행 API를 호출하여 오늘자 USD 실시간 매매기준율을 가져옵니다.
      */
     public BigDecimal getUsdExchangeRate() {
         try {
@@ -63,8 +63,28 @@ public class ExchangeRateCalculator {
             log.error("[FX] 환율 API 호출 중 서버 오류 발생: {}", e.getMessage());
         }
 
-        // 🚨 API 호출 실패 또는 주말이라 데이터가 없을 때를 대비한 '안전 기본값'
-        log.info("[FX] 안전 기본 환율(1450.00원)을 적용하여 정산을 진행합니다.");
-        return new BigDecimal("1450.00");
+        // 실패 시 null을 반환하여 Service의 하이브리드 방어로직이 작동하도록 함
+        return null;
     }
+
+    /**
+     * [2순위 방어] 일일 고시 환율 (Frankfurter API 등) 조회
+     * TODO: Member C가 Redis 캐싱 및 Frankfurter 연동으로 고도화할 예정
+     */
+    public BigDecimal getDailyStandardRate() {
+        log.info("[FX-Fallback] 2순위: 일일 고시 환율(Frankfurter 등)을 시도합니다.");
+
+        return new BigDecimal("1400.00");
+    }
+
+    /**
+     * [3순위 방어] 시스템 DB 최신 저장 환율 조회
+     * TODO: Member C가 시스템에 마지막으로 저장된 성공 환율을 가져오도록 구현할 예정
+     */
+    public BigDecimal getLatestStoredRate() {
+        log.info("[FX-Fallback] 3순위: 시스템에 마지막으로 저장된 환율을 꺼내옵니다.");
+
+        return new BigDecimal("1380.00");
+    }
+
 }

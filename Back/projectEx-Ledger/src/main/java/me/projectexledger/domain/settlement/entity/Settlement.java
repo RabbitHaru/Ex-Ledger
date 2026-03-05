@@ -26,27 +26,35 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
     @Column(nullable = false)
     private String clientName;
 
+    // 🌟 [입금 대상 정보] - 프론트엔드 및 송금 실행 시 필수
+    @Column(name = "bank_name", length = 50)
+    private String bankName;
+
+    @Column(name = "account_number", length = 50)
+    private String accountNumber;
+
+    // 🌟 [금액 데이터] - 금융권 표준 정밀도(19, 4) 적용
     @Column(nullable = false, precision = 19, scale = 4)
-    private BigDecimal amount;
+    private BigDecimal amount; // 원금 (USD)
 
     @Column(nullable = false, length = 10)
     private String currency;
 
     @Column(nullable = false, precision = 19, scale = 4)
-    private BigDecimal settlementAmount;
+    private BigDecimal settlementAmount; // 최종 정산액 (KRW)
 
+    // 🌟 [환율 및 수수료 상세 정보] - 감사(Audit) 시 필수 데이터
     @Column(name = "base_rate", precision = 19, scale = 4)
-    private BigDecimal baseRate;
+    private BigDecimal baseRate; // 기준 환율
 
     @Column(name = "final_applied_rate", precision = 19, scale = 4)
-    private BigDecimal finalAppliedRate;
+    private BigDecimal finalAppliedRate; // 마진/우대율 적용 환율
 
     @Column(name = "preferred_rate", precision = 19, scale = 4)
-    private BigDecimal preferredRate;
+    private BigDecimal preferredRate; // 적용 우대율
 
-    // 🚨 [추가] 환전 수수료(스프레드) 저장 변수
     @Column(name = "spread_fee", precision = 19, scale = 4)
-    private BigDecimal spreadFee;
+    private BigDecimal spreadFee; // 적용 스프레드 마진
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -55,14 +63,16 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
     @Column(name = "resolution_reason", length = 500)
     private String resolutionReason;
 
-    // 🚨 [수정] 빌더에 spreadFee 추가
+    // 🌟 [빌더] - SettlementEngineService에서 데이터 저장 시 사용
     @Builder
-    public Settlement(String orderId, String transactionId, String clientName, BigDecimal amount,
+    public Settlement(String orderId, String transactionId, String clientName, String bankName, String accountNumber, BigDecimal amount,
                       String currency, BigDecimal settlementAmount, SettlementStatus status,
                       BigDecimal baseRate, BigDecimal finalAppliedRate, BigDecimal preferredRate, BigDecimal spreadFee) {
         this.orderId = orderId;
         this.transactionId = transactionId;
         this.clientName = clientName;
+        this.bankName = bankName;
+        this.accountNumber = accountNumber;
         this.amount = amount;
         this.currency = currency;
         this.settlementAmount = settlementAmount;
@@ -70,9 +80,10 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
         this.baseRate = baseRate;
         this.finalAppliedRate = finalAppliedRate;
         this.preferredRate = preferredRate;
-        this.spreadFee = spreadFee; // 🚨 추가
+        this.spreadFee = spreadFee;
     }
 
+    // 🌟 [비즈니스 로직 메서드]
     @Override public String getTransactionId() { return this.orderId; }
     @Override public BigDecimal getAmount() { return this.amount; }
 

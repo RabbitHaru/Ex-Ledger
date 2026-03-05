@@ -19,11 +19,15 @@ import java.time.LocalDateTime;
 public class ReconciliationListDTO {
     private Long id;
     private String orderId;          // 포트원 대조용 주문번호
-    private String clientName;// 기업명
+    private String clientName;       // 기업명
+
+    // 🌟 [추가] 프론트엔드로 넘겨줄 은행/계좌 정보!
+    private String bankName;
+    private String accountNumber;
+
     private BigDecimal amount;       // 내부 DB 결제 원금 (정산 시스템 필수 타입)
     private BigDecimal originalAmount;
     private BigDecimal settlementAmount;
     private String status;           // 내부 결제 상태 (COMPLETED, FAILED 등)
     private String updatedAt;
-
 }

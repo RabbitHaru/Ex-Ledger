@@ -10,6 +10,7 @@ import me.projectexledger.domain.settlement.entity.SettlementStatus;
 import me.projectexledger.domain.settlement.service.SettlementEngineService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -80,5 +81,14 @@ public class AdminSettlementController {
                 uniqueOrderId, "익명 기업", new BigDecimal("1004"), "KRW", status
         );
         return ResponseEntity.ok(ApiResponse.success("테스트 데이터 생성 완료!", null));
+    }
+    @PostMapping("/reconciliations/{id}/approve")
+    public ResponseEntity<?> approveSettlement(@PathVariable Long id) {
+        try {
+            settlementEngineService.approveSettlement(id);
+            return ResponseEntity.ok().body(Map.of("message", "승인이 완료되었습니다. 송금 대기 상태로 전환됩니다."));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 }
