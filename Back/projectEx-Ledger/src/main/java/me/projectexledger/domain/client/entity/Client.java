@@ -67,4 +67,9 @@ public class Client extends BaseEntity {
     public void setGrade(ClientGrade grade) {
         this.grade = grade;
     }
+    public void updatePolicy(ClientGrade grade, BigDecimal feeRate, BigDecimal preferenceRate) {
+        this.grade = grade;
+        this.feeRate = feeRate;
+        this.preferenceRate = preferenceRate;
+    }
 }

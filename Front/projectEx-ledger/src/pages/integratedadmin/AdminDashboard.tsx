@@ -145,7 +145,7 @@ const AdminDashboard: React.FC = () => {
         )}
 
         <div className="flex justify-end">
-          <a href="/list" className="text-sm font-bold text-[#007b70] hover:underline flex items-center gap-1">
+          <a href="/admin/list" className="text-sm font-bold text-[#007b70] hover:underline flex items-center gap-1">
             상세 대사 리스트 확인하기 →
           </a>
         </div>

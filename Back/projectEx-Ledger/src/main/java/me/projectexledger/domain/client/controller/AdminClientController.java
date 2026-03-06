@@ -4,22 +4,66 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.projectexledger.common.dto.ApiResponse;
 import me.projectexledger.domain.client.dto.ClientPendingDTO;
+import me.projectexledger.domain.client.entity.Client;
+import me.projectexledger.domain.client.entity.ClientGrade;
 import me.projectexledger.domain.client.service.ClientService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
+// 🌟 프론트엔드와 통신하기 위해 경로를 맞춥니다.
 @RequestMapping("/api/admin/clients")
 @RequiredArgsConstructor
 // @PreAuthorize("hasRole('ADMIN')") // 임시 주석 처리
 public class AdminClientController {
 
     private final ClientService clientService;
+
+    // =========================================================================
+    // 🚀 [수정됨] 프론트엔드(ClientManagement.tsx) 가맹점 전체 목록 조회 API
+    // GET /api/admin/clients
+    // =========================================================================
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<Client>>> getAllClients() {
+        log.info("[Admin] DB에서 실제 가맹점 전체 목록 조회 요청");
+
+        // 🌟 임시 하드코딩 데이터를 지우고, 진짜 DB에서 목록을 가져옵니다.
+        List<Client> clients = clientService.getAllClients();
+
+        return ResponseEntity.ok(ApiResponse.success("가맹점 목록 조회 성공", clients));
+    }
+
+    // =========================================================================
+    // 🚀 [수정됨] 가맹점 등급(VIP/GENERAL) 및 수수료 정책 저장 API
+    // POST /api/admin/clients/{merchantId}/policy
+    // =========================================================================
+    @PostMapping("/{merchantId}/policy")
+    public ResponseEntity<ApiResponse<Void>> updateClientPolicy(
+            @PathVariable String merchantId,
+            @RequestBody Map<String, Object> policyData) {
+
+        log.info("[Admin] 가맹점 정책 업데이트 요청 - 가맹점 ID: {}", merchantId);
+        log.info("업데이트 내용: {}", policyData);
+
+        ClientGrade grade = ClientGrade.valueOf((String) policyData.get("grade"));
+        BigDecimal platformFeeRate = new BigDecimal(policyData.get("platformFeeRate").toString());
+        BigDecimal preferenceRate = new BigDecimal(policyData.get("preferenceRate").toString());
+
+        // 🌟 서비스 로직을 호출하여 DB에 진짜로 업데이트합니다!
+        clientService.updateClientPolicy(merchantId, grade, platformFeeRate, preferenceRate);
+
+        return ResponseEntity.ok(ApiResponse.success("가맹점 등급 및 수수료 정책이 성공적으로 반영되었습니다!", null));
+    }
+
+    // -------------------------------------------------------------------------
+    // 기존에 작성하신 코드 유지
+    // -------------------------------------------------------------------------
 
     // 1. 가입 승인 대기 리스트 조회
     @GetMapping("/pending")
@@ -45,13 +89,10 @@ public class AdminClientController {
     @PostMapping("/{clientId}/approve")
     public ResponseEntity<ApiResponse<Void>> approveClient(
             @PathVariable Long clientId,
-            @RequestParam BigDecimal feeRate) { // 수수료율 파라미터 추가
+            @RequestParam BigDecimal feeRate) {
 
         log.info("기업 고객 가입 승인 및 수수료 설정. ID: {}, 수수료: {}", clientId, feeRate);
-
-
         clientService.approveClient(clientId, feeRate);
-
         return ResponseEntity.ok(ApiResponse.success("고객 승인 및 수수료 설정이 완료되었습니다.", null));
     }
 
@@ -62,10 +103,7 @@ public class AdminClientController {
             @RequestParam BigDecimal feeRate) {
 
         log.info("기업 고객 수수료 변경. ID: {}, 수수료: {}", clientId, feeRate);
-
-        //  approveClient 로직을 재활용해야 합니다
         // clientService.updateClientFee(clientId, feeRate);
-
         return ResponseEntity.ok(ApiResponse.success("수수료가 성공적으로 변경되었습니다.", null));
     }
 }
