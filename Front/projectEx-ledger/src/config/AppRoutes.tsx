@@ -14,22 +14,26 @@ import MFASetup from "../components/pages/auth/MFASetup";
 // Admin System Pages
 import AdminLogList from "../components/pages/admin/system/AdminLogList";
 import SystemHealth from "../components/pages/admin/system/SystemHealth";
-import AdminDashboard from "../pages/admin/AdminDashboard";
-import ReconciliationList from "../pages/admin/ReconciliationList";
+import AdminDashboard from "../pages/integratedadmin/AdminDashboard";
+import ReconciliationList from "../pages/integratedadmin/ReconciliationList";
 import SellerDashboard from "../components/pages/remittance/SellerDashboard";
-import ReconciliationDetail from "../pages/admin/ReconciliationDetail";
+import ReconciliationDetail from '../pages/integratedadmin/ReconciliationDetail';
+import ClientManagement from "../pages/integratedadmin/ClientManagement";
 import MySettlementList from "../components/pages/settlement/MySettlementList";
 
 const AppRoutes = () => {
-  return (
-    <Routes>
-      {/* 누구나 접근 가능한 기본 렌딩 페이지 */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/dashboard" element={<AdminDashboard />} />
-      <Route path="/admin/list" element={<ReconciliationList />} />
-      <Route path="/list" element={<MySettlementList />} />
-      <Route path="/detail" element={<ReconciliationDetail />} />
-      <Route path="/seller/dashboard" element={<SellerDashboard />} />
+    return (
+        <Routes>
+            {/* 누구나 접근 가능한 기본 렌딩 페이지 */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/list" element={<ReconciliationList />} />
+         <Route path="/admin/settlement/:id" element={<ReconciliationDetail />} />
+         <Route path="/pages/admin/settlement" element={<ReconciliationList />} />
+            <Route path="/seller/dashboard" element={<SellerDashboard />} />
+            <Route path="/client" element={<ClientManagement />} />
+            <Route path="/list" element={<MySettlementList />} />
+            <Route path="/seller/dashboard" element={<SellerDashboard />} />
       {/* 인증 불필요 라우트 */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />

@@ -90,7 +90,7 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
     public void markAsCompleted() { this.status = SettlementStatus.COMPLETED; }
     public void markAsDiscrepancy() { this.status = SettlementStatus.DISCREPANCY; }
     public void markAsResolved(String reason) {
-        this.status = SettlementStatus.COMPLETED;
+        this.status = SettlementStatus.WAITING_USER_CONSENT;
         this.resolutionReason = reason;
     }
     public void updateSettlementAmount(BigDecimal correctedAmount) { this.settlementAmount = correctedAmount; }

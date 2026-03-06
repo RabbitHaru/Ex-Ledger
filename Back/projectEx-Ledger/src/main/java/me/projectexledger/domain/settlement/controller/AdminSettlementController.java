@@ -4,12 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.projectexledger.common.dto.ApiResponse;
 import me.projectexledger.domain.admin.dto.DashboardSummaryDTO;
+import me.projectexledger.domain.company.service.SettlementPolicyService;
 import me.projectexledger.domain.settlement.dto.ReconciliationListDTO;
 import me.projectexledger.domain.settlement.dto.SettlementPolicyUpdateRequest;
 import me.projectexledger.domain.settlement.entity.SettlementStatus;
 import me.projectexledger.domain.settlement.service.SettlementEngineService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.Map;
 
 import java.math.BigDecimal;
@@ -23,6 +25,7 @@ import java.util.List;
 public class AdminSettlementController {
 
     private final SettlementEngineService settlementEngineService;
+    private final SettlementPolicyService policyService;
 
     @GetMapping("/sync")
     public ResponseEntity<ApiResponse<Void>> syncDailySettlement(@RequestParam(required = false) String date) {
@@ -74,6 +77,7 @@ public class AdminSettlementController {
             @PathVariable String merchantId,
             @RequestBody SettlementPolicyUpdateRequest request) {
         log.info("[Admin] {} 가맹점의 정산 수수료 정책 업데이트 요청", merchantId);
+        policyService.updatePolicy(merchantId, request);
         return ResponseEntity.ok(ApiResponse.success("수수료 정책이 성공적으로 반영되었습니다.", null));
     }
 
@@ -106,4 +110,5 @@ public class AdminSettlementController {
             return ResponseEntity.badRequest().body(ApiResponse.fail(e.getMessage()));
         }
     }
+
 }
