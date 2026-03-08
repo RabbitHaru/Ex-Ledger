@@ -15,7 +15,6 @@ import java.util.Map;
 @Component
 public class ExchangeRateCalculator {
 
-    // 🚨 application.properties의 설정값과 완벽하게 매핑
     @Value("${koreaexim.api.base-url}")
     private String baseUrl;
 
@@ -26,65 +25,62 @@ public class ExchangeRateCalculator {
     private String dataType;
 
     /**
-     * [1순위] 한국수출입은행 API를 호출하여 오늘자 USD 실시간 매매기준율을 가져옵니다.
+     * [1순위] 한국수출입은행 API를 호출하여 요청한 외화의 실시간 매매기준율을 가져옵니다.
+     * 메서드명을 getUsdExchangeRate -> getExchangeRate 로 범용적으로 변경했습니다.
      */
-    public BigDecimal getUsdExchangeRate() {
+    public BigDecimal getExchangeRate(String targetCurrency) {
         try {
             RestTemplate restTemplate = new RestTemplate();
-            // 오늘 날짜를 yyyyMMdd 포맷으로 변환
             String searchDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
-            // 🚨 properties에서 주입받은 값들을 조합하여 최종 URL 생성
             String url = String.format("%s?authkey=%s&searchdate=%s&data=%s",
                     baseUrl, serviceKey, searchDate, dataType);
 
-            log.info("[FX] 수출입은행 환율 API 호출 중... (조회일자: {})", searchDate);
+            log.info("[FX] 수출입은행 환율 API 호출 중... (통화: {}, 조회일자: {})", targetCurrency, searchDate);
 
-            // API 호출 결과 받아오기
             List<Map<String, Object>> responses = restTemplate.getForObject(url, List.class);
 
-            // 응답 데이터 파싱
             if (responses != null && !responses.isEmpty()) {
                 for (Map<String, Object> rateInfo : responses) {
-                    if ("USD".equals(rateInfo.get("cur_unit"))) {
-                        // "1,350.50" 처럼 콤마가 포함된 문자열에서 콤마 제거 후 변환
+                    String curUnit = (String) rateInfo.get("cur_unit");
+
+                    // 🌟 핵심 방어 로직: JPY(100), VND(100) 등 100단위 표기 통화를 잡아내기 위해 startsWith 사용!
+                    if (curUnit != null && curUnit.startsWith(targetCurrency.toUpperCase())) {
                         String rateStr = ((String) rateInfo.get("deal_bas_r")).replace(",", "");
                         BigDecimal liveRate = new BigDecimal(rateStr);
-                        log.info("[FX] 오늘자 실시간 USD 환율 조회 성공: {}원", liveRate);
-                        return liveRate;
+                        log.info("[FX] 오늘자 실시간 {} 환율 조회 성공: {}원 (단위: {})", targetCurrency, liveRate, curUnit);
+                        return liveRate; // 이 값은 나중에 SettlementEngineService의 normalizeRate에서 1단위로 쪼개집니다.
                     }
                 }
-                log.warn("[FX] API 응답은 정상이나 USD 통화 정보가 없습니다.");
+                log.warn("[FX] API 응답은 정상이나 {} 통화 정보가 없습니다.", targetCurrency);
             } else {
-                // 수출입은행 API는 주말이나 공휴일에는 빈 리스트([])를 반환합니다.
                 log.warn("[FX] API 응답이 비어있습니다. (주말/공휴일 또는 영업시간 외일 수 있음)");
             }
         } catch (Exception e) {
             log.error("[FX] 환율 API 호출 중 서버 오류 발생: {}", e.getMessage());
         }
 
-        // 실패 시 null을 반환하여 Service의 하이브리드 방어로직이 작동하도록 함
         return null;
     }
 
     /**
      * [2순위 방어] 일일 고시 환율 (Frankfurter API 등) 조회
-     * TODO: Member C가 Redis 캐싱 및 Frankfurter 연동으로 고도화할 예정
      */
-    public BigDecimal getDailyStandardRate() {
-        log.info("[FX-Fallback] 2순위: 일일 고시 환율(Frankfurter 등)을 시도합니다.");
-
-        return new BigDecimal("1400.00");
+    public BigDecimal getDailyStandardRate(String targetCurrency) {
+        log.info("[FX-Fallback] 2순위: 일일 고시 환율(Frankfurter 등)을 시도합니다. (통화: {})", targetCurrency);
+        // 임시 더미 데이터 (각 통화별 대략적인 환율 세팅)
+        if ("JPY".equalsIgnoreCase(targetCurrency)) return new BigDecimal("900.00");
+        if ("VND".equalsIgnoreCase(targetCurrency)) return new BigDecimal("5.50");
+        return new BigDecimal("1400.00"); // 기본 USD
     }
 
     /**
      * [3순위 방어] 시스템 DB 최신 저장 환율 조회
-     * TODO: Member C가 시스템에 마지막으로 저장된 성공 환율을 가져오도록 구현할 예정
      */
-    public BigDecimal getLatestStoredRate() {
-        log.info("[FX-Fallback] 3순위: 시스템에 마지막으로 저장된 환율을 꺼내옵니다.");
-
-        return new BigDecimal("1380.00");
+    public BigDecimal getLatestStoredRate(String targetCurrency) {
+        log.info("[FX-Fallback] 3순위: 시스템에 마지막으로 저장된 환율을 꺼내옵니다. (통화: {})", targetCurrency);
+        if ("JPY".equalsIgnoreCase(targetCurrency)) return new BigDecimal("890.00");
+        if ("VND".equalsIgnoreCase(targetCurrency)) return new BigDecimal("5.40");
+        return new BigDecimal("1380.00"); // 기본 USD
     }
-
 }

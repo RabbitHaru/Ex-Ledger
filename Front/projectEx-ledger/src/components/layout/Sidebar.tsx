@@ -7,6 +7,10 @@ import {
   Globe,
   X,
   ClipboardList,
+  ListChecks,
+  ShieldAlert,
+  Building2,
+  SendHorizontal,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -52,6 +56,90 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           />
           홈
         </Link>
+        <div className="px-4 pt-6 pb-2">
+          <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
+            Admin Area
+          </p>
+        </div>
+
+        <Link
+          to="/dashboard"
+          onClick={onClose}
+          className={`flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-all rounded-xl group ${
+            location.pathname === "/dashboard"
+              ? "bg-blue-50 text-blue-600"
+              : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+          }`}
+        >
+          <ShieldAlert
+            size={18}
+            className={
+              location.pathname === "/dashboard"
+                ? "text-blue-500"
+                : "text-slate-400 group-hover:text-blue-500"
+            }
+          />
+          정산 요약 대시보드
+        </Link>
+
+        <Link
+          to="/client"
+          onClick={onClose}
+          className={`flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-all rounded-xl group ${
+            location.pathname === "/client"
+              ? "bg-blue-50 text-blue-600"
+              : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+          }`}
+        >
+          <Building2
+            size={18}
+            className={
+              location.pathname === "/client"
+                ? "text-blue-500"
+                : "text-slate-400 group-hover:text-blue-500"
+            }
+          />
+          가맹점 및 수수료 관리
+        </Link>
+
+        <Link
+          to="/admin/list"
+          onClick={onClose}
+          className={`flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-all rounded-xl group ${
+            location.pathname === "/admin/list"
+              ? "bg-blue-50 text-blue-600"
+              : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+          }`}
+        >
+          <ListChecks
+            size={18}
+            className={
+              location.pathname === "/admin/list"
+                ? "text-blue-500"
+                : "text-slate-400 group-hover:text-blue-500"
+            }
+          />
+          결제 정산 대사
+        </Link>
+        <Link
+  to="/remittance" // 경로 설정 확인 필요
+  onClick={onClose}
+  className={`flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-all rounded-xl group ${
+    location.pathname === "/remittance"
+      ? "bg-blue-50 text-blue-600"
+      : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+  }`}
+>
+  <SendHorizontal
+    size={18}
+    className={
+      location.pathname === "/remittance"
+        ? "text-blue-500"
+        : "text-slate-400 group-hover:text-blue-500"
+    }
+  />
+  자금 이체 프로세싱
+</Link>
 
         <div className="px-4 pt-6 pb-2">
           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">

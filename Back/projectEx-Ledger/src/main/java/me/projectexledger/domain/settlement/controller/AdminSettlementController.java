@@ -13,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,6 +26,7 @@ public class AdminSettlementController {
     private final SettlementEngineService settlementEngineService;
     private final SettlementPolicyService policyService;
 
+    // 1. 실시간 동기화 (AdminDashboard.tsx - handleSync 연동)
     @GetMapping("/sync")
     public ResponseEntity<ApiResponse<Void>> syncDailySettlement(@RequestParam(required = false) String date) {
         String targetDate = (date != null) ? date : LocalDate.now().toString();
@@ -35,6 +35,7 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("정산 동기화가 성공적으로 완료되었습니다.", null));
     }
 
+    // 2. 대시보드 요약 정보 조회 (AdminDashboard.tsx - fetchDashboardSummary 연동)
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<DashboardSummaryDTO>> getDashboardSummary() {
         log.info("[Admin] 대시보드 요약 데이터 요청");
@@ -42,6 +43,7 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("대시보드 데이터 조회 성공", summaryData));
     }
 
+    // 3. 대사 리스트 조회 (ReconciliationList.tsx - fetchReconciliationData 연동)
     @GetMapping("/reconciliations")
     public ResponseEntity<ApiResponse<List<ReconciliationListDTO>>> getReconciliationList(
             @RequestParam(defaultValue = "0") int page,
@@ -51,7 +53,7 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("리스트 조회 성공", data));
     }
 
-    // 🚨 1. 오차 수정 API (React 연동을 위해 @PatchMapping 및 @RequestBody로 개선)
+    // 4. 오차 수정 API (상세 페이지의 수동 수정 기능)
     @PatchMapping("/{settlementId}/resolve")
     public ResponseEntity<ApiResponse<Void>> resolveDiscrepancy(
             @PathVariable Long settlementId,
@@ -65,13 +67,16 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("수동 오차 수정 처리가 완료되었습니다.", null));
     }
 
-    @PostMapping("/{settlementId}/retry-remittance")
-    public ResponseEntity<ApiResponse<Void>> retryRemittance(@PathVariable Long settlementId) {
-        log.info("[Admin] 송금 실패 건 재전송 요청. ID: {}", settlementId);
-        settlementEngineService.retryRemittance(settlementId);
+    // 🌟 5. [에러 해결 핵심] 송금 재시도 API
+    // 프론트엔드에서 보낸 '/retry' 요청을 받아 엔진의 retryRemittance를 실행합니다.
+    @PostMapping("/{id}/retry")
+    public ResponseEntity<ApiResponse<Void>> retrySettlement(@PathVariable Long id) {
+        log.info("[Admin] 송금 실패 건 재전송(retry) 요청. ID: {}", id);
+        settlementEngineService.retryRemittance(id);
         return ResponseEntity.ok(ApiResponse.success("재송금 요청이 접수되었습니다.", null));
     }
 
+    // 6. 가맹점별 정산 정책 업데이트
     @PostMapping("/policy/{merchantId}")
     public ResponseEntity<ApiResponse<Void>> updateSettlementPolicy(
             @PathVariable String merchantId,
@@ -81,12 +86,11 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("수수료 정책이 성공적으로 반영되었습니다.", null));
     }
 
+    // 7. 테스트 데이터 주입 (ReconciliationList.tsx - handleCreateTestData 연동)
     @PostMapping("/test-data")
     public ResponseEntity<ApiResponse<String>> createTestData(@RequestParam SettlementStatus status) {
-        // 이제 서비스가 알아서 랜덤으로 만들 거니까, 여기서는 그냥 '실행'만 시킵니다!
         log.info("[Admin] 발표용 랜덤 테스트 데이터 생성 요청 (상태: {})", status);
 
-        // 파라미터는 아무거나 넣어도 서비스가 무시하고 랜덤으로 생성할 겁니다.
         settlementEngineService.createTestSettlement(
                 "T-ORDER-" + System.currentTimeMillis(),
                 "RANDOM",
@@ -98,7 +102,7 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("랜덤 테스트 데이터가 생성되었습니다!", null));
     }
 
-    // 🚨 2. 수동 승인 API (공통 응답 포맷인 ApiResponse 적용 및 주소 단순화)
+    // 8. 수동 정산 승인 (ReconciliationList.tsx - handleApprove 연동)
     @PostMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<Void>> approveSettlement(@PathVariable Long id) {
         log.info("[Admin] 정산 건 수동 승인 처리 요청. ID: {}", id);
@@ -106,9 +110,8 @@ public class AdminSettlementController {
             settlementEngineService.approveSettlement(id);
             return ResponseEntity.ok(ApiResponse.success("승인이 완료되었습니다. 송금 대기 상태로 전환됩니다.", null));
         } catch (Exception e) {
-            // 예외 발생 시 에러 메시지를 프론트엔드로 전달
+            log.error("[Admin] 승인 중 에러 발생: {}", e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.fail(e.getMessage()));
         }
     }
-
 }

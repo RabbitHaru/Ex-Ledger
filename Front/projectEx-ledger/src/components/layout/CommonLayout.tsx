@@ -74,21 +74,7 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
               </Link>
             </div>
 
-            {/* 중앙 메뉴 (Desktop) */}
-            <nav className="items-center hidden gap-8 text-sm font-semibold md:flex text-slate-600">
-              <Link
-                to="/dashboard"
-                className="transition-colors hover:text-teal-600"
-              >
-                정산요약
-              </Link>
-              <Link
-                to="/list"
-                className="transition-colors hover:text-teal-600"
-              >
-                정산리스트
-              </Link>
-            </nav>
+            
 
             {/* 우측 알림 및 사용자 버튼 세트 */}
             <div className="relative flex items-center gap-4">

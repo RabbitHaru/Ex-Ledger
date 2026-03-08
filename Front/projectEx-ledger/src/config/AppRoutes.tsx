@@ -20,6 +20,7 @@ import SellerDashboard from "../components/pages/remittance/SellerDashboard";
 import ReconciliationDetail from '../pages/integratedadmin/ReconciliationDetail';
 import ClientManagement from "../pages/integratedadmin/ClientManagement";
 import MySettlementList from "../components/pages/settlement/MySettlementList";
+import RemittanceManagement from "../pages/integratedadmin/RemittanceManagement";
 
 const AppRoutes = () => {
     return (
@@ -34,6 +35,7 @@ const AppRoutes = () => {
             <Route path="/client" element={<ClientManagement />} />
             <Route path="/list" element={<MySettlementList />} />
             <Route path="/seller/dashboard" element={<SellerDashboard />} />
+             <Route path="/remittance" element={<RemittanceManagement/>} />
       {/* 인증 불필요 라우트 */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
