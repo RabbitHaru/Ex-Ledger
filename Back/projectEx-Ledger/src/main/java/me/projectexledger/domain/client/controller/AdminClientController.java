@@ -49,14 +49,26 @@ public class AdminClientController {
             @RequestBody Map<String, Object> policyData) {
 
         log.info("[Admin] 가맹점 정책 업데이트 요청 - 가맹점 ID: {}", merchantId);
-        log.info("업데이트 내용: {}", policyData);
 
+        // 1. 프론트에서 넘어온 JSON 데이터에서 값들을 하나씩 꺼냅니다.
         ClientGrade grade = ClientGrade.valueOf((String) policyData.get("grade"));
         BigDecimal platformFeeRate = new BigDecimal(policyData.get("platformFeeRate").toString());
         BigDecimal preferenceRate = new BigDecimal(policyData.get("preferenceRate").toString());
 
-        // 🌟 서비스 로직을 호출하여 DB에 진짜로 업데이트합니다!
-        clientService.updateClientPolicy(merchantId, grade, platformFeeRate, preferenceRate);
+        // 🌟 [추가] 누락되었던 두 값을 마저 꺼냅니다.
+        BigDecimal networkFee = new BigDecimal(policyData.get("networkFee").toString());
+        BigDecimal exchangeSpread = new BigDecimal(policyData.get("exchangeSpread").toString());
+
+        // 2. 서비스 로직을 호출할 때 6개의 파라미터를 모두 순서대로 넘겨줍니다.
+        // 🌟 이제 서비스의 메서드 구조와 일치하므로 빨간 줄이 사라집니다!
+        clientService.updateClientPolicy(
+                merchantId,
+                grade,
+                platformFeeRate,
+                preferenceRate,
+                networkFee,
+                exchangeSpread
+        );
 
         return ResponseEntity.ok(ApiResponse.success("가맹점 등급 및 수수료 정책이 성공적으로 반영되었습니다!", null));
     }

@@ -52,15 +52,15 @@ public class ClientService {
     // =========================================================================
     // 🚀 [신규 추가 2] 가맹점 등급 및 수수료 정책 DB 업데이트 (updateClientPolicy 빨간 줄 해결!)
     // =========================================================================
-    public void updateClientPolicy(String merchantId, ClientGrade grade, BigDecimal platformFeeRate, BigDecimal preferenceRate) {
+    public void updateClientPolicy(String merchantId, ClientGrade grade, BigDecimal platformFeeRate, BigDecimal preferenceRate, BigDecimal networkFee, BigDecimal exchangeSpread) {
 
-        // 가맹점 ID로 DB에서 해당 기업을 찾습니다.
         Client client = clientRepository.findAll().stream()
                 .filter(c -> merchantId.equals(c.getMerchantId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("해당 가맹점을 찾을 수 없습니다."));
 
-        // JPA의 변경 감지(Dirty Checking)를 통해 자동으로 DB 값이 수정됩니다.
-        client.updatePolicy(grade, platformFeeRate, preferenceRate);
+        // ❌ 기존: client.updatePolicy(grade, platformFeeRate, preferenceRate, exchangeSpread, platformFeeRate);
+        // ✅ 수정: 엔티티에 정의된 순서(grade, feeRate, preferenceRate, networkFee, exchangeSpread)대로 정확히 전달
+        client.updatePolicy(grade, platformFeeRate, preferenceRate, networkFee, exchangeSpread);
     }
 }

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CommonLayout from "../../components/layout/CommonLayout"; 
+// 🌟 1. 우리가 만든 마스터키 불러오기
+import { authFetch } from '../../utils/api';
 
 export interface ReconciliationData {
   id: number;
@@ -44,10 +46,7 @@ const ReconciliationList: React.FC = () => {
   const statusKoreanMap: { [key: string]: string } = {
     PENDING: '송금 대기',
     COMPLETED: '정산 완료',
-    WAITING: '승인 대기',
     FAILED: '송금 실패',
-    DISCREPANCY: '오차 발생',
-    WAITING_USER_CONSENT: '유저 동의 대기',
   };
 
   const filterMap: { [key: string]: string } = {
@@ -75,7 +74,8 @@ const ReconciliationList: React.FC = () => {
   const fetchReconciliationData = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/settlements/reconciliations?page=0&size=1000');
+      // 🌟 2. 마스터키(authFetch) 적용 - 토큰 자동 탑재
+      const response = await authFetch('/api/admin/settlements/reconciliations?page=0&size=1000');
       if (response.ok) {
         const result = await response.json();
         setData(result.data || []);
@@ -89,7 +89,8 @@ const ReconciliationList: React.FC = () => {
 
   const handleCreateTestData = async () => {
     try {
-      const response = await fetch(`/api/admin/settlements/test-data?status=${testStatus}`, { method: 'POST' });
+      // 🌟 3. 마스터키(authFetch) 적용
+      const response = await authFetch(`/api/admin/settlements/test-data?status=${testStatus}`, { method: 'POST' });
       if (response.ok) {
         const koreanStatus = statusKoreanMap[testStatus] || testStatus;
         alert(`${koreanStatus} 상태의 테스트 데이터가 성공적으로 주입되었습니다! 💉`);
@@ -104,7 +105,8 @@ const ReconciliationList: React.FC = () => {
     if (!window.confirm(`대사 ID #${id} 건의 송금을 승인하시겠습니까?\n승인 시 '송금 대기' 상태로 전환됩니다.`)) return;
     
     try {
-      const response = await fetch(`/api/admin/settlements/${id}/approve`, { method: 'POST' });
+      // 🌟 4. 마스터키(authFetch) 적용
+      const response = await authFetch(`/api/admin/settlements/${id}/approve`, { method: 'POST' });
       if (response.ok) {
         alert("✅ 성공적으로 승인되었습니다.");
         fetchReconciliationData(); 
@@ -139,11 +141,8 @@ const ReconciliationList: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'COMPLETED': return <span className="px-3 py-1 text-xs font-bold text-green-700 bg-green-100 rounded-full">정산 완료</span>;
-      case 'DISCREPANCY': return <span className="px-3 py-1 text-xs font-bold text-red-700 bg-red-100 rounded-full">오차 발생</span>;
       case 'PENDING': return <span className="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-200 rounded-full">송금 대기</span>;
       case 'FAILED': return <span className="px-3 py-1 text-xs font-bold text-red-700 bg-red-100 rounded-full">송금 실패</span>;
-      case 'WAITING': return <span className="px-3 py-1 text-xs font-bold text-purple-700 bg-purple-100 rounded-full">승인 대기</span>;
-      case 'WAITING_USER_CONSENT': return <span className="px-3 py-1 text-xs font-bold text-yellow-700 bg-yellow-100 rounded-full">유저 동의 대기</span>;
       default: return <span className="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-200 rounded-full">{status}</span>;
     }
   };

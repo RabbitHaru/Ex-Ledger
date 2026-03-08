@@ -48,6 +48,12 @@ public class Client extends BaseEntity {
     @Column(name = "merchant_id", unique = true)
     private String merchantId;
 
+    @Column(name = "network_fee", precision = 15, scale = 2)
+    private BigDecimal networkFee;      // 네트워크/전신료 고정비 (예: 2000)
+
+    @Column(name = "exchange_spread", precision = 5, scale = 2)
+    private BigDecimal exchangeSpread;  // 환전 스프레드 마진 (예: 10.0)
+
     @Builder.Default // 빌더를 사용할 때 초기값이 무시되지 않도록 방어
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -67,9 +73,18 @@ public class Client extends BaseEntity {
     public void setGrade(ClientGrade grade) {
         this.grade = grade;
     }
-    public void updatePolicy(ClientGrade grade, BigDecimal feeRate, BigDecimal preferenceRate) {
+    // ✅ 수정된 코드 (Client.java)
+    public void updatePolicy(
+            ClientGrade grade,
+            BigDecimal feeRate,
+            BigDecimal preferenceRate,
+            BigDecimal networkFee,
+            BigDecimal exchangeSpread
+    ) {
         this.grade = grade;
         this.feeRate = feeRate;
         this.preferenceRate = preferenceRate;
+        this.networkFee = networkFee;     // 🌟 이제 정상적으로 전달받은 값을 저장합니다.
+        this.exchangeSpread = exchangeSpread; // 🌟 누락되었던 필드도 추가되었습니다.
     }
 }
