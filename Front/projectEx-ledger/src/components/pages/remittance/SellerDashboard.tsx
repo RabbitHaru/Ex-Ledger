@@ -16,6 +16,7 @@ const SellerDashboard = () => {
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [settleAmount, setSettleAmount] = useState<number>(0);
   const [currentStatus, setCurrentStatus] = useState<any>("WAITING");
+  const [currentTxId, setCurrentTxId] = useState<string>("NEW-REQ"); // 🌟 신청 후 ID 저장을 위한 상태 추가
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
   const [verifiedName, setVerifiedName] = useState("");
@@ -30,10 +31,16 @@ const SellerDashboard = () => {
   const currentRateInfo = rates.find((r) => r.curUnit.includes(targetCurrency));
   const currentRate = currentRateInfo?.rate || 0;
 
-  // 🌟 원화 계산 로직 (소수점 완전 제거)
+  // 🌟 계산 로직: 이 데이터들이 모달로 그대로 전달됩니다.
   const totalKRW = settleAmount * currentRate;
-  const platformFee = Math.floor(totalKRW * 0.015); // 1.5% 수수료 절사
-  const finalAmount = Math.max(0, Math.floor(totalKRW - platformFee)); // 최종 금액 절사
+  const platformFee = Math.floor(totalKRW * 0.015);
+  const finalAmount = Math.max(0, Math.floor(totalKRW - platformFee));
+
+  // 🌟 핵심 로직: 신청 성공 시 대시보드 상태 업데이트
+  const handleRequestSuccess = (transactionId: string) => {
+    setCurrentTxId(transactionId); // 서버에서 받은 실제 ID 반영
+    setCurrentStatus("PENDING"); // 상태를 '승인 대기(검토 중)'로 변경
+  };
 
   return (
     <CommonLayout>
@@ -105,7 +112,6 @@ const SellerDashboard = () => {
                     <span className="font-bold text-slate-400">
                       플랫폼 수수료 (1.5%)
                     </span>
-                    {/* 🌟 원화 소수점 제거 반영 */}
                     <span className="font-black text-red-400">
                       - {platformFee.toLocaleString()} KRW
                     </span>
@@ -115,7 +121,6 @@ const SellerDashboard = () => {
                       최종 예상 수령액
                     </span>
                     <h2 className="text-3xl font-black tracking-tighter text-white">
-                      {/* 🌟 원화 소수점 제거 반영 */}
                       {finalAmount.toLocaleString()}{" "}
                       <span className="text-sm">KRW</span>
                     </h2>
@@ -132,24 +137,35 @@ const SellerDashboard = () => {
               </button>
             </div>
 
+            {/* 🌟 상태 및 트랜잭션 ID 반영 */}
             <RemittanceTracking
               status={currentStatus}
-              transactionId="NEW-REQ"
+              transactionId={currentTxId}
               updatedAt="실시간 업데이트 중"
             />
           </div>
         </div>
       </div>
 
+      {/* 🌟 수정된 모달 호출: settlementData 객체를 조립해서 넘겨줍니다. */}
       <RemittanceRequestModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialReceiverName={verifiedName}
+        onSuccess={handleRequestSuccess}
+        settlementData={{
+          amount: settleAmount,
+          currency: targetCurrency,
+          rate: currentRate,
+          fee: platformFee,
+          finalAmount: finalAmount,
+        }}
       />
+
       <RemittanceConsentModal
         isOpen={isConsentModalOpen}
         onClose={() => setIsConsentModalOpen(false)}
-        transactionId="NEW-REQ"
+        transactionId={currentTxId}
         initialReceiverName={verifiedName}
         adjustedAmount={0}
         onSuccess={() => setCurrentStatus("PENDING")}
