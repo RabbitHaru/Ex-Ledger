@@ -22,20 +22,24 @@ import ClientManagement from "../pages/integratedadmin/ClientManagement";
 import MySettlementList from "../components/pages/settlement/MySettlementList";
 import RemittanceManagement from "../pages/integratedadmin/RemittanceManagement";
 
+// Company
+import CompanyJoin from "../pages/company/CompanyJoin";
+import PendingUsers from "../pages/company/PendingUsers";
+
 const AppRoutes = () => {
-    return (
-        <Routes>
-            {/* 누구나 접근 가능한 기본 렌딩 페이지 */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/list" element={<ReconciliationList />} />
-         <Route path="/admin/settlement/:id" element={<ReconciliationDetail />} />
-         <Route path="/pages/admin/settlement" element={<ReconciliationList />} />
-            <Route path="/seller/dashboard" element={<SellerDashboard />} />
-            <Route path="/client" element={<ClientManagement />} />
-            <Route path="/list" element={<MySettlementList />} />
-            <Route path="/seller/dashboard" element={<SellerDashboard />} />
-             <Route path="/remittance" element={<RemittanceManagement/>} />
+  return (
+    <Routes>
+      {/* 누구나 접근 가능한 기본 렌딩 페이지 */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/dashboard" element={<AdminDashboard />} />
+      <Route path="/admin/list" element={<ReconciliationList />} />
+      <Route path="/admin/settlement/:id" element={<ReconciliationDetail />} />
+      <Route path="/pages/admin/settlement" element={<ReconciliationList />} />
+      <Route path="/seller/dashboard" element={<SellerDashboard />} />
+      <Route path="/client" element={<ClientManagement />} />
+      <Route path="/list" element={<MySettlementList />} />
+      <Route path="/seller/dashboard" element={<SellerDashboard />} />
+      <Route path="/remittance" element={<RemittanceManagement />} />
       {/* 인증 불필요 라우트 */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
@@ -52,6 +56,7 @@ const AppRoutes = () => {
             path="/settlement"
             element={<div className="p-4">Settlement</div>}
           />
+          <Route path="/company/join" element={<CompanyJoin />} />
 
           {/* 관리자(Admin) 전용 라우트 */}
           <Route
@@ -63,6 +68,7 @@ const AppRoutes = () => {
           >
             <Route path="/admin/logs" element={<AdminLogList />} />
             <Route path="/admin/health" element={<SystemHealth />} />
+            <Route path="/admin/company/pending" element={<PendingUsers />} />
           </Route>
         </Route>
       </Route>

@@ -48,6 +48,7 @@ public class AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
                 .role(role)
+                .businessNumber(request.getBusinessNumber())
                 .build();
 
         return memberRepository.save(member).getId();
