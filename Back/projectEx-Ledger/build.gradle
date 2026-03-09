@@ -66,6 +66,9 @@ dependencies {
 
     // Spring AOP (For MFA and Audit logs)
     implementation 'org.springframework.boot:spring-boot-starter-aop:3.2.1'
+
+    // JUnit 5 & AssertJ
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 tasks.named('test') {

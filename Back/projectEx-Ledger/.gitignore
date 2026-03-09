@@ -38,3 +38,4 @@ out/
 
 # Ignore secret application properties
 secret.properties
+

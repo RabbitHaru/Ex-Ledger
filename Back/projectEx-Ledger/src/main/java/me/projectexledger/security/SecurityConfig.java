@@ -34,6 +34,10 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    // "/api/v1/exchange/**" 차트용
+    // "/api/exchange/**" 테이블/계산기용
+    // "/api/connect" SSE 연결(주소)
+    // "/api/connect/**" SSE 하위경로
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -41,8 +45,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/auth/**", "/api/exchange/**", "/swagger-ui/**", "/v3/api-docs/**")
-                        .permitAll()
+                        .requestMatchers("/api/auth/**", "/api/v1/exchange/**", "/api/exchange/**", "/api/connect", "/api/connect/**", "/test.html",  "/api/admin/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 
