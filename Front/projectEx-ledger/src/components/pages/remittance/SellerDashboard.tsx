@@ -1,86 +1,138 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import CommonLayout from "../../layout/CommonLayout"; // 🌟 다시 추가된 레이아웃
+import CommonLayout from "../../layout/CommonLayout";
 import ExchangeRateChart from "../../widgets/finance/ExchangeRateChart";
 import AccountVerification from "./AccountVerification";
 import RemittanceTracking from "./Tracking/RemittanceTracking";
 import RemittanceRequestModal from "./RemittanceRequestModal";
-import RemittanceConsentModal from "./RemittanceConsentModal";
+// 🌟 토스트 알림 훅 임포트
+import { useToast } from "../../../components/notification/ToastProvider";
 import {
   Wallet,
   ArrowLeftRight,
   Coins,
-  ArrowUpRight,
+  Send,
+  Globe,
   Activity,
   ClipboardCheck,
+  Landmark,
 } from "lucide-react";
 import type { ExchangeRate } from "../../../types/exchange";
 
 const SellerDashboard = () => {
+  // 🌟 ToastContextType의 실제 구현에 맞춰 showToast 추출
+  const { showToast } = useToast();
   const location = useLocation();
-  const targetCurrency = location.state?.currencyCode || "USD";
-
   const [rates, setRates] = useState<ExchangeRate[]>([]);
 
-  // 🌟 [비즈니스 분리] 보유 잔액(정산 완료) vs 환전 신청 금액
-  const [availableBalance, setAvailableBalance] = useState<number>(12450.0);
-  const [exchangeAmount, setExchangeAmount] = useState<number>(0);
+  // 🌟 [핀테크 로직] 보유한 원화(KRW)를 외화로 바꿔 보내는 구조
+  const [krwBalance, setKrwBalance] = useState<number>(25400000); // 2,540만원 보유
+  const [outboundAmount, setOutboundAmount] = useState<number>(0); // 송금할 원화 금액
+  const [targetCurrency, setTargetCurrency] = useState("USD");
+  const [liveRate, setLiveRate] = useState<number>(0);
+
+  // 시뮬레이션용 해외 수취인 데이터
+  const [beneficiaries] = useState([
+    {
+      id: 1,
+      name: "Global Supply Co.",
+      country: "USA",
+      bank: "Chase Bank",
+      swift: "CHASUS33",
+    },
+    {
+      id: 2,
+      name: "Tech Parts Ltd.",
+      country: "Japan",
+      bank: "MUFG Bank",
+      swift: "MUFGJPJT",
+    },
+  ]);
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState<number | null>(
+    null,
+  );
 
   const [currentStatus, setCurrentStatus] = useState<any>("WAITING");
   const [currentTxId, setCurrentTxId] = useState<string>("NEW-REQ");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
   const [verifiedName, setVerifiedName] = useState("");
 
+  // 🌟 Frankfurter 무료 API로 실시간 환율 가져오기
   useEffect(() => {
-    fetch("http://localhost:8080/api/exchange/latest")
-      .then((res) => res.json())
-      .then((data) => setRates(Array.isArray(data) ? data : []))
-      .catch((err) => console.error("환율 로드 실패:", err));
-  }, []);
+    const fetchLiveRate = async () => {
+      try {
+        const res = await fetch(
+          `https://api.frankfurter.app/latest?from=KRW&to=${targetCurrency}`,
+        );
+        const data = await res.json();
+        setLiveRate(data.rates[targetCurrency]);
+      } catch (err) {
+        console.error("환율 로드 실패:", err);
+      }
+    };
+    fetchLiveRate();
+  }, [targetCurrency]);
 
-  const currentRateInfo = rates.find((r) => r.curUnit.includes(targetCurrency));
-  const currentRate = currentRateInfo?.rate || 0;
-
-  const totalKRW = exchangeAmount * currentRate;
-  const platformFee = Math.floor(totalKRW * 0.015);
-  const finalWithdrawAmount = Math.max(0, Math.floor(totalKRW - platformFee));
+  const estimatedFX = outboundAmount * liveRate;
 
   const handleRequestSuccess = (transactionId: string) => {
     setCurrentTxId(transactionId);
-    setCurrentStatus("PENDING");
+    setCurrentStatus("REVIEWING");
+
+    showToast(
+      `해외 송금 시작: ${targetCurrency} ${estimatedFX.toFixed(2)} 검토 중`,
+      "INFO",
+    );
+
+    // 4초 뒤: 2단계 환전 완료
+    setTimeout(() => setCurrentStatus("EXCHANGED"), 4000);
+
+    // 8초 뒤: 3단계 현지 송금 중
+    setTimeout(() => setCurrentStatus("TRANSFERRING"), 8000);
+
+    // 12초 뒤: 4단계 최종 완료 시뮬레이션
+    setTimeout(() => {
+      setCurrentStatus("COMPLETED");
+      setKrwBalance((prev) => prev - outboundAmount);
+
+      showToast("해외 현지 은행으로 송금이 최종 완료되었습니다.", "SUCCESS");
+    }, 12000);
+  };
+
+  const handleSendMoney = () => {
+    if (outboundAmount > krwBalance) {
+      alert("잔액이 부족합니다.");
+      return;
+    }
+    setCurrentTxId(
+      `OUT-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+    );
+    setIsModalOpen(true);
   };
 
   return (
-    // 🌟 CommonLayout으로 전체 페이지를 감싸 사이드바와 헤더를 보여줍니다.
     <CommonLayout>
       <div className="w-full p-6 mx-auto lg:p-10 max-w-7xl">
-        {/* --- 상단 섹션: 기업 정산 현황 (Settlement) --- */}
+        {/* 상단: 자산 요약 섹션 */}
         <div className="grid grid-cols-1 gap-6 mb-12 md:grid-cols-3">
-          {/* 잔액 카드 */}
-          <div className="md:col-span-2 bg-gradient-to-br from-teal-600 to-teal-700 p-10 rounded-[48px] text-white shadow-2xl shadow-teal-100 flex justify-between items-center relative overflow-hidden group">
+          <div className="md:col-span-2 bg-slate-900 p-10 rounded-[48px] text-white shadow-2xl relative overflow-hidden group">
             <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-3 opacity-80">
-                <Coins size={16} />
-                <p className="text-[11px] font-black uppercase tracking-[0.2em]">
-                  Settled Balance
+              <div className="flex items-center gap-2 mb-3 opacity-50">
+                <Wallet size={16} />
+                <p className="text-[11px] font-black uppercase tracking-widest">
+                  Available KRW Balance
                 </p>
               </div>
               <h2 className="text-5xl font-black tracking-tighter">
-                {availableBalance.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                })}
-                <span className="ml-2 text-2xl font-bold opacity-50">
-                  {targetCurrency}
+                {krwBalance.toLocaleString()}
+                <span className="ml-2 text-2xl font-bold text-teal-400 text-opacity-80">
+                  KRW
                 </span>
               </h2>
               <div className="flex items-center gap-4 mt-8">
-                <span className="px-4 py-2 bg-white/10 rounded-2xl text-[12px] font-bold">
-                  정산 완료
+                <span className="px-4 py-2 bg-white/10 rounded-2xl text-[12px] font-bold text-teal-400">
+                  송금 가능
                 </span>
-                <p className="text-sm italic font-medium opacity-60">
-                  최종 업데이트: 2026-03-09 10:27
-                </p>
               </div>
             </div>
             <Activity
@@ -89,112 +141,102 @@ const SellerDashboard = () => {
             />
           </div>
 
-          {/* 현재 진행 중인 정산 요약 */}
           <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between">
             <div>
               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-6">
-                Current Settlement
+                Current Processing
               </p>
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
+                <div className="p-2 text-teal-600 rounded-lg bg-teal-50">
                   <ClipboardCheck size={18} />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase">
-                    검토 중인 대금
+                    최근 활동
                   </p>
                   <h4 className="text-xl font-black text-slate-900">
-                    4,120.00 {targetCurrency}
+                    {currentStatus === "COMPLETED" ? "처리 완료" : "진행 중"}
                   </h4>
                 </div>
               </div>
             </div>
             <div className="pt-4 border-t border-slate-50">
               <div className="w-full h-1.5 overflow-hidden rounded-full bg-slate-50">
-                <div className="bg-teal-500 h-full w-[45%]" />
+                <div
+                  className={`h-full transition-all duration-1000 ${currentStatus === "COMPLETED" ? "w-full bg-teal-500" : "w-[30%] bg-amber-400"}`}
+                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* --- 하단 섹션: 환율 분석 및 환전 신청 (Exchange) --- */}
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
           <div className="space-y-8 lg:col-span-2">
-            <div className="bg-white p-8 rounded-[48px] shadow-sm border border-slate-100 h-[480px]">
-              <ExchangeRateChart
-                rates={rates}
-                selectedCurrency={targetCurrency}
-              />
+            {/* 해외 수취인 선택 영역 */}
+            <div className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm">
+              <h3 className="flex items-center gap-2 mb-6 text-lg font-black text-slate-800">
+                <Globe size={20} className="text-teal-600" /> 해외 수취인 선택
+              </h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {beneficiaries.map((b) => (
+                  <div
+                    key={b.id}
+                    onClick={() => {
+                      setSelectedBeneficiary(b.id);
+                      setTargetCurrency(b.country === "USA" ? "USD" : "JPY");
+                    }}
+                    className={`p-6 rounded-[32px] border-2 cursor-pointer transition-all ${selectedBeneficiary === b.id ? "border-teal-500 bg-teal-50/30" : "border-slate-50 hover:border-slate-200"}`}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="p-3 text-white bg-slate-900 rounded-2xl">
+                        <Landmark size={20} />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-300 uppercase">
+                        {b.swift}
+                      </span>
+                    </div>
+                    <p className="font-black text-slate-800">{b.name}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-400">
+                      {b.bank} ({b.country})
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <AccountVerification onVerificationSuccess={setVerifiedName} />
+            <div className="bg-white p-8 rounded-[48px] shadow-sm border border-slate-100 h-[400px]">
+              <ExchangeRateChart rates={[]} selectedCurrency={targetCurrency} />
+            </div>
           </div>
 
           <div className="space-y-8">
-            {/* 환전 계산기 */}
+            {/* 송금 계산기 */}
             <div className="bg-slate-900 p-9 rounded-[48px] text-white shadow-2xl relative overflow-hidden group border border-white/5">
               <div className="flex items-center gap-3 mb-10 opacity-60">
-                <ArrowLeftRight size={20} className="text-teal-400" />
+                <Send size={20} className="text-teal-400" />
                 <span className="text-[11px] font-bold tracking-widest uppercase">
-                  실시간 환전 계산기
+                  Global Payout
                 </span>
               </div>
-
-              <div className="mb-10 space-y-8">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">
-                      환전 신청 금액 ({targetCurrency})
-                    </p>
-                    <button
-                      onClick={() => setExchangeAmount(availableBalance)}
-                      className="text-[10px] font-black text-teal-400 hover:text-teal-300 transition-colors"
-                    >
-                      MAX
-                    </button>
-                  </div>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={exchangeAmount || ""}
-                    onChange={(e) => setExchangeAmount(Number(e.target.value))}
-                    className="w-full px-6 py-5 text-3xl font-black border outline-none bg-white/5 border-white/10 rounded-3xl focus:ring-2 focus:ring-teal-500/50"
-                  />
-                </div>
-
-                <div className="pt-8 space-y-5 border-t border-white/5">
-                  <div className="flex justify-between text-[14px] font-bold">
-                    <span className="text-slate-500">실시간 적용 환율</span>
-                    <span className="text-teal-400">
-                      {currentRate.toLocaleString()} KRW
-                    </span>
-                  </div>
-                  <div className="flex items-end justify-between pt-4">
-                    <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">
-                      최종 출금 예상액
-                    </span>
-                    <h2 className="text-4xl font-black tracking-tighter text-white">
-                      {finalWithdrawAmount.toLocaleString()}{" "}
-                      <span className="text-sm font-bold text-slate-500">
-                        KRW
-                      </span>
-                    </h2>
-                  </div>
-                </div>
-              </div>
-
+              <input
+                type="number"
+                placeholder="0"
+                value={outboundAmount || ""}
+                onChange={(e) => setOutboundAmount(Number(e.target.value))}
+                className="w-full px-6 py-5 text-3xl font-black border outline-none bg-white/5 border-white/10 rounded-3xl focus:ring-2 focus:ring-teal-500/50"
+              />
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={handleSendMoney}
                 disabled={
-                  !exchangeAmount ||
-                  exchangeAmount <= 0 ||
-                  exchangeAmount > availableBalance
+                  !selectedBeneficiary ||
+                  outboundAmount <= 0 ||
+                  outboundAmount > krwBalance
                 }
-                className="flex items-center justify-center w-full gap-3 py-6 text-[16px] font-black bg-teal-500 hover:bg-teal-600 rounded-[28px] disabled:opacity-20 shadow-xl shadow-teal-900/40 active:scale-95"
+                className="w-full mt-8 py-6 bg-teal-500 hover:bg-teal-600 rounded-[28px] font-black text-white shadow-xl shadow-teal-900/40"
               >
-                <ArrowUpRight size={20} strokeWidth={3} /> 실시간 환전 신청하기
+                <Send size={20} className="inline mr-2" /> 해외 송금 실행
               </button>
             </div>
-
+            {/* 하단 트래킹 위젯 */}
             <RemittanceTracking
               status={currentStatus}
               transactionId={currentTxId}
@@ -207,24 +249,17 @@ const SellerDashboard = () => {
       <RemittanceRequestModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        initialReceiverName={verifiedName}
+        initialReceiverName={
+          beneficiaries.find((b) => b.id === selectedBeneficiary)?.name || ""
+        }
         onSuccess={handleRequestSuccess}
         settlementData={{
-          amount: exchangeAmount,
+          amount: estimatedFX,
           currency: targetCurrency,
-          rate: currentRate,
-          fee: platformFee,
-          finalAmount: finalWithdrawAmount,
+          rate: liveRate,
+          fee: 0,
+          finalAmount: outboundAmount,
         }}
-      />
-
-      <RemittanceConsentModal
-        isOpen={isConsentModalOpen}
-        onClose={() => setIsConsentModalOpen(false)}
-        transactionId={currentTxId}
-        initialReceiverName={verifiedName}
-        adjustedAmount={0}
-        onSuccess={() => setCurrentStatus("PENDING")}
       />
     </CommonLayout>
   );

@@ -23,6 +23,7 @@ import MySettlementList from "../components/pages/settlement/MySettlementList";
 import RemittanceManagement from "../pages/integratedadmin/RemittanceManagement";
 import TransactionHistory from "../components/dashboard/TransactionHistory";
 import RemittanceTracking from "../components/pages/remittance/Tracking/RemittanceTracking";
+import ExchangePage from "../components/widgets/finance/ExchangePage";
 
 const AppRoutes = () => {
   return (
@@ -42,6 +43,7 @@ const AppRoutes = () => {
         path="/pages/remittance/Tracking"
         element={<RemittanceTracking />}
       />
+      <Route path="/widget/finance" element={<ExchangePage />} />
 
       {/* 인증 불필요 라우트 */}
       <Route element={<AuthLayout />}>
