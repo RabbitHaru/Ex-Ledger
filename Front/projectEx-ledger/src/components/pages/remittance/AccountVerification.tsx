@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Search, CheckCircle2, AlertCircle } from "lucide-react";
+import { toast } from 'sonner';
 
 // 🌟 1. Props 인터페이스 정의 (에러 해결 핵심)
 interface AccountVerificationProps {
@@ -18,7 +19,7 @@ const AccountVerification: React.FC<AccountVerificationProps> = ({
 
   const verifyAccount = async () => {
     if (!bankCode || !accountNo) {
-      alert("은행과 계좌번호를 모두 입력해주세요.");
+      toast.info("은행과 계좌번호를 모두 입력해주세요.");
       return;
     }
 
@@ -39,7 +40,7 @@ const AccountVerification: React.FC<AccountVerificationProps> = ({
       }
     } catch (error) {
       console.error("계좌 인증 실패:", error);
-      alert("계좌 정보를 확인할 수 없습니다. 정보를 다시 확인해주세요.");
+      toast.error("계좌 정보를 확인할 수 없습니다. 정보를 다시 확인해주세요.");
       setIsVerified(false);
     } finally {
       setLoading(false);

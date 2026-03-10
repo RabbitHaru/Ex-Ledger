@@ -4,6 +4,7 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import http from '../../../config/http';
 import { Turnstile } from '@marsidev/react-turnstile';
+import { toast } from 'sonner';
 
 const SignupPage: React.FC = () => {
     const navigate = useNavigate();
@@ -33,7 +34,7 @@ const SignupPage: React.FC = () => {
     const handlePortoneVerification = () => {
         // [TODO] 실제 포트원 SDK 연동창 띄우기 (샌드박스)
         // 임시로 바로 성공 처리 및 더미 UID 세팅
-        alert("포트원 본인인증 샌드박스 화면이 호출됩니다 (임시 성공 처리).");
+        toast.success("포트원 본인인증 샌드박스 화면이 호출됩니다 (임시 성공 처리).");
         setIsPortoneVerified(true);
         setPortoneImpUid("imp_dummy_12345");
     };
@@ -56,7 +57,7 @@ const SignupPage: React.FC = () => {
             const res = await http.post('/auth/verify-business', { businessNumber });
             if (res.data.status === 'SUCCESS') {
                 setIsBusinessVerified(true);
-                alert('사업자 인증이 완료되었습니다.');
+                toast.success('사업자 인증이 완료되었습니다.');
             } else {
                 setError(res.data.message || '사업자 인증에 실패했습니다.');
             }
@@ -137,7 +138,7 @@ const SignupPage: React.FC = () => {
                 licenseFileUuid: fakeLicenseUuid,
                 turnstileToken
             });
-            alert('회원가입이 완료되었습니다. 로그인해주세요.');
+            toast.success('회원가입이 완료되었습니다. 로그인해주세요.');
             navigate('/login');
         } catch (err: any) {
             setError(err.response?.data?.message || '회원가입에 실패했습니다.');

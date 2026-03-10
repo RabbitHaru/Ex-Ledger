@@ -23,6 +23,13 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    protected ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.warn("handleIllegalArgumentException: {}", e.getMessage());
+        ApiResponse<Object> response = ApiResponse.fail(e.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     protected ResponseEntity<ApiResponse<Object>> handleException(Exception e) {
         log.error("handleEntityNotFoundException", e);

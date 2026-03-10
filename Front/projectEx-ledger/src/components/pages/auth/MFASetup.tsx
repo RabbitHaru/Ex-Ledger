@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import http from '../../../config/http';
 import { Button } from '../common/Button';
-import { Input } from '../common/Input';
+import { OtpInput } from '../common/OtpInput';
 import { ShieldCheck, ShieldAlert, KeyRound } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { toast } from 'sonner';
 
 const MFASetup: React.FC = () => {
     const location = useLocation();
@@ -16,12 +17,16 @@ const MFASetup: React.FC = () => {
     const [otpCode, setOtpCode] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
+    const fetchedRef = React.useRef(false);
 
     useEffect(() => {
         if (!email) {
             navigate('/login');
             return;
         }
+
+        if (fetchedRef.current) return;
+        fetchedRef.current = true;
 
         const fetchSetupData = async () => {
             try {
@@ -40,13 +45,14 @@ const MFASetup: React.FC = () => {
         fetchSetupData();
     }, [email, navigate]);
 
-    const handleVerify = async (e: React.FormEvent) => {
+    const handleVerify = async (e: React.FormEvent, mfaCodeArg?: string) => {
         e.preventDefault();
         setError('');
 
         try {
-            await http.post('/auth/mfa/enable', { email, code: Number(otpCode) });
-            alert('구글 OTP 인증 설정이 완료되었습니다. 다시 로그인해 주세요.');
+            const codeNum = mfaCodeArg ? Number(mfaCodeArg) : Number(otpCode);
+            await http.post('/auth/mfa/enable', { email, code: codeNum });
+            toast.success('구글 OTP 인증 설정이 완료되었습니다. 다시 로그인해 주세요.');
             navigate('/login');
         } catch (err: any) {
             setError(err.response?.data?.message || 'OTP 코드 검증에 실패했습니다.');
@@ -104,17 +110,15 @@ const MFASetup: React.FC = () => {
                 </div>
             </div>
 
-            <form onSubmit={handleVerify} className="space-y-4">
-                <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 ml-1">생성된 6자리 코드 입력</label>
-                    <Input
-                        type="text"
+            <form onSubmit={handleVerify} className="space-y-6">
+                <div className="space-y-4">
+                    <label className="block text-center text-sm font-bold text-slate-700">구글 OTP 앱 6자리 코드</label>
+                    <OtpInput
                         value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value)}
-                        placeholder="123456"
-                        maxLength={6}
-                        required
-                        className="text-center text-lg tracking-[0.5em] font-mono"
+                        onChange={setOtpCode}
+                        onComplete={(code) => {
+                            handleVerify({ preventDefault: () => { } } as any, code);
+                        }}
                     />
                 </div>
 

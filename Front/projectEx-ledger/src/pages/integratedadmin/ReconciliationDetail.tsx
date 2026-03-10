@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import CommonLayout from "../../components/layout/CommonLayout";
 // 🌟 마스터키 불러오기
 import { authFetch } from '../../utils/api';
+import { toast } from 'sonner';
 
 export default function ReconciliationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -13,7 +14,7 @@ export default function ReconciliationDetail() {
 
   const handleRequestConsent = async () => {
     if (!correctedAmount || !reason) {
-      alert('수정 금액과 사유를 모두 입력해주세요.');
+      toast.info('수정 금액과 사유를 모두 입력해주세요.');
       return;
     }
 
@@ -35,16 +36,16 @@ export default function ReconciliationDetail() {
       const result = await response.json();
 
       if (response && response.ok && result.status === 'SUCCESS') {
-        alert('✅ 유저에게 오차 수정 동의 요청이 발송되었습니다. (유저 동의 대기 상태)');
+        toast.info('✅ 유저에게 오차 수정 동의 요청이 발송되었습니다. (유저 동의 대기 상태)');
         setCorrectedAmount('');
         setReason('');
         navigate('/pages/admin/settlement');
       } else {
-        alert(`❌ 요청 실패: ${result.message}`);
+        toast.error(`❌ 요청 실패: ${result.message}`);
       }
     } catch (error) {
       console.error('API 에러:', error);
-      alert('서버와 통신 중 에러가 발생했습니다.');
+      toast.error('서버와 통신 중 에러가 발생했습니다.');
     }
   };
 
@@ -62,14 +63,14 @@ export default function ReconciliationDetail() {
       const result = await response.json();
 
       if (response && response.ok && result.status === 'SUCCESS') {
-        alert('✅ 유저에게 최종 승인 동의를 요청했습니다!');
+        toast.info('✅ 유저에게 최종 승인 동의를 요청했습니다!');
         navigate('/pages/admin/settlement');
       } else {
-        alert(`❌ 승인 요청 실패: ${result.message}`);
+        toast.error(`❌ 승인 요청 실패: ${result.message}`);
       }
     } catch (error) {
       console.error('API 에러:', error);
-      alert('서버와 통신 중 에러가 발생했습니다.');
+      toast.error('서버와 통신 중 에러가 발생했습니다.');
     }
   };
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import http from "../../utils/http";
 import { CheckCircle, XCircle, FileImage, ShieldAlert, FileText } from "lucide-react";
+import { toast } from 'sonner';
 
 interface PendingCompany {
     userId: number;
@@ -24,7 +25,7 @@ const CompanyReview: React.FC = () => {
             }
         } catch (err) {
             console.error("Failed to fetch pending companies:", err);
-            alert("대기열을 가져오는데 실패했습니다.");
+            toast.error("대기열을 가져오는데 실패했습니다.");
         } finally {
             setLoading(false);
         }
@@ -38,10 +39,10 @@ const CompanyReview: React.FC = () => {
         if (!window.confirm("이 기업 회원을 승인하시겠습니까?")) return;
         try {
             await http.post(`/api/admin/companies/${userId}/approve`, {});
-            alert("성공적으로 승인되었습니다.");
+            toast.success("성공적으로 승인되었습니다.");
             fetchPendingCompanies();
         } catch (err: any) {
-            alert("승인 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
+            toast.error("승인 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
         }
     };
 
@@ -49,10 +50,10 @@ const CompanyReview: React.FC = () => {
         if (!window.confirm("정말로 이 기업 가입을 반려하시겠습니까? (복구 불가)")) return;
         try {
             await http.post(`/api/admin/companies/${userId}/reject`, {});
-            alert("가입 요청이 반려되었습니다.");
+            toast.info("가입 요청이 반려되었습니다.");
             fetchPendingCompanies();
         } catch (err: any) {
-            alert("반려 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
+            toast.error("반려 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
         }
     };
 
@@ -65,7 +66,7 @@ const CompanyReview: React.FC = () => {
             setSelectedImage(imageUrl);
         } catch (err) {
             console.error("Failed to load license image:", err);
-            alert("이미지를 불러오는데 실패했습니다.");
+            toast.error("이미지를 불러오는데 실패했습니다.");
         }
     };
 

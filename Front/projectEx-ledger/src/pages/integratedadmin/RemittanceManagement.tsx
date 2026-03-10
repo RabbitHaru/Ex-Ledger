@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CommonLayout from "../../components/layout/CommonLayout"; 
+import { toast } from 'sonner';
 
 export interface RemittanceHistoryData {
   id: number;
@@ -98,14 +99,14 @@ const RemittanceManagement: React.FC = () => {
       const successCount = results.filter(r => r.ok).length;
 
       if (successCount === count) {
-        alert(`✅ ${count}건 모두 재전송 요청이 완료되었습니다.`);
+        toast.success(`✅ ${count}건 모두 재전송 요청이 완료되었습니다.`);
       } else {
-        alert(`⚠️ ${successCount}건 성공, ${count - successCount}건 실패했습니다.`);
+        toast.success(`⚠️ ${successCount}건 성공, ${count - successCount}건 실패했습니다.`);
       }
       
       fetchRemittanceHistory(); 
     } catch (error) {
-      alert("서버 통신 중 오류가 발생했습니다.");
+      toast.error("서버 통신 중 오류가 발생했습니다.");
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CommonLayout from "../../components/layout/CommonLayout";
 import { authFetch } from '../../utils/api';
+import { toast } from 'sonner';
 
 const CompanyJoin: React.FC = () => {
     const [businessNumber, setBusinessNumber] = useState('');
@@ -11,7 +12,7 @@ const CompanyJoin: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!businessNumber) {
-            alert("사업자등록번호를 입력해주세요.");
+            toast.info("사업자등록번호를 입력해주세요.");
             return;
         }
 
@@ -27,14 +28,14 @@ const CompanyJoin: React.FC = () => {
 
             const data = await res.json();
             if (res.ok && data.status === 'SUCCESS') {
-                alert("성공적으로 소속 기업의 관리자에게 가입 승인을 요청했습니다.");
+                toast.success("성공적으로 소속 기업의 관리자에게 가입 승인을 요청했습니다.");
                 navigate('/dashboard');
             } else {
-                alert(`승인 요청 실패: ${data.message || '알 수 없는 오류'}`);
+                toast.error(`승인 요청 실패: ${data.message || '알 수 없는 오류'}`);
             }
         } catch (error) {
             console.error(error);
-            alert("요청 중 오류가 발생했습니다.");
+            toast.error("요청 중 오류가 발생했습니다.");
         } finally {
             setIsSubmitting(false);
         }

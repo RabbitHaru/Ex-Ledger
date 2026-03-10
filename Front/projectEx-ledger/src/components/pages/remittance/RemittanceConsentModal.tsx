@@ -1,6 +1,7 @@
 import React from "react";
 import axios from "axios";
 import { CheckCircle, AlertCircle, X, User } from "lucide-react";
+import { toast } from 'sonner';
 
 interface ConsentProps {
   isOpen: boolean;
@@ -24,11 +25,11 @@ const RemittanceConsentModal: React.FC<ConsentProps> = ({
   const handleConsent = async () => {
     try {
       await axios.post(`/api/v1/remittance/${transactionId}/consent`);
-      alert("금액 동의가 완료되었습니다. 송금 대기 상태로 전환됩니다.");
+      toast.success("금액 동의가 완료되었습니다. 송금 대기 상태로 전환됩니다.");
       onSuccess();
       onClose();
     } catch (error) {
-      alert("처리 중 오류가 발생했습니다.");
+      toast.error("처리 중 오류가 발생했습니다.");
     }
   };
 

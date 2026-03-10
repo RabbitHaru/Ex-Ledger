@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { X, Info } from "lucide-react";
+import { OtpInput } from "../common/OtpInput";
+import { toast } from "sonner";
 
 interface ModalProps {
   isOpen: boolean;
@@ -46,17 +48,21 @@ const RemittanceRequestModal: React.FC<ModalProps> = ({
     }
   }, [amount]);
 
-  const handleRemittanceSubmit = async () => {
-    if (amount <= 0 || !recipientName)
-      return alert("금액과 정보를 확인해주세요.");
+  const handleRemittanceSubmit = async (mfaCodeArg?: string) => {
+    if (amount <= 0 || !recipientName) {
+      toast.error("금액과 정보를 확인해주세요.");
+      return;
+    }
 
     if (!showOtpInput) {
       setShowOtpInput(true);
       return;
     }
 
-    if (!otpCode || otpCode.length !== 6) {
-      return alert("6자리 OTP 코드를 입력해주세요.");
+    const codeToUse = mfaCodeArg || otpCode;
+    if (!codeToUse || codeToUse.length !== 6) {
+      toast.error("6자리 OTP 코드를 입력해주세요.");
+      return;
     }
 
     setLoading(true);
@@ -70,16 +76,16 @@ const RemittanceRequestModal: React.FC<ModalProps> = ({
         totalPayment: feeInfo?.totalPayment,
       }, {
         headers: {
-          "X-MFA-Code": otpCode
+          "X-MFA-Code": codeToUse
         }
       });
-      alert("송금 신청이 완료되었습니다.");
+      toast.success("송금 신청이 완료되었습니다.");
       onClose();
     } catch (err: any) {
       if (err.response?.data?.message) {
-        alert(err.response.data.message);
+        toast.error(err.response.data.message);
       } else {
-        alert("신청 중 오류가 발생했습니다.");
+        toast.error("신청 중 오류가 발생했습니다.");
       }
     } finally {
       setLoading(false);
@@ -119,8 +125,8 @@ const RemittanceRequestModal: React.FC<ModalProps> = ({
               readOnly={!!initialReceiverName}
               placeholder="수취인 실명을 입력하세요"
               className={`w-full p-4 border-none rounded-2xl text-lg font-bold outline-none transition-all ${initialReceiverName
-                  ? "bg-blue-50 text-blue-700 cursor-not-allowed"
-                  : "bg-gray-50 text-gray-800 focus:ring-2 focus:ring-blue-500"
+                ? "bg-blue-50 text-blue-700 cursor-not-allowed"
+                : "bg-gray-50 text-gray-800 focus:ring-2 focus:ring-blue-500"
                 }`}
             />
           </div>
@@ -158,25 +164,24 @@ const RemittanceRequestModal: React.FC<ModalProps> = ({
 
           {showOtpInput && (
             <div className="duration-300 animate-in fade-in slide-in-from-top-4">
-              <label className="block mb-2 ml-1 text-sm font-bold text-gray-500">
-                구글 OTP 인증번호 (6자리)
+              <label className="block mb-4 text-center text-sm font-bold text-gray-700">
+                구글 OTP 앱 6자리 코드
               </label>
-              <input
-                type="text"
-                maxLength={6}
+              <OtpInput
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="000000"
-                className="w-full p-4 text-center tracking-[0.5em] border-2 border-blue-500 rounded-2xl text-2xl font-black outline-none bg-blue-50 text-blue-800 focus:ring-4 focus:ring-blue-500/20 transition-all"
+                onChange={setOtpCode}
+                onComplete={(code) => {
+                  handleRemittanceSubmit(code);
+                }}
               />
-              <p className="mt-2 text-xs text-center text-red-500">
+              <p className="mt-4 text-xs text-center text-red-500">
                 안전한 금융 거래를 위해 OTP 인증이 필요합니다.
               </p>
             </div>
           )}
 
           <button
-            onClick={handleRemittanceSubmit}
+            onClick={() => handleRemittanceSubmit()}
             disabled={loading}
             className="w-full py-5 text-lg font-black text-white transition-all bg-blue-600 shadow-xl rounded-2xl hover:bg-blue-700 disabled:bg-gray-400"
           >

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import CommonLayout from "../../components/layout/CommonLayout";
 // 🌟 1. 우리가 만든 마스터키 불러오기
 import { authFetch } from '../../utils/api';
+import { toast } from 'sonner';
 
 export interface ReconciliationData {
   id: number;
@@ -65,7 +66,7 @@ const ReconciliationList: React.FC = () => {
   // 🌟 결제번호 복사 함수
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      alert("결제 번호가 복사되었습니다! ✅");
+      toast.info("결제 번호가 복사되었습니다! ✅");
     }).catch(err => {
       console.error('복사 실패:', err);
     });
@@ -93,11 +94,11 @@ const ReconciliationList: React.FC = () => {
       const response = await authFetch(`/api/admin/settlements/test-data?status=${testStatus}`, { method: 'POST' });
       if (response && response.ok) {
         const koreanStatus = statusKoreanMap[testStatus] || testStatus;
-        alert(`${koreanStatus} 상태의 테스트 데이터가 성공적으로 주입되었습니다! 💉`);
+        toast.success(`${koreanStatus} 상태의 테스트 데이터가 성공적으로 주입되었습니다! 💉`);
         fetchReconciliationData();
       }
     } catch (error) {
-      alert("데이터 주입 중 오류가 발생했습니다.");
+      toast.error("데이터 주입 중 오류가 발생했습니다.");
     }
   };
 
@@ -108,14 +109,14 @@ const ReconciliationList: React.FC = () => {
       // 🌟 4. 마스터키(authFetch) 적용
       const response = await authFetch(`/api/admin/settlements/${id}/approve`, { method: 'POST' });
       if (response && response.ok) {
-        alert("✅ 성공적으로 승인되었습니다.");
+        toast.success("✅ 성공적으로 승인되었습니다.");
         fetchReconciliationData();
       } else if (response) {
         const err = await response.json();
-        alert(`❌ 승인 실패: ${err.error || "알 수 없는 오류"}`);
+        toast.error(`❌ 승인 실패: ${err.error || "알 수 없는 오류"}`);
       }
     } catch (error) {
-      alert("서버 통신 중 오류가 발생했습니다.");
+      toast.error("서버 통신 중 오류가 발생했습니다.");
     }
   };
 

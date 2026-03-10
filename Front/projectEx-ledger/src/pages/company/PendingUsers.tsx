@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CommonLayout from "../../components/layout/CommonLayout";
 import { authFetch } from '../../utils/api';
+import { toast } from 'sonner';
 
 interface PendingUser {
     id: number;
@@ -40,14 +41,14 @@ const PendingUsers: React.FC = () => {
                 method: 'POST'
             });
             if (res && res.ok) {
-                alert("✅ 성공적으로 승인되었습니다.");
+                toast.success("✅ 성공적으로 승인되었습니다.");
                 fetchUsers();
             } else if (res) {
                 const data = await res.json();
-                alert(`❌ 승인 실패: ${data.message || '알 수 없는 오류'}`);
+                toast.error(`❌ 승인 실패: ${data.message || '알 수 없는 오류'}`);
             }
         } catch (error) {
-            alert("서버 통신 중 오류가 발생했습니다.");
+            toast.error("서버 통신 중 오류가 발생했습니다.");
         }
     };
 

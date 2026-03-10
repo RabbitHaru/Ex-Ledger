@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from 'sonner';
 
 const RemittancePage = () => {
   const [formData, setFormData] = useState({
@@ -35,9 +36,9 @@ const RemittancePage = () => {
         feeAmount: feeDetail.totalFeeAmount,
         totalPayment: feeDetail.totalPayment,
       });
-      alert(`송금 신청 완료! 거래번호: ${response.data.transactionId}`);
+      toast.success(`송금 신청 완료! 거래번호: ${response.data.transactionId}`);
     } catch (error) {
-      alert("송금 신청 중 오류가 발생했습니다.");
+      toast.error("송금 신청 중 오류가 발생했습니다.");
     }
   };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { RefreshCw, Send } from "lucide-react";
+import { toast } from 'sonner';
 
 // 🌟 [타입 정의] A님이 주는 환율 데이터의 규격을 정의하여 'never' 에러를 방지합니다.
 interface ExchangeRate {
@@ -49,7 +50,7 @@ const SmartExchangeForm = ({ onPaymentSuccess }: SmartExchangeFormProps) => {
   // 3. 결제 요청 (C님의 Transaction API 호출)
   const handlePayment = async () => {
     if (!amount || parseFloat(amount) <= 0)
-      return alert("올바른 금액을 입력하세요.");
+      return toast.info("올바른 금액을 입력하세요.");
 
     setLoading(true);
     try {
@@ -64,13 +65,13 @@ const SmartExchangeForm = ({ onPaymentSuccess }: SmartExchangeFormProps) => {
         externalTransactionId: mockExternalId,
       });
 
-      alert("✅ 결제 및 정산이 완료되었습니다!");
+      toast.success("✅ 결제 및 정산이 완료되었습니다!");
       setAmount("");
 
       if (onPaymentSuccess) onPaymentSuccess();
     } catch (error) {
       console.error("결제 실패:", error);
-      alert("결제 실패: 서버 상태를 확인하거나 다시 시도해주세요.");
+      toast.error("결제 실패: 서버 상태를 확인하거나 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }

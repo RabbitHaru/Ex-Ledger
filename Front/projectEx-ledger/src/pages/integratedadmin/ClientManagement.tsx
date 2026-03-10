@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CommonLayout from "../../components/layout/CommonLayout";
+import { toast } from 'sonner';
 
 interface Client {
   merchantId: string;
@@ -147,13 +148,13 @@ export default function ClientManagement() {
       const result = await response.json();
 
       if (response.ok && result.status === 'SUCCESS') {
-        alert('✅ 가맹점 등급 및 수수료 정책이 성공적으로 반영되었습니다!');
+        toast.success('✅ 가맹점 등급 및 수수료 정책이 성공적으로 반영되었습니다!');
       } else {
-        alert(`❌ 업데이트 실패: ${result.message}`);
+        toast.error(`❌ 업데이트 실패: ${result.message}`);
       }
     } catch (error) {
       console.error('API 통신 에러:', error);
-      alert('서버와 통신 중 문제가 발생했습니다. 백엔드가 켜져있는지 확인해주세요!');
+      toast.error('서버와 통신 중 문제가 발생했습니다. 백엔드가 켜져있는지 확인해주세요!');
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../common/Button";
 import { Input } from "../common/Input";
+import { OtpInput } from "../common/OtpInput";
 import http from "../../../config/http";
 import { setToken } from "../../../config/auth";
 import { Turnstile } from "@marsidev/react-turnstile";
@@ -16,7 +17,7 @@ const LoginPage: React.FC = () => {
 
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent, mfaCodeArg?: string) => {
     e.preventDefault();
     setError("");
 
@@ -28,7 +29,8 @@ const LoginPage: React.FC = () => {
     try {
       if (isMfaRequired) {
         // MFA 검증 로직
-        const response = await http.post('/auth/login/mfa', { email, password, code: Number(otpCode), turnstileToken });
+        const codeNum = mfaCodeArg ? Number(mfaCodeArg) : Number(otpCode);
+        const response = await http.post('/auth/login/mfa', { email, password, code: codeNum, turnstileToken });
         if (response.data && response.data.data) {
           const { accessToken } = response.data.data;
           setToken(accessToken);
@@ -92,15 +94,17 @@ const LoginPage: React.FC = () => {
         />
 
         {isMfaRequired && (
-          <Input
-            label="구글 OTP 앱 6자리 코드"
-            type="text"
-            value={otpCode}
-            onChange={(e) => setOtpCode(e.target.value)}
-            placeholder="123456"
-            required
-            maxLength={6}
-          />
+          <div className="space-y-4">
+            <div className="text-center text-sm font-bold text-gray-700">구글 OTP 앱 6자리 코드</div>
+            <OtpInput
+              value={otpCode}
+              onChange={setOtpCode}
+              onComplete={(code) => {
+                // e.preventDefault doesn't exist here, but we can pass code directly
+                handleLogin({ preventDefault: () => { } } as any, code);
+              }}
+            />
+          </div>
         )}
 
         <div className="flex justify-center my-4">

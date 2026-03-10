@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import CommonLayout from "../../components/layout/CommonLayout"; 
+import { toast } from 'sonner';
 
 export interface DashboardSummary {
   totalPaymentAmount: number;
@@ -32,7 +33,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const response = await fetch("/api/admin/settlements/sync", { method: "GET" });
       if (response.ok) {
-        alert("포트원 결제 데이터 동기화 완료! ✅");
+        toast.success("포트원 결제 데이터 동기화 완료! ✅");
         await fetchDashboardSummary(); 
       }
     } finally {
