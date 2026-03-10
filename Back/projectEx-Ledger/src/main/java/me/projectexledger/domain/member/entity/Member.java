@@ -56,6 +56,20 @@ public class Member extends BaseEntity {
     @Column(length = 20)
     private AdminApprovalStatus adminApprovalStatus;
 
+    // 개인 계좌 정보
+    @Column(length = 50)
+    private String bankName;
+
+    @Column(length = 50)
+    private String accountNumber;
+
+    @Column(length = 50)
+    private String accountHolder;
+
+    // 알림 설정
+    @Column(nullable = false)
+    private boolean allowNotifications = true;
+
     @Builder
     public Member(String email, String password, String name, Role role, String businessNumber, String portoneImpUid,
             String licenseFileUuid) {
@@ -107,6 +121,15 @@ public class Member extends BaseEntity {
         this.isApproved = true;
     }
 
+    public void disableMfa() {
+        this.mfaEnabled = false;
+        this.totpSecret = null;
+    }
+
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
     public void approveByAdmin() {
         this.isApproved = true;
         this.adminApprovalStatus = AdminApprovalStatus.APPROVED;
@@ -115,5 +138,15 @@ public class Member extends BaseEntity {
     public void rejectByAdmin() {
         this.isApproved = false;
         this.adminApprovalStatus = AdminApprovalStatus.REJECTED;
+    }
+
+    public void updateAccountInfo(String bankName, String accountNumber, String accountHolder) {
+        this.bankName = bankName;
+        this.accountNumber = accountNumber;
+        this.accountHolder = accountHolder;
+    }
+
+    public void updateNotificationSettings(boolean allowNotifications) {
+        this.allowNotifications = allowNotifications;
     }
 }

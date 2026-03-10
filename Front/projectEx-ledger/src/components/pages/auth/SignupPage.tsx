@@ -31,12 +31,42 @@ const SignupPage: React.FC = () => {
     const fileRef = useRef<HTMLInputElement>(null);
     const termsRef = useRef<HTMLInputElement>(null);
 
-    const handlePortoneVerification = () => {
-        // [TODO] 실제 포트원 SDK 연동창 띄우기 (샌드박스)
-        // 임시로 바로 성공 처리 및 더미 UID 세팅
-        toast.success("포트원 본인인증 샌드박스 화면이 호출됩니다 (임시 성공 처리).");
-        setIsPortoneVerified(true);
-        setPortoneImpUid("imp_dummy_12345");
+    const handlePortoneVerification = async () => {
+        try {
+            const STORE_ID = import.meta.env.VITE_PORTONE_STORE_ID;
+            const CHANNEL_KEY = import.meta.env.VITE_PORTONE_CHANNEL_KEY;
+
+            if (!window.PortOne) {
+                setError("인증 시스템을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+                return;
+            }
+
+            // @ts-ignore (PortOne V2 SDK Simple Authentication)
+            const response = await window.PortOne.requestIdentityVerification({
+                storeId: STORE_ID,
+                channelKey: CHANNEL_KEY,
+                identityVerificationId: `identity_${Date.now()}`,
+                customer: {
+                    fullName: name || undefined,
+                },
+            });
+
+            if (response.code !== undefined) {
+                // '조건을 만족하는 채널을 찾을 수 없습니다' 에러에 대한 힌트 추가
+                const hint = response.message?.includes('채널')
+                    ? '\n(포트원 콘솔에서 "결제" 채널이 아닌 "본인인증" 채널 키를 사용했는지 확인해주세요.)'
+                    : '';
+                setError(`인증 실패: ${response.message}${hint}`);
+                return;
+            }
+
+            setIsPortoneVerified(true);
+            setPortoneImpUid(response.identityVerificationId);
+            toast.success("간편인증이 완료되었습니다.");
+        } catch (err: any) {
+            setError(`인증 과정에서 오류가 발생했습니다: ${err.message || err}`);
+            console.error(err);
+        }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,12 +138,12 @@ const SignupPage: React.FC = () => {
         }
 
         if (!isPortoneVerified) {
-            setError('휴대폰 본인인증을 완료해주세요.');
+            setError('간편인증을 완료하세요.');
             return;
         }
 
         if (!termsRequired) {
-            setError('필수 약관에 동의해주세요.');
+            setError('필수 약관에 동의해야 합니다.');
             termsRef.current?.focus();
             return;
         }
@@ -124,8 +154,6 @@ const SignupPage: React.FC = () => {
         }
 
         try {
-            // [TODO] 실제 서버 연동 시 licenseFile 을 FormData로 묶어서 /api/file/upload 등에 먼저 전송한 후, 반환된 uuid를 사용.
-            // 지금은 임시 uuid를 보냅니다.
             const fakeLicenseUuid = activeTab === 'COMPANY_ADMIN' ? 'some-fake-uuid.pdf' : undefined;
 
             await http.post('/auth/signup', {
@@ -146,82 +174,82 @@ const SignupPage: React.FC = () => {
     };
 
     return (
-        <div className="w-full">
-            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">회원가입</h2>
+        <div className="w-full max-w-lg mx-auto py-12">
+            <header className="text-center mb-12">
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight">계정 만들기</h2>
+                <p className="text-slate-400 font-bold text-[12px] uppercase tracking-[0.2em] mt-3">Ex-Ledger 글로벌 네트워크에 합류하세요</p>
+            </header>
 
-            <div className="flex mb-6 border-b border-gray-200">
+            <div className="flex p-1.5 bg-slate-100 rounded-[24px] mb-10 shadow-inner">
                 <button
                     type="button"
-                    className={`flex-1 py-2 text-sm font-semibold text-center border-b-2 transition-colors ${activeTab === 'USER'
-                        ? 'border-teal-600 text-teal-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
+                    className={`flex-1 py-4 text-[14px] font-black rounded-[18px] transition-all ${activeTab === 'USER' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                     onClick={() => setActiveTab('USER')}
                 >
-                    일반 유저
+                    개인 회원
                 </button>
                 <button
                     type="button"
-                    className={`flex-1 py-2 text-sm font-semibold text-center border-b-2 transition-colors ${activeTab === 'COMPANY_USER'
-                        ? 'border-teal-600 text-teal-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
+                    className={`flex-1 py-4 text-[14px] font-black rounded-[18px] transition-all ${activeTab === 'COMPANY_USER' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                     onClick={() => setActiveTab('COMPANY_USER')}
                 >
-                    사내 멤버 등록
+                    기업 멤버
                 </button>
                 <button
                     type="button"
-                    className={`flex-1 py-2 text-sm font-semibold text-center border-b-2 transition-colors ${activeTab === 'COMPANY_ADMIN'
-                        ? 'border-teal-600 text-teal-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
+                    className={`flex-1 py-4 text-[14px] font-black rounded-[18px] transition-all ${activeTab === 'COMPANY_ADMIN' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                     onClick={() => setActiveTab('COMPANY_ADMIN')}
                 >
-                    신규 기업 등록
+                    기업 관리자
                 </button>
             </div>
 
             {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                <div className="px-5 py-4 mb-6 text-[12px] font-bold text-red-500 bg-red-50 border border-red-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
                     {error}
                 </div>
             )}
 
-            <form onSubmit={handleSignup} className="space-y-4">
-                <Input
-                    ref={emailRef}
-                    label="이메일"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                />
-                <Input
-                    ref={passwordRef}
-                    label="비밀번호"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                />
-                <Input
-                    ref={nameRef}
-                    label="이름"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                />
+            <form onSubmit={handleSignup} className="space-y-6">
+                <div className="space-y-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+                    <Input
+                        ref={emailRef}
+                        label="이메일"
+                        type="email"
+                        placeholder="example@exledger.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
+                    <Input
+                        ref={passwordRef}
+                        label="비밀번호"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
+                    <Input
+                        ref={nameRef}
+                        label="이름"
+                        type="text"
+                        placeholder="홍길동"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                    />
+                </div>
 
                 {(activeTab === 'COMPANY_ADMIN' || activeTab === 'COMPANY_USER') && (
-                    <div className="space-y-4">
-                        <div className="flex items-end gap-2">
+                    <div className="space-y-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+                        <div className="flex items-end gap-3">
                             <div className="flex-1">
                                 <Input
                                     ref={businessRef}
-                                    label="사업자등록번호 (10자리 숫자)"
+                                    label="사업자등록번호"
                                     type="text"
+                                    placeholder="000-00-00000"
                                     value={businessNumber}
                                     onChange={(e) => {
                                         setBusinessNumber(e.target.value.replace(/[^0-9]/g, ''));
@@ -233,112 +261,141 @@ const SignupPage: React.FC = () => {
                                 />
                             </div>
                             {activeTab === 'COMPANY_ADMIN' && (
-                                <Button
+                                <button
                                     type="button"
                                     onClick={handleVerifyBusiness}
                                     disabled={isBusinessVerified || verifying || businessNumber.length !== 10}
-                                    className={isBusinessVerified ? "bg-slate-400 cursor-not-allowed" : "bg-slate-600 hover:bg-slate-700"}
+                                    className={`px-4 py-3 rounded-2xl text-[11px] font-black tracking-tight transition-all ${isBusinessVerified ? "bg-slate-100 text-slate-400" : "bg-slate-900 text-white hover:bg-slate-800 shadow-lg active:scale-95"}`}
                                 >
-                                    {verifying ? '확인 중...' : isBusinessVerified ? '인증됨' : '진위확인'}
-                                </Button>
+                                    {verifying ? '...' : isBusinessVerified ? '인증됨' : '진위확인'}
+                                </button>
                             )}
                         </div>
-                        {activeTab === 'COMPANY_ADMIN' && (
-                            <p className="text-xs text-gray-500">
-                                * 기업 최초 등록 시 국세청 진위확인이 진행됩니다.
-                            </p>
-                        )}
-                        {activeTab === 'COMPANY_USER' && (
-                            <p className="text-xs text-gray-500">
-                                * 사내 관리자가 가입 시 등록한 동일한 사업자 번호를 입력해야 소속될 수 있습니다.
-                            </p>
-                        )}
 
                         {activeTab === 'COMPANY_ADMIN' && (
-                            <div className="p-4 border rounded-md space-y-4 bg-gray-50">
-                                <h3 className="font-semibold text-sm text-gray-700">추가 도용 방지 심사</h3>
-                                <div className="space-y-2">
-                                    <label className="block text-sm font-medium text-gray-700">사업자등록증 (사본)</label>
-                                    <input
-                                        ref={fileRef}
-                                        type="file"
-                                        accept="image/*, .pdf"
-                                        onChange={handleFileChange}
-                                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
-                                    />
-                                    <p className="text-xs text-gray-500">심사용 파일은 업로드 즉시 암호화되어 관리자 외에는 열람 불가합니다.</p>
-                                </div>
+                            <div className="p-5 bg-teal-50/30 rounded-2xl border border-teal-100/50 space-y-3">
+                                <label className="block text-[11px] font-black text-teal-800 uppercase tracking-widest">사업자등록증 업로드 (보안심사)</label>
+                                <input
+                                    ref={fileRef}
+                                    type="file"
+                                    accept="image/*, .pdf"
+                                    onChange={handleFileChange}
+                                    className="block w-full text-[11px] text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[11px] file:font-black file:bg-teal-600 file:text-white hover:file:bg-teal-700 transition-all cursor-pointer"
+                                />
+                                <p className="text-[10px] font-bold text-teal-600/70 leading-relaxed">심사용 파일은 업로드 즉시 AES-256 암호화되어 관리용 고립 서버로 전송됩니다.</p>
                             </div>
                         )}
                     </div>
                 )}
 
-                <div className="p-4 border rounded-md space-y-2 bg-indigo-50/50">
-                    <label className="block text-sm font-medium text-gray-700">실명 및 연락처 인증 (필수)</label>
-                    <Button
+                <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm shadow-slate-100/50 space-y-5 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-teal-50/50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+
+                    <div className="space-y-1 relative">
+                        <label className="text-[10px] font-black text-teal-600 uppercase tracking-[0.2em]">Identity Verification</label>
+                        <p className="text-[12px] font-extrabold text-slate-400 leading-relaxed italic">Premium security layer for global transfer</p>
+                    </div>
+
+                    <button
                         type="button"
-                        className={`w-full ${isPortoneVerified ? "bg-slate-400" : "bg-indigo-600 hover:bg-indigo-700"}`}
+                        className={`w-full py-5 rounded-[24px] text-[14px] font-black transition-all flex items-center justify-center gap-3 active:scale-[0.98] relative ${isPortoneVerified ? "bg-teal-50 text-teal-600 border border-teal-100 shadow-none" : "bg-slate-900 text-white hover:bg-slate-800 shadow-xl shadow-slate-200"}`}
                         disabled={isPortoneVerified}
                         onClick={handlePortoneVerification}
                     >
-                        {isPortoneVerified ? "✅ 본인인증 완료" : "휴대폰 본인인증 하기"}
-                    </Button>
-                    <p className="text-xs text-gray-500">안전한 금융/외환 거래를 위해 가입 시 반드시 1회 휴대폰 실명 인증을 진행합니다.</p>
+                        {isPortoneVerified ? (
+                            <>본인인증 완료</>
+                        ) : (
+                            "실명 본인인증 시작하기"
+                        )}
+                    </button>
+
+                    <p className="text-[10px] font-bold text-slate-500/80 leading-relaxed relative">
+                        안전한 자금이체 및 환전 서비스를 위해 가입 시 1회 실명 인증을 요청합니다. <br />
+                        인증 데이터는 즉시 암호화 처리됩니다.
+                    </p>
                 </div>
 
-                <div className="mt-6 p-4 border rounded-md space-y-3 bg-gray-50 text-sm">
-                    <label className="flex items-center space-x-2 cursor-pointer font-medium text-gray-700">
-                        <input
-                            type="checkbox"
-                            checked={termsRequired && termsOptional}
-                            onChange={(e) => {
-                                setTermsRequired(e.target.checked);
-                                setTermsOptional(e.target.checked);
-                            }}
-                            className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
-                        />
-                        <span>전체 약관에 동의합니다.</span>
+                <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 space-y-4">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className="relative">
+                            <input
+                                type="checkbox"
+                                checked={termsRequired && termsOptional}
+                                onChange={(e) => {
+                                    setTermsRequired(e.target.checked);
+                                    setTermsOptional(e.target.checked);
+                                }}
+                                className="peer appearance-none w-5 h-5 bg-white border border-slate-200 rounded-lg checked:bg-teal-600 checked:border-teal-600 transition-all cursor-pointer"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white opacity-0 peer-checked:opacity-100 transition-all">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            </div>
+                        </div>
+                        <span className="text-[13px] font-black text-slate-800">모든 약관에 전체 동의합니다.</span>
                     </label>
-                    <hr className="border-gray-200" />
-                    <label className="flex items-center space-x-2 cursor-pointer text-gray-600">
-                        <input
-                            ref={termsRef}
-                            type="checkbox"
-                            checked={termsRequired}
-                            onChange={(e) => setTermsRequired(e.target.checked)}
-                            className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
-                        />
-                        <span>[필수] 서비스 이용약관 및 개인정보 처리방침 동의</span>
-                    </label>
-                    <label className="flex items-center space-x-2 cursor-pointer text-gray-600">
-                        <input
-                            type="checkbox"
-                            checked={termsOptional}
-                            onChange={(e) => setTermsOptional(e.target.checked)}
-                            className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
-                        />
-                        <span>[선택] 혜택 및 이벤트 알림 수신 동의</span>
-                    </label>
+
+                    <div className="h-[1px] bg-slate-200/50" />
+
+                    <div className="space-y-4">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                                ref={termsRef}
+                                type="checkbox"
+                                checked={termsRequired}
+                                onChange={(e) => setTermsRequired(e.target.checked)}
+                                className="peer appearance-none w-5 h-5 bg-white border border-slate-200 rounded-md checked:bg-slate-800 transition-all"
+                            />
+                            <span className="text-[14px] font-bold text-slate-500 group-hover:text-slate-700 transition-colors">[필수] 서비스 이용약관 및 개인정보 처리방침</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="peer appearance-none w-5 h-5 bg-white border border-slate-200 rounded-md checked:bg-slate-800 transition-all"
+                                required
+                            />
+                            <span className="text-[14px] font-bold text-slate-500 group-hover:text-slate-700 transition-colors">[필수] 전자금융거래 이용약관</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="peer appearance-none w-5 h-5 bg-white border border-slate-200 rounded-md checked:bg-slate-800 transition-all"
+                                required
+                            />
+                            <span className="text-[14px] font-bold text-slate-500 group-hover:text-slate-700 transition-colors">[필수] 자금세탁방지(AML) 및 고객확인 절차 동의</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={termsOptional}
+                                onChange={(e) => setTermsOptional(e.target.checked)}
+                                className="peer appearance-none w-5 h-5 bg-white border border-slate-200 rounded-md checked:bg-slate-800 transition-all"
+                            />
+                            <span className="text-[14px] font-bold text-slate-500">[선택] 마케팅 및 이벤트 알림 수신 동의</span>
+                        </label>
+                    </div>
                 </div>
 
-                <div className="flex justify-center my-4">
+                <div className="flex justify-center p-4 border border-slate-100 rounded-[24px]">
                     <Turnstile
-                        siteKey="1x00000000000000000000AA"
+                        siteKey="0x4AAAAAAA4J3sV2-tFjWlT1"
                         onSuccess={(token) => setTurnstileToken(token)}
                     />
                 </div>
 
-                <Button type="submit" className="w-full mt-4">
-                    {activeTab === 'COMPANY_ADMIN' ? '기업 신규 등록 및 가입' : activeTab === 'COMPANY_USER' ? '사내 멤버 합류 신청' : '일반 회원 가입'}
-                </Button>
+                <button
+                    type="submit"
+                    className="w-full py-6 bg-slate-900 text-white rounded-[24px] font-black text-[18px] hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-[0.98] mt-4"
+                >
+                    {activeTab === 'COMPANY_ADMIN' ? '기업 등록 완료' : '회원가입 완료'}
+                </button>
             </form>
 
-            <div className="mt-6 text-center text-sm text-gray-600">
-                이미 계정이 있으신가요?{' '}
-                <Link to="/login" className="text-blue-600 hover:text-blue-800">
-                    로그인
-                </Link>
-            </div>
+            <footer className="mt-10 text-center">
+                <p className="text-[12px] font-bold text-slate-400">
+                    이미 계정이 있으신가요?{' '}
+                    <Link to="/login" className="text-teal-600 hover:underline ml-1">로그인하기</Link>
+                </p>
+            </footer>
         </div>
     );
 };

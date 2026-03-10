@@ -231,16 +231,24 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
               {/* 사용자 버튼 */}
               <div className="h-6 w-[1px] bg-slate-100 mx-1" />
               {token ? (
-                <button
-                  onClick={() => {
-                    localStorage.removeItem("access_token");
-                    window.location.href = "/";
-                  }}
-                  className="flex items-center gap-2 pl-2 pr-4 py-2 bg-slate-800 text-white rounded-2xl text-[12px] font-black hover:bg-slate-900 transition-all shadow-lg shadow-slate-200 active:scale-95"
-                >
-                  <UserCircle size={20} className="text-slate-400" />
-                  로그아웃
-                </button>
+                <div className="flex items-center gap-2">
+                  <Link to="/mypage">
+                    <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-100 text-slate-600 rounded-2xl text-[12px] font-black hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
+                      <UserCircle size={18} className="text-slate-400" />
+                      마이페이지
+                    </button>
+                  </Link>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem("access_token");
+                      window.location.href = "/";
+                    }}
+                    className="flex items-center gap-2 pl-2 pr-4 py-2 bg-slate-800 text-white rounded-2xl text-[12px] font-black hover:bg-slate-900 transition-all shadow-lg shadow-slate-200 active:scale-95"
+                  >
+                    <UserCircle size={20} className="text-slate-400" />
+                    로그아웃
+                  </button>
+                </div>
               ) : (
                 <Link to="/login">
                   <button className="px-6 py-2.5 text-[12px] font-black text-white bg-teal-600 rounded-2xl shadow-lg shadow-teal-100 hover:bg-teal-700 transition-all active:scale-95">

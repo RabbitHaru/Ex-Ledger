@@ -25,6 +25,7 @@ import TransactionHistory from "../components/dashboard/TransactionHistory";
 import RemittanceTracking from "../components/pages/remittance/Tracking/RemittanceTracking";
 import ExchangePage from "../components/widgets/finance/ExchangePage";
 import SettlementDashboard from "../components/pages/settlement/SettlementDashboard";
+import MyPage from "../components/pages/user/MyPage";
 
 // Company
 import CompanyJoin from "../pages/company/CompanyJoin";
@@ -57,6 +58,7 @@ const AppRoutes = () => {
             <Route path="/list" element={<MySettlementList />} />
             <Route path="/seller/history" element={<TransactionHistory />} />
             <Route path="/settlement" element={<SettlementDashboard />} />
+            <Route path="/mypage" element={<MyPage />} />
           </Route>
 
           {/* ----- 기업 관리자(Company Admin) 전용 라우트 ----- */}
@@ -73,6 +75,7 @@ const AppRoutes = () => {
             <Route path="/admin/logs" element={<AdminLogList />} />
             <Route path="/admin/health" element={<SystemHealth />} />
             <Route path="/admin/companies/review" element={<CompanyReview />} />
+            <Route path="/admin/license-approval" element={<CompanyReview />} />
             <Route path="/remittance" element={<RemittanceManagement />} />
           </Route>
         </Route>
