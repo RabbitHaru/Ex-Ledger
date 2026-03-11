@@ -51,7 +51,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto py-12">
+    <div className="w-full max-w-xl mx-auto py-12">
       <header className="text-center mb-12">
         <h2 className="text-5xl font-black text-slate-900 tracking-tight italic">로그인</h2>
         <p className="text-slate-400 font-bold text-[14px] uppercase tracking-[0.2em] mt-3">Ex-Ledger 서비스에 접속합니다</p>

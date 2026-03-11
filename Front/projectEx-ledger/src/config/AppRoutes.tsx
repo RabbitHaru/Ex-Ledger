@@ -41,6 +41,11 @@ import CorporateWallet from "../components/pages/wallet/CorporateWallet";
 import { TermsPage, PrivacyPage, NoticePage, OperationPolicyPage } from "../components/pages/resources/ResourcePages";
 import AdminBroadcast from "../components/pages/admin/AdminBroadcast";
 
+// Error Pages
+import Unauthorized from "../pages/error/Unauthorized";
+import PendingApproval from "../pages/error/PendingApproval";
+import LoginRequired from "../pages/error/LoginRequired";
+
 const AppRoutes = () => {
   return (
     <Routes>
@@ -103,7 +108,13 @@ const AppRoutes = () => {
       </Route>
     </Route>
 
-    <Route path="*" element={<NotFound />} />
+      {/* 에러 및 특수 상태 페이지 */}
+      <Route path="/unauthorized" element={<Unauthorized />} />
+      <Route path="/403" element={<Unauthorized />} />
+      <Route path="/pending-approval" element={<PendingApproval />} />
+      <Route path="/login-required" element={<LoginRequired />} />
+
+      <Route path="*" element={<NotFound />} />
   </Routes>
   );
 };

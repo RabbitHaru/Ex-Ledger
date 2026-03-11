@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import CommonLayout from "../../layout/CommonLayout";
 import { useToast } from "../../notification/ToastProvider";
 import { useWallet } from "../../../context/WalletContext";
 
@@ -189,25 +188,23 @@ const SellerDashboard: React.FC = () => {
 
   if (!hasAccount)
     return (
-      <CommonLayout>
-        <div className="max-w-4xl px-6 py-24 mx-auto space-y-16 text-center animate-in fade-in">
-          <div className="space-y-6">
-            <div className="bg-teal-50 w-24 h-24 rounded-[32px] flex items-center justify-center mx-auto text-teal-600 shadow-xl shadow-teal-100/50">
-              <Sparkles size={40} />
-            </div>
-            <h1 className="text-4xl italic font-black tracking-tighter uppercase text-slate-900">
-              지갑 활성화
-            </h1>
+      <div className="max-w-4xl px-6 py-24 mx-auto space-y-16 text-center animate-in fade-in">
+        <div className="space-y-6">
+          <div className="bg-teal-50 w-24 h-24 rounded-[32px] flex items-center justify-center mx-auto text-teal-600 shadow-xl shadow-teal-100/50">
+            <Sparkles size={40} />
           </div>
-          <AccountVerification
-            onVerificationSuccess={handleAccountCreationSuccess}
-          />
+          <h1 className="text-4xl italic font-black tracking-tighter uppercase text-slate-900">
+            지갑 활성화
+          </h1>
         </div>
-      </CommonLayout>
+        <AccountVerification
+          onVerificationSuccess={handleAccountCreationSuccess}
+        />
+      </div>
     );
 
   return (
-    <CommonLayout>
+    <div className="min-h-screen">
       <div className="max-w-4xl p-10 mx-auto animate-in fade-in">
         <header className="flex items-center justify-between mb-12">
           <button
@@ -450,7 +447,7 @@ const SellerDashboard: React.FC = () => {
           </div>
         </div>
       )}
-    </CommonLayout>
+    </div>
   );
 };
 

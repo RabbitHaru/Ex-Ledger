@@ -66,7 +66,7 @@ http.interceptors.response.use(
             const rt = getRefreshToken();
             if (!rt) {
                 removeToken();
-                window.location.href = '/login';
+                window.location.href = '/login-required';
                 return Promise.reject(error);
             }
 
@@ -88,11 +88,17 @@ http.interceptors.response.use(
             } catch (err) {
                 processQueue(err, null);
                 removeToken();
-                window.location.href = '/login';
+                window.location.href = '/login-required';
                 return Promise.reject(err);
             } finally {
                 isRefreshing = false;
             }
+        }
+
+        // 403 Forbidden: 권한 부족 (토큰은 유효하지만 리소스 접근 불가)
+        if (error.response?.status === 403) {
+            window.location.href = '/unauthorized';
+            return Promise.reject(error);
         }
 
         return Promise.reject(error);

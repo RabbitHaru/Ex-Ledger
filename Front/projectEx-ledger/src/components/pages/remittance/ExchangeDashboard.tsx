@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 
 import { useToast } from "../../notification/ToastProvider";
-import { hasRole } from "../../../utils/auth";
+import { hasRole } from "../../../config/auth";
 import {
   Building2,
   Send,

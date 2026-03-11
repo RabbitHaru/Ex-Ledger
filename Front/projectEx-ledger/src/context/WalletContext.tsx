@@ -5,7 +5,7 @@ import React, {
   useEffect,
   type ReactNode,
 } from "react";
-import { getAuthToken, parseJwt } from "../utils/auth";
+import { getToken, parseJwt } from "../config/auth";
 
 export interface Transaction {
   id: string;
@@ -140,7 +140,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const syncAuth = () => {
-      const token = getAuthToken();
+      const token = getToken();
       if (token) {
         try {
           const decoded = parseJwt(token);
