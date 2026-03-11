@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.projectexledger.domain.audit.entity.SystemAuditLog;
 import me.projectexledger.domain.audit.repository.SystemAuditLogRepository;
+import me.projectexledger.domain.client.dto.repository.ClientRepository;
 import me.projectexledger.domain.client.entity.Client;
 import me.projectexledger.domain.client.entity.ClientGrade;
 import me.projectexledger.domain.client.entity.ClientStatus;
-import me.projectexledger.domain.client.dto.repository.ClientRepository;
 import me.projectexledger.domain.company.entity.Company;
 import me.projectexledger.domain.company.repository.CompanyRepository;
 import me.projectexledger.domain.member.entity.AdminApprovalStatus;
@@ -95,14 +95,13 @@ public class DummyDataInit implements CommandLineRunner {
     }
 
     private void initCompaniesAndMembers() {
-        if (memberRepository.findByEmail("admin@exledger.com").isPresent()) {
-            log.info("Member 데이터가 이미 존재합니다. 스킵.");
+        // 🌟 [수정] admin만 있고 테스트 유저는 없는 상황을 대비해 전체 카운트 체크
+        if (memberRepository.count() > 1) {
+            log.info("Member 데이터가 충분히 존재합니다. 스킵.");
             return;
         }
 
         // ========== Company 생성 ==========
-
-        // 기업A: 승인 대기 (사업자 심사 테스트용)
         Company companyA = companyRepository.save(Company.builder()
                 .businessNumber("1234567890")
                 .companyName("(주)테스트기업A")
@@ -110,7 +109,6 @@ public class DummyDataInit implements CommandLineRunner {
                 .adminApprovalStatus(AdminApprovalStatus.PENDING)
                 .build());
 
-        // 기업B: 이미 승인됨 (정상 기업 테스트용)
         Company companyB = companyRepository.save(Company.builder()
                 .businessNumber("9876543210")
                 .companyName("(주)엑스레저글로벌")
@@ -118,7 +116,6 @@ public class DummyDataInit implements CommandLineRunner {
                 .adminApprovalStatus(AdminApprovalStatus.APPROVED)
                 .build());
 
-        // 기업C: 승인 대기
         Company companyC = companyRepository.save(Company.builder()
                 .businessNumber("1112233333")
                 .companyName("(주)글로벌무역")
@@ -126,7 +123,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .adminApprovalStatus(AdminApprovalStatus.PENDING)
                 .build());
 
-        // ========== 사이트 관리자 (기업 소속 없음) ==========
+        // ========== Member 생성 ==========
         Member admin = Member.builder()
                 .email("admin@exledger.com")
                 .password(passwordEncoder.encode("admin123!"))
@@ -134,7 +131,6 @@ public class DummyDataInit implements CommandLineRunner {
                 .role(Member.Role.ROLE_INTEGRATED_ADMIN)
                 .build();
 
-        // ========== 개인 유저 (기업 소속 없음) ==========
         Member user1 = Member.builder()
                 .email("user@example.com")
                 .password(passwordEncoder.encode("user1234!"))
@@ -149,7 +145,6 @@ public class DummyDataInit implements CommandLineRunner {
                 .role(Member.Role.ROLE_USER)
                 .build();
 
-        // ========== 기업A: 심사 대기 중인 기업 관리자 ==========
         Member companyAdminA = Member.builder()
                 .email("ceo@testcompany.com")
                 .password(passwordEncoder.encode("test1234!"))
@@ -158,7 +153,6 @@ public class DummyDataInit implements CommandLineRunner {
                 .company(companyA)
                 .build();
 
-        // ========== 기업B: 승인된 기업 관리자 + 소속 직원 ==========
         Member companyAdminB = Member.builder()
                 .email("boss@exglobal.com")
                 .password(passwordEncoder.encode("test1234!"))
@@ -166,7 +160,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .role(Member.Role.ROLE_COMPANY_ADMIN)
                 .company(companyB)
                 .build();
-        companyAdminB.approveCompany(); // 승인된 기업이므로 관리자도 승인 처리
+        companyAdminB.approveCompany(); // 🌟 이제 정상 작동함
 
         Member companyStaff1 = Member.builder()
                 .email("staff1@exglobal.com")
@@ -175,7 +169,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .role(Member.Role.ROLE_COMPANY_USER)
                 .company(companyB)
                 .build();
-        companyStaff1.approveCompany(); // 승인된 직원
+        companyStaff1.approveCompany(); // 🌟 정상 작동
 
         Member companyStaff2 = Member.builder()
                 .email("staff2@exglobal.com")
@@ -184,9 +178,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .role(Member.Role.ROLE_COMPANY_USER)
                 .company(companyB)
                 .build();
-        // 이 직원은 아직 승인 대기 상태
 
-        // ========== 기업C: 심사 대기 관리자 ==========
         Member companyAdminC = Member.builder()
                 .email("manager@globaltrade.com")
                 .password(passwordEncoder.encode("test1234!"))
@@ -226,23 +218,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .durationMs(120L)
                 .build();
 
-        SystemAuditLog log3 = SystemAuditLog.builder()
-                .userEmail("ceo@testcompany.com")
-                .action("POST /api/auth/signup")
-                .clientIp("10.0.0.5")
-                .requestUri("/api/auth/signup")
-                .durationMs(350L)
-                .build();
-
-        SystemAuditLog log4 = SystemAuditLog.builder()
-                .userEmail("admin@exledger.com")
-                .action("GET /api/admin/companies/pending")
-                .clientIp("127.0.0.1")
-                .requestUri("/api/admin/companies/pending")
-                .durationMs(22L)
-                .build();
-
-        auditLogRepository.saveAll(List.of(log1, log2, log3, log4));
-        log.info("더미 AuditLog(감사로그) 생성 완료");
+        auditLogRepository.saveAll(List.of(log1, log2));
+        log.info("더미 AuditLog 생성 완료");
     }
 }

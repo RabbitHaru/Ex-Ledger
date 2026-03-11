@@ -20,14 +20,18 @@ public class FrankfurterClient implements ExchangeRateProvider {
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final String BASE_URL = "https://api.frankfurter.app/";
-    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     @Override
     public List<ExchangeRateDTO> fetchRates() {
         return fetchHistoricalRates("latest");
     }
 
+    /**
+     * 유럽 중앙은행 데이터를 기반으로 환율을 가져옵니다.
+     */
     public List<ExchangeRateDTO> fetchHistoricalRates(String datePath) {
+        // 원화(KRW)를 기준으로 역산하기 위해 ?from=KRW 쿼리 사용
         String url = BASE_URL + datePath + "?from=KRW";
 
         try {
@@ -36,23 +40,22 @@ public class FrankfurterClient implements ExchangeRateProvider {
                 return List.of();
             }
 
+            // 🌟 [핵심 개선] API 응답에 포함된 실제 환율 기준 날짜(date) 추출 (예: "2026-03-11")
+            // 시스템 시각이 12일이라도 API가 11일 데이터를 주면 11일로 타임스탬프를 찍습니다.
+            String apiDate = response.get("date").toString();
+            String timestamp = apiDate + " " + LocalDateTime.now().format(timeFormatter);
+
             @SuppressWarnings("unchecked")
             Map<String, Object> rates = (Map<String, Object>) response.get("rates");
-            String timestamp = datePath.equals("latest")
-                    ? LocalDateTime.now().format(formatter)
-                    : datePath + " 10:00:00";
 
             return rates.entrySet().stream()
-                    // 🌟 1. KRW 차단
                     .filter(entry -> !entry.getKey().equals("KRW"))
                     .map(entry -> {
                         String curUnit = entry.getKey();
+                        // 내부 매퍼 기준에 맞춰 중국 위안화 코드 조정
+                        if (curUnit.equals("CNY")) curUnit = "CNH";
 
-                        // 🌟 2. [위안화 마법] 프랑크푸터의 CNY를 CNH로 강제 개명시켜서 데이터 단절 방지!
-                        if (curUnit.equals("CNY")) {
-                            curUnit = "CNH";
-                        }
-
+                        // 1 KRW당 외화 수치를 역산하여 1 외화당 KRW 수치로 변환
                         BigDecimal rateValue = BigDecimal.ONE.divide(
                                 new BigDecimal(entry.getValue().toString()), 4, RoundingMode.HALF_UP);
 
@@ -61,17 +64,16 @@ public class FrankfurterClient implements ExchangeRateProvider {
                                 .curNm(CurrencyMapper.getName(curUnit))
                                 .rate(rateValue)
                                 .provider(getProviderName())
-                                .updatedAt(timestamp)
+                                .updatedAt(timestamp) // 실제 데이터 날짜가 포함된 타임스탬프
                                 .changeAmount(BigDecimal.ZERO)
                                 .changeRate(BigDecimal.ZERO)
                                 .build();
                     })
-                    // 🌟 3. 우리가 사전에 정의한 통화(CurrencyMapper)만 리스트에 통과시킴
                     .filter(dto -> CurrencyMapper.isSupported(dto.getCurUnit()))
                     .collect(Collectors.toList());
 
         } catch (Exception e) {
-            log.error("Frankfurter API 호출 에러: {}", e.getMessage());
+            log.error("❌ Frankfurter API 호출 에러: {}", e.getMessage());
             return List.of();
         }
     }

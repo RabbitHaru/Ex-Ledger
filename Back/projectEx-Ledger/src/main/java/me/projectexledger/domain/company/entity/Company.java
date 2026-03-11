@@ -37,6 +37,10 @@ public class Company extends BaseEntity {
     @Column(length = 100)
     private String licenseFileUuid;
 
+    @Column(length = 50)
+    private String corporateAccountNumber;
+    private Long balanceKrw;
+
     @Builder
     public Company(String businessNumber, String companyName, String representative,
                    AdminApprovalStatus adminApprovalStatus, String licenseFileUuid) {
@@ -45,6 +49,12 @@ public class Company extends BaseEntity {
         this.representative = representative;
         this.adminApprovalStatus = adminApprovalStatus != null ? adminApprovalStatus : AdminApprovalStatus.PENDING;
         this.licenseFileUuid = licenseFileUuid;
+        this.balanceKrw = 0L;
+    }
+
+    public void activateAccount(String accountNumber) {
+        this.corporateAccountNumber = accountNumber;
+        this.adminApprovalStatus = AdminApprovalStatus.APPROVED;
     }
 
     public void approveByAdmin() {
