@@ -19,6 +19,8 @@ const MyPage: React.FC = () => {
     const [allowNoti, setAllowNoti] = useState(true);
 
     const [isMfaSetting, setIsMfaSetting] = useState(false);
+    const [isVerifyingCurrentOtp, setIsVerifyingCurrentOtp] = useState(false);
+    const [currentOtp, setCurrentOtp] = useState("");
     const [mfaData, setMfaData] = useState<{ secret: string; qrCodeUrl: string } | null>(null);
     const [otpCode, setOtpCode] = useState("");
 
@@ -34,6 +36,8 @@ const MyPage: React.FC = () => {
         businessNumber: string;
         mfaEnabled: boolean;
         adminApprovalStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+        mfaResetAt: string | null;
+        mfaCooldownEnd: string | null;
     } | null>(null);
 
     useEffect(() => {
@@ -100,13 +104,25 @@ const MyPage: React.FC = () => {
         }
     };
 
-    const startMfaSetup = async () => {
+    const startMfaSetup = async (otpCodeForVerify?: string) => {
         try {
-            const response = await http.post("/auth/mfa/setup", {});
+            const payload: any = {};
+            if (otpCodeForVerify) {
+                payload.currentOtpCode = Number(otpCodeForVerify);
+            }
+            const response = await http.post("/auth/mfa/setup", payload);
             setMfaData(response.data.data);
             setIsMfaSetting(true);
+            setIsVerifyingCurrentOtp(false);
+            setCurrentOtp("");
         } catch (err: any) {
-            showToast("MFA 설정 요청 실패", "ERROR");
+            const msg = err.response?.data?.message || "";
+            if (msg === "MFA_CURRENT_CODE_REQUIRED") {
+                // MFA가 이미 활성화 → 기존 OTP 입력 단계로
+                setIsVerifyingCurrentOtp(true);
+            } else {
+                showToast(msg || "MFA 설정 요청 실패", "ERROR");
+            }
         }
     };
 
@@ -311,19 +327,133 @@ const MyPage: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {!isMfaSetting ? (
+                                    {/* ★ MFA 쿨다운 경고 (데이터가 있을 때만) */}
+                                    {profile?.mfaCooldownEnd && new Date(profile.mfaCooldownEnd) > new Date() && (
+                                        <div className="p-6 bg-rose-50 border border-rose-100 rounded-[32px] flex items-start gap-4 animate-in slide-in-from-top-4">
+                                            <div className="p-3 bg-white rounded-2xl shadow-sm text-rose-500">
+                                                <AlertCircle size={20} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h4 className="text-[14px] font-black text-rose-900">금융거래 제한 안내 (쿨다운)</h4>
+                                                <p className="text-[12px] font-bold text-rose-600/80 leading-relaxed">
+                                                    보안을 위해 OTP 재설정 후 24시간 동안 송금이 제한됩니다.<br />
+                                                    제한 해제: <span className="text-rose-700 underline underline-offset-2">
+                                                        {new Date(profile.mfaCooldownEnd).toLocaleString('ko-KR', { 
+                                                            month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                                                        })}
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!isMfaSetting && !isVerifyingCurrentOtp ? (
                                         <div className="space-y-6">
                                             <p className="text-[14px] font-bold text-slate-500 leading-relaxed px-2">
                                                 송금 및 주요 금융 설정 변경 시에만 OTP 번호를 요구합니다. <br />
-                                                분실 시 아래 버튼으로 즉시 재설정이 가능합니다.
+                                                {profile?.mfaEnabled 
+                                                    ? "재설정 시 기존 OTP 인증이 필요합니다." 
+                                                    : "분실 시 고객센터에 문의해주세요."}
                                             </p>
                                             <button
-                                                onClick={startMfaSetup}
+                                                onClick={() => startMfaSetup()}
                                                 className="w-full py-6 border-[3px] border-dashed border-slate-100 text-slate-400 rounded-3xl font-black text-[13px] hover:border-teal-500 hover:text-teal-600 transition-all flex items-center justify-center gap-3"
                                             >
                                                 <RefreshCw size={18} />
-                                                OTP 보안키 및 재설정
+                                                {profile?.mfaEnabled ? "OTP 보안키 재설정 (기존 OTP 인증 필요)" : "OTP 보안키 설정"}
                                             </button>
+
+                                            {/* OTP 분실 시 본인인증으로 초기화 */}
+                                            {profile?.mfaEnabled && (
+                                                <button
+                                                    onClick={async () => {
+                                                        // PortOne V2 본인인증 호출
+                                                        const PortOne = (window as any).PortOne;
+                                                        if (!PortOne) {
+                                                            showToast("본인인증 모듈(V2)을 불러올 수 없습니다. 페이지를 새로고침 해주세요.", "ERROR");
+                                                            return;
+                                                        }
+
+                                                        try {
+                                                            const storeId = import.meta.env.VITE_PORTONE_STORE_ID;
+                                                            const channelKey = import.meta.env.VITE_PORTONE_AUTH_CHANNEL_KEY;
+
+                                                            if (!storeId || !channelKey) {
+                                                                showToast("본인인증 설정(STORE_ID/CHANNEL_KEY)이 누락되었습니다.", "ERROR");
+                                                                return;
+                                                            }
+
+                                                            const res = await PortOne.requestIdentityVerification({
+                                                                storeId: storeId,
+                                                                channelKey: channelKey,
+                                                                identityVerificationId: `mfa-reset-${Date.now()}`,
+                                                            });
+
+                                                            if (res.code == null && res.identityVerificationId) {
+                                                                // V2는 성공 시 에러 코드가 없음 (res.code가 undefined/null)
+                                                                // txId 또는 identityVerificationId를 통해 백엔드에서 확인
+                                                                try {
+                                                                    // V2의 결과인 txId 또는 identityVerificationId를 백엔드로 전송
+                                                                    const response = await http.post("/auth/mfa/reset-by-identity", { 
+                                                                        impUid: res.txId || res.identityVerificationId 
+                                                                    });
+                                                                    setMfaData(response.data.data);
+                                                                    setIsMfaSetting(true);
+                                                                    showToast("본인인증 확인 완료! 새 OTP를 설정해주세요.", "SUCCESS");
+                                                                } catch (err: any) {
+                                                                    showToast(err.response?.data?.message || "본인인증 기반 OTP 초기화에 실패했습니다.", "ERROR");
+                                                                }
+                                                            } else {
+                                                                showToast(`본인인증 실패: ${res.message || '인증이 취소되었습니다.'}`, "ERROR");
+                                                            }
+                                                        } catch (err: any) {
+                                                            showToast("본인인증 과정 중 오류가 발생했습니다.", "ERROR");
+                                                            console.error(err);
+                                                        }
+                                                    }}
+                                                    className="w-full py-5 bg-rose-50 text-rose-500 rounded-3xl font-black text-[12px] hover:bg-rose-100 transition-all flex items-center justify-center gap-2 border border-rose-200"
+                                                >
+                                                    🆘 OTP 분실? 본인인증으로 초기화
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : isVerifyingCurrentOtp ? (
+                                        /* ★ 기존 OTP 인증 단계 */
+                                        <div className="space-y-6 animate-in slide-in-from-right-4">
+                                            <div className="p-8 bg-amber-50 rounded-[32px] border border-amber-200 space-y-3">
+                                                <h4 className="text-[15px] font-black text-amber-800 flex items-center gap-2">
+                                                    🔐 기존 OTP 인증 필요
+                                                </h4>
+                                                <p className="text-[13px] font-medium text-amber-700 leading-relaxed">
+                                                    보안을 위해 현재 사용 중인 인증 앱의 OTP 코드를 입력하세요.<br />
+                                                    기존 OTP를 분실한 경우 고객센터에 연락해주세요.
+                                                </p>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                maxLength={6}
+                                                placeholder="현재 OTP 6자리"
+                                                autoFocus
+                                                className="w-full px-10 py-6 bg-white border-2 border-amber-200 rounded-3xl text-center text-3xl font-black tracking-[0.6em] outline-none focus:ring-8 focus:ring-amber-500/10 focus:border-amber-500 transition-all"
+                                                value={currentOtp}
+                                                onChange={(e) => setCurrentOtp(e.target.value.replace(/[^0-9]/g, ""))}
+                                                onKeyDown={(e) => { if (e.key === 'Enter' && currentOtp.length === 6) startMfaSetup(currentOtp); }}
+                                            />
+                                            <div className="flex gap-4">
+                                                <button
+                                                    onClick={() => { setIsVerifyingCurrentOtp(false); setCurrentOtp(""); }}
+                                                    className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[14px]"
+                                                >
+                                                    취소
+                                                </button>
+                                                <button
+                                                    onClick={() => startMfaSetup(currentOtp)}
+                                                    disabled={currentOtp.length !== 6}
+                                                    className="flex-[2] py-4 bg-amber-500 text-white rounded-2xl font-black text-[14px] disabled:opacity-40 transition-all"
+                                                >
+                                                    확인 후 재설정 진행
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="space-y-8 animate-in slide-in-from-right-4">
@@ -374,25 +504,87 @@ const MyPage: React.FC = () => {
                     <div className="space-y-10">
                         {/* 상세 승인 상태 안내창 */}
                         {!profile?.isApproved && (profile?.role === "ROLE_COMPANY_ADMIN" || profile?.role === "ROLE_COMPANY_USER") && (
-                            <div className={`${profile?.adminApprovalStatus === 'REJECTED' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'} rounded-[48px] p-12 flex items-start gap-8 animate-in slide-in-from-top-4`}>
-                                <div className={`p-6 bg-white rounded-3xl ${profile?.adminApprovalStatus === 'REJECTED' ? 'text-rose-500' : 'text-amber-500'} shadow-sm`}>
-                                    <AlertCircle size={40} />
+                            <div className={`${profile?.adminApprovalStatus === 'REJECTED' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'} rounded-[48px] p-12 flex flex-col gap-8 animate-in slide-in-from-top-4`}>
+                                <div className="flex items-start gap-8">
+                                    <div className={`p-6 bg-white rounded-3xl ${profile?.adminApprovalStatus === 'REJECTED' ? 'text-rose-500' : 'text-amber-500'} shadow-sm`}>
+                                        <AlertCircle size={40} />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <h3 className={`text-2xl font-black ${profile?.adminApprovalStatus === 'REJECTED' ? 'text-rose-900' : 'text-amber-900'}`}>
+                                            {profile?.adminApprovalStatus === 'REJECTED' ? "사업자 승인이 반려되었습니다" : 
+                                             profile?.role === "ROLE_COMPANY_ADMIN" ? "사업자 승인 심사 대기 중입니다" : "기업 소속 승인 대기 중입니다"}
+                                        </h3>
+                                        <p className={`text-[16px] ${profile?.adminApprovalStatus === 'REJECTED' ? 'text-rose-700' : 'text-amber-700'} font-medium leading-relaxed`}>
+                                            {profile?.adminApprovalStatus === 'REJECTED' ? (
+                                                <>첨부하신 사업자등록증 정보가 불명확하거나 유효하지 않습니다. <br />아래에서 사업자등록증을 다시 첨부하여 재제출해주세요.</>
+                                            ) : profile?.role === "ROLE_COMPANY_ADMIN" ? (
+                                                <>{profile?.businessNumber} 사업자로 승인 요청이 접수되었습니다. <br />사업자 승인 전까지는 정산 및 외환 거래 기능 이용이 제한됩니다.</>
+                                            ) : (
+                                                <>현재 소속 기업 관리자의 승인을 기다리고 있습니다. <br />승인이 완료된 후 기업 전용 기능을 이용하실 수 있습니다.</>
+                                            )}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="space-y-3">
-                                    <h3 className={`text-2xl font-black ${profile?.adminApprovalStatus === 'REJECTED' ? 'text-rose-900' : 'text-amber-900'}`}>
-                                        {profile?.adminApprovalStatus === 'REJECTED' ? "사업자 승인이 반려되었습니다" : 
-                                         profile?.role === "ROLE_COMPANY_ADMIN" ? "사업자 승인 심사 대기 중입니다" : "기업 소속 승인 대기 중입니다"}
-                                    </h3>
-                                    <p className={`text-[16px] ${profile?.adminApprovalStatus === 'REJECTED' ? 'text-rose-700' : 'text-amber-700'} font-medium leading-relaxed`}>
-                                        {profile?.adminApprovalStatus === 'REJECTED' ? (
-                                            <>첨부하신 사업자등록증 정보가 불명확하거나 유효하지 않습니다. <br />고객센터 문의 또는 정보 수정을 통해 다시 신청해주세요.</>
-                                        ) : profile?.role === "ROLE_COMPANY_ADMIN" ? (
-                                            <>{profile?.businessNumber} 사업자로 승인 요청이 접수되었습니다. <br />사업자 승인 전까지는 정산 및 외환 거래 기능 이용이 제한됩니다.</>
-                                        ) : (
-                                            <>현재 소속 기업 관리자의 승인을 기다리고 있습니다. <br />승인이 완료된 후 기업 전용 기능을 이용하실 수 있습니다.</>
-                                        )}
-                                    </p>
-                                </div>
+
+                                {/* 재제출 UI — 반려된 기업 관리자에게만 표시 */}
+                                {profile?.adminApprovalStatus === 'REJECTED' && profile?.role === 'ROLE_COMPANY_ADMIN' && (
+                                    <div className="bg-white rounded-3xl p-8 border border-rose-200 space-y-5">
+                                        <h4 className="text-[15px] font-black text-rose-800 flex items-center gap-2">
+                                            📎 사업자등록증 재제출
+                                        </h4>
+                                        <div className="flex items-center gap-4">
+                                            <label className="flex-1 flex items-center gap-3 px-5 py-4 bg-rose-50 rounded-2xl cursor-pointer hover:bg-rose-100 transition-all border border-rose-200 border-dashed">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,.pdf"
+                                                    className="hidden"
+                                                    id="resubmit-license-input"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const fileNameDisplay = document.getElementById('resubmit-file-name');
+                                                            if (fileNameDisplay) fileNameDisplay.textContent = file.name;
+                                                        }
+                                                    }}
+                                                />
+                                                <svg className="w-5 h-5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                                                <span id="resubmit-file-name" className="text-[13px] font-bold text-rose-500">사업자등록증 파일 선택 (이미지/PDF)</span>
+                                            </label>
+                                            <button
+                                                onClick={async () => {
+                                                    const fileInput = document.getElementById('resubmit-license-input') as HTMLInputElement;
+                                                    const file = fileInput?.files?.[0];
+                                                    if (!file) {
+                                                        showToast('사업자등록증 파일을 먼저 선택해주세요.', 'ERROR');
+                                                        return;
+                                                    }
+                                                    try {
+                                                        // 1. 파일 업로드
+                                                        const formData = new FormData();
+                                                        formData.append('file', file);
+                                                        const uploadRes = await http.post('/auth/upload-license', formData, {
+                                                            headers: { 'Content-Type': 'multipart/form-data' }
+                                                        });
+                                                        const uuid = uploadRes.data?.uuid || uploadRes.data?.data?.uuid;
+
+                                                        // 2. 재제출 API 호출
+                                                        await http.post('/company/resubmit-license', { licenseFileUuid: uuid });
+                                                        showToast('사업자등록증이 재제출되었습니다. 심사가 다시 진행됩니다.', 'SUCCESS');
+                                                        window.location.reload();
+                                                    } catch (err: any) {
+                                                        showToast(err.response?.data?.message || '재제출에 실패했습니다.', 'ERROR');
+                                                    }
+                                                }}
+                                                className="px-6 py-4 bg-rose-600 text-white rounded-2xl text-[13px] font-black hover:bg-rose-700 transition-all shadow-lg whitespace-nowrap"
+                                            >
+                                                재제출하기
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] text-rose-400 font-medium">
+                                            * 재제출 후 관리자 심사가 다시 진행됩니다. 심사 완료까지 1~2 영업일이 소요될 수 있습니다.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
 

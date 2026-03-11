@@ -58,4 +58,15 @@ public class CompanyController {
         companyService.revokeMe();
         return ApiResponse.success("기업 소속 해제가 완료되었습니다.", null);
     }
+
+    @PostMapping("/resubmit-license")
+    @PreAuthorize("hasRole('COMPANY_ADMIN')")
+    public ApiResponse<Void> resubmitLicense(@RequestBody java.util.Map<String, String> body) {
+        String licenseFileUuid = body.get("licenseFileUuid");
+        if (licenseFileUuid == null || licenseFileUuid.isBlank()) {
+            throw new IllegalArgumentException("사업자등록증 파일이 필요합니다.");
+        }
+        companyService.resubmitLicense(licenseFileUuid);
+        return ApiResponse.success("사업자등록증이 재제출되었습니다. 심사가 다시 진행됩니다.", null);
+    }
 }

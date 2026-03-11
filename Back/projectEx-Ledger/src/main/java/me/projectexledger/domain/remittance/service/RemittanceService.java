@@ -20,6 +20,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import me.projectexledger.domain.notification.service.SseEmitters;
+import me.projectexledger.domain.member.entity.Member;
+import me.projectexledger.domain.member.repository.MemberRepository;
+import java.time.temporal.ChronoUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -29,9 +32,23 @@ public class RemittanceService {
     private final CurrencyCalculator currencyCalculator;
     private final SystemConfigService configService;
     private final SseEmitters sseEmitters;
+    private final MemberRepository memberRepository;
 
     @Transactional
     public RemittanceDTO.Response processRemittanceRequest(String requesterId, RemittanceDTO.Request requestDTO) {
+        // ★ 보안 강화: MFA 쿨다운 체크 (재설정 후 24시간 제한)
+        Member member = memberRepository.findByEmail(requesterId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (member.getMfaResetAt() != null) {
+            long hoursSinceReset = ChronoUnit.HOURS.between(member.getMfaResetAt(), LocalDateTime.now());
+            if (hoursSinceReset < 24) {
+                long remainingMinutes = 1440 - ChronoUnit.MINUTES.between(member.getMfaResetAt(), LocalDateTime.now());
+                long h = remainingMinutes / 60;
+                long m = remainingMinutes % 60;
+                throw new IllegalStateException(String.format("보안을 위해 OTP 재설정 후 24시간 동안 송금이 금지됩니다. (남은 시간: %d시간 %d분)", h, m));
+            }
+        }
 
         Remittance remittance = Remittance.builder()
                 .requesterId(requesterId)

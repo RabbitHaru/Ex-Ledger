@@ -59,6 +59,17 @@ public class Company extends BaseEntity {
         this.licenseFileUuid = licenseFileUuid;
     }
 
+    /**
+     * 반려 후 재제출: 사업자등록증을 보완하여 다시 심사 요청
+     */
+    public void resubmitForReview(String newLicenseFileUuid) {
+        if (this.adminApprovalStatus != AdminApprovalStatus.REJECTED) {
+            throw new IllegalStateException("반려 상태의 기업만 재제출할 수 있습니다.");
+        }
+        this.licenseFileUuid = newLicenseFileUuid;
+        this.adminApprovalStatus = AdminApprovalStatus.PENDING;
+    }
+
     public void updateInfo(String companyName, String representative) {
         if (companyName != null) this.companyName = companyName;
         if (representative != null) this.representative = representative;

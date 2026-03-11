@@ -1,6 +1,7 @@
 package me.projectexledger.domain.auth.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import me.projectexledger.domain.auth.dto.MfaLoginRequest;
 import me.projectexledger.domain.auth.dto.MfaSetupResponse;
 import me.projectexledger.domain.auth.dto.MfaVerifyRequest;
@@ -30,6 +31,7 @@ import me.projectexledger.domain.notification.service.SseEmitters;
 import me.projectexledger.domain.company.entity.Company;
 import me.projectexledger.domain.company.repository.CompanyRepository;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -213,16 +215,23 @@ public class AuthService {
     }
 
     @Transactional
-    public MfaSetupResponse setupMfa(String email) {
+    public MfaSetupResponse setupMfa(String email, Integer currentOtpCode) {
         Member member = memberRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        // 재발급(reset) 시에도 사용 가능하도록 수정
+        // ★ 보안 강화: 이미 MFA가 활성화된 경우, 기존 OTP 코드를 반드시 검증
+        if (member.isMfaEnabled()) {
+            if (currentOtpCode == null) {
+                throw new IllegalArgumentException("MFA_CURRENT_CODE_REQUIRED");
+            }
+            boolean isValid = googleAuthenticator.authorize(member.getTotpSecret(), currentOtpCode);
+            if (!isValid) {
+                throw new IllegalArgumentException("현재 OTP 코드가 일치하지 않습니다. 기존 인증 앱의 코드를 입력해주세요.");
+            }
+        }
+
         GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
         member.updateTotpSecret(key.getKey());
-
-        // MFA가 이미 활성화되어 있었다면, 새로운 키 등록 전까지는 유효하도록 둘 수도 있지만
-        // 여기서는 즉시 비활성화 후 재등록 유도
         member.disableMfa();
 
         String qrCodeUrl = String.format("otpauth://totp/Ex-Ledger:%s?secret=%s&issuer=Ex-Ledger", email, key.getKey());
@@ -240,6 +249,42 @@ public class AuthService {
         }
 
         member.enableMfa();
+        member.recordMfaReset(); // 재설정 시각 기록 (24시간 쿨다운 추적)
+    }
+
+    /**
+     * OTP 분실 시 본인인증을 통한 MFA 초기화
+     * 가입 시 등록된 portoneImpUid와 동일 인물인지 대조
+     */
+    @Transactional
+    public MfaSetupResponse resetMfaByIdentity(String email, String impUid) {
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (!member.isMfaEnabled()) {
+            throw new IllegalArgumentException("MFA가 활성화되어 있지 않습니다. 일반 설정을 이용해주세요.");
+        }
+
+        // 가입 시 등록된 본인인증 정보와 대조
+        String registeredImpUid = member.getPortoneImpUid();
+        if (registeredImpUid == null || registeredImpUid.isBlank()) {
+            throw new IllegalArgumentException("가입 시 본인인증 정보가 등록되지 않았습니다. 관리자에게 문의해주세요.");
+        }
+
+        if (!registeredImpUid.equals(impUid)) {
+            throw new IllegalArgumentException("본인인증 정보가 가입 시 등록된 정보와 일치하지 않습니다.");
+        }
+
+        // 본인인증 성공 → OTP 초기화 + 새 키 발급
+        GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
+        member.updateTotpSecret(key.getKey());
+        member.disableMfa();
+        member.recordMfaReset(); // 24시간 쿨다운
+
+        log.info("[MFA-RESET-BY-IDENTITY] User: {}, OTP 초기화 완료 (본인인증)", email);
+
+        String qrCodeUrl = String.format("otpauth://totp/Ex-Ledger:%s?secret=%s&issuer=Ex-Ledger", email, key.getKey());
+        return new MfaSetupResponse(key.getKey(), qrCodeUrl);
     }
 
     @Transactional

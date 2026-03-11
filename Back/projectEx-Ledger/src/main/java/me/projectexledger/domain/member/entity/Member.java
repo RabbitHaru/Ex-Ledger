@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import me.projectexledger.domain.BaseEntity;
 import me.projectexledger.domain.company.entity.Company;
 
+import java.time.LocalDateTime;
+
 /**
  * 사용자(회원) 엔티티
  */
@@ -65,6 +67,9 @@ public class Member extends BaseEntity {
     @Column(nullable = false)
     private boolean allowNotifications = true;
 
+    // MFA 재설정 시각 (쿨다운 추적)
+    private LocalDateTime mfaResetAt;
+
     @Builder
     public Member(String email, String password, String name, Role role,
                   Company company, String portoneImpUid) {
@@ -117,6 +122,10 @@ public class Member extends BaseEntity {
     public void disableMfa() {
         this.mfaEnabled = false;
         this.totpSecret = null;
+    }
+
+    public void recordMfaReset() {
+        this.mfaResetAt = LocalDateTime.now();
     }
 
     public void updatePassword(String encodedPassword) {

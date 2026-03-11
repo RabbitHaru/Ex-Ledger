@@ -22,8 +22,15 @@ public class UserProfileResponse {
     private boolean allowNotifications;
     private boolean mfaEnabled;
     private String adminApprovalStatus;
+    private java.time.LocalDateTime mfaResetAt;
+    private java.time.LocalDateTime mfaCooldownEnd;
 
     public static UserProfileResponse from(Member member) {
+        java.time.LocalDateTime cooldownEnd = null;
+        if (member.getMfaResetAt() != null) {
+            cooldownEnd = member.getMfaResetAt().plusHours(24);
+        }
+
         return UserProfileResponse.builder()
                 .email(member.getEmail())
                 .name(member.getName())
@@ -36,6 +43,8 @@ public class UserProfileResponse {
                 .accountHolder(member.getAccountHolder())
                 .allowNotifications(member.isAllowNotifications())
                 .mfaEnabled(member.isMfaEnabled())
+                .mfaResetAt(member.getMfaResetAt())
+                .mfaCooldownEnd(cooldownEnd)
                 .build();
     }
 }
