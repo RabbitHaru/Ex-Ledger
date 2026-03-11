@@ -17,7 +17,7 @@ import AdminLogList from "../components/pages/admin/system/AdminLogList";
 import SystemHealth from "../components/pages/admin/system/SystemHealth";
 import AdminDashboard from "../pages/integratedadmin/AdminDashboard";
 import ReconciliationList from "../pages/integratedadmin/ReconciliationList";
-import SellerDashboard from "../components/pages/remittance/SellerDashboard";
+import ExchangeDashboard from "../components/pages/remittance/ExchangeDashboard";
 import ReconciliationDetail from "../pages/integratedadmin/ReconciliationDetail";
 import ClientManagement from "../pages/integratedadmin/ClientManagement";
 import MySettlementList from "../components/pages/settlement/MySettlementList";
@@ -32,6 +32,10 @@ import MyPage from "../components/pages/user/MyPage";
 import CompanyJoin from "../pages/company/CompanyJoin";
 import CompanyMemberManagement from "../pages/company/PendingUsers";
 import CompanyReview from "../pages/integratedadmin/CompanyReview";
+import SellerDashboard from "../components/widgets/finance/SellerDashboard";
+import WalletOverview from "../components/pages/wallet/WalletOverview";
+import PersonalHistory from "../components/pages/history/PersonalHistory";
+import CorporateWallet from "../components/pages/wallet/CorporateWallet";
 
 // Resource Pages
 import { TermsPage, PrivacyPage, NoticePage, OperationPolicyPage } from "../components/pages/resources/ResourcePages";
@@ -46,7 +50,7 @@ const AppRoutes = () => {
         <Route path="/exchange" element={<ExchangePage />} />
         <Route path="/finance" element={<LandingPage />} />
         <Route path="/pages/remittance/Tracking" element={<RemittanceTracking />} />
-        
+
         {/* 리소스/정보 페이지 */}
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
@@ -67,14 +71,20 @@ const AppRoutes = () => {
             <Route path="/seller/dashboard" element={<SellerDashboard />} />
             <Route path="/company/join" element={<CompanyJoin />} />
             <Route path="/list" element={<MySettlementList />} />
-            <Route path="/seller/history" element={<TransactionHistory />} />
             <Route path="/settlement" element={<SettlementDashboard />} />
             <Route path="/mypage" element={<MyPage />} />
+              <Route path="/wallet/overview" element={<WalletOverview />} />
+              <Route path="/seller/history" element={<PersonalHistory />} />
+
+            <Route path="/wallet/overview" element={<WalletOverview />} />
+            <Route path="/seller/history" element={<PersonalHistory />} />
+            <Route path="/corporate/wallet" element={<CorporateWallet />} />
           </Route>
 
           {/* ----- 기업 관리자(Company Admin) 전용 라우트 ----- */}
           <Route element={<ProtectedRoute allowedRoles={["ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]} />}>
             <Route path="/admin/company/pending" element={<CompanyMemberManagement />} />
+              <Route path="/corporate/wallet" element={<CorporateWallet />} />
           </Route>
 
           {/* ----- 최고 관리자(Integrated Admin) 전용 라우트 ----- */}

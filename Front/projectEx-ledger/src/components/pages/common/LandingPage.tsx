@@ -19,14 +19,17 @@ const ChartSkeleton = () => (
 
 const LandingPage: React.FC = () => {
   const [rates, setRates] = useState<ExchangeRate[]>([]);
+  // [수정] 테이블 클릭과 차트를 연동하기 위한 상태
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
 
   useEffect(() => {
+    // 초기 전체 환율 로드
     fetch("http://localhost:8080/api/exchange/latest")
       .then((res) => res.json())
       .then((data) => setRates(Array.isArray(data) ? data : []))
       .catch((err) => console.error("데이터 로드 실패:", err));
 
+    // SSE 실시간 업데이트 연결
     const eventSource = new EventSource("http://localhost:8080/api/connect");
     eventSource.addEventListener("exchange-update", (event: any) => {
       try {
@@ -39,6 +42,7 @@ const LandingPage: React.FC = () => {
     return () => eventSource.close();
   }, []);
 
+  // 상위 상승/하락 통화 계산
   const sortedByChange = [...rates].sort(
     (a, b) => (b.changeRate || 0) - (a.changeRate || 0),
   );
@@ -46,97 +50,89 @@ const LandingPage: React.FC = () => {
   const topLoser =
     rates.length > 0 ? sortedByChange[sortedByChange.length - 1] : null;
 
-  const gainerValue = topGainer?.changeRate || 0;
-  const loserValue = topLoser?.changeRate || 0;
-
   return (
-    <>
-      <main className="flex flex-col min-h-screen gap-10 px-4 py-10 mx-auto max-w-7xl bg-slate-50/50">
-        {/* Top Mover 카드 (지능형 라벨 적용) */}
-        <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {[
-            {
-              label: gainerValue > 0 ? "최고 상승" : "최소 하락",
-              data: topGainer,
-              val: gainerValue,
-            },
-            {
-              label: loserValue < 0 ? "최대 하락" : "최소 상승",
-              data: topLoser,
-              val: loserValue,
-            },
-          ].map((mover, i) => (
-            <div
-              key={i}
-              className="p-6 bg-white border border-slate-100 shadow-sm rounded-[32px] flex items-center justify-between transition-all hover:shadow-md"
-            >
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                  {mover.label}
-                </p>
-                <h4 className="text-xl font-black text-slate-800">
-                  {mover.data?.curUnit}{" "}
-                  <span className="text-sm font-bold text-slate-400">
-                    {mover.data?.curNm}
-                  </span>
-                </h4>
-              </div>
-              <div
-                className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black ${mover.val > 0 ? "bg-red-50 text-red-500" : mover.val < 0 ? "bg-blue-50 text-blue-500" : "bg-slate-50 text-slate-400"}`}
-              >
-                {mover.val > 0 ? (
-                  <ArrowUpRight size={20} />
-                ) : mover.val < 0 ? (
-                  <ArrowDownRight size={20} />
-                ) : (
-                  <Minus size={20} />
-                )}
-                <span className="text-lg">{mover.val.toFixed(2)}%</span>
-              </div>
-            </div>
-          ))}
-        </section>
-
-        <section className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px]">
-          <h2 className="flex items-center gap-2 mb-8 text-xl font-black text-slate-800">
-            <BarChart3 className="text-blue-600" size={20} /> 주요 통화 환율
-            추이
-          </h2>
-          <div className="w-full h-96">
-            <Suspense fallback={<ChartSkeleton />}>
-              <ExchangeRateChart rates={rates || []} />
-            </Suspense>
-          </div>
-        </section>
-
-        <section className="flex flex-col w-full max-w-4xl p-2 mx-auto">
-          <div className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px]">
-            <MiniConverter rates={rates || []} />
-          </div>
-        </section>
-
-        <section className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px]">
-          <div className="flex items-center justify-between mb-8">
-            <div className="space-y-1">
-              <h2 className="text-xl font-black text-slate-800">
-                상세 환율 정보
-              </h2>
-              <p className="text-xs font-bold text-slate-400">
-                환율 정보를 클릭하여 상세 히스토리를 확인하세요.
+    <main className="flex flex-col min-h-screen gap-10 px-4 py-10 mx-auto max-w-7xl bg-slate-50/50">
+      {/* 1. 요약 카드 섹션 */}
+      <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        {[
+          { label: "최고 상승", data: topGainer },
+          { label: "최대 하락", data: topLoser },
+        ].map((mover, i) => (
+          <div
+            key={i}
+            className="p-6 bg-white border border-slate-100 shadow-sm rounded-[32px] flex items-center justify-between transition-all hover:shadow-md"
+          >
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                {mover.label}
               </p>
+              <h4 className="text-xl font-black text-slate-800">
+                {mover.data?.curUnit}{" "}
+                <span className="text-sm font-bold text-slate-400">
+                  {mover.data?.curNm}
+                </span>
+              </h4>
             </div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">
-              Live Updates
-            </span>
+            <div
+              className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black ${(mover.data?.changeRate || 0) > 0 ? "bg-red-50 text-red-500" : "bg-blue-50 text-blue-500"}`}
+            >
+              {(mover.data?.changeRate || 0) > 0 ? (
+                <ArrowUpRight size={20} />
+              ) : (
+                <ArrowDownRight size={20} />
+              )}
+              <span className="text-lg">
+                {(mover.data?.changeRate || 0).toFixed(2)}%
+              </span>
+            </div>
           </div>
-          <ExchangeRateTable
-            rates={rates || []}
-            selectedCurrency={selectedCurrency}
-            onRowClick={setSelectedCurrency}
-          />
-        </section>
-      </main>
-    </>
+        ))}
+      </section>
+
+      {/* 2. 메인 차트 섹션 */}
+      <section className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px]">
+        <h2 className="flex items-center gap-2 mb-8 text-xl font-black text-slate-800">
+          <BarChart3 className="text-blue-600" size={20} /> 주요 통화 환율 추이
+        </h2>
+        <div className="w-full h-96">
+          <Suspense fallback={<ChartSkeleton />}>
+            {/* [핵심 수정] selectedCurrency를 차트에 전달하여 동기화 */}
+            <ExchangeRateChart
+              rates={rates}
+              selectedCurrency={selectedCurrency}
+            />
+          </Suspense>
+        </div>
+      </section>
+
+      {/* 3. 미니 계산기 섹션 */}
+      <section className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px] max-w-4xl mx-auto w-full">
+        <MiniConverter rates={rates} />
+      </section>
+
+      {/* 4. 상세 환율 테이블 섹션 */}
+      <section className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px]">
+        <div className="flex items-center justify-between mb-8">
+          <div className="space-y-1">
+            <h2 className="text-xl font-black text-slate-800">
+              상세 환율 정보
+            </h2>
+            <p className="text-xs font-bold text-slate-400">
+              행을 클릭하면 해당 통화의 차트가 업데이트됩니다.
+            </p>
+          </div>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">
+            Live Updates
+          </span>
+        </div>
+        {/* [핵심 수정] onRowClick 시 selectedCurrency 상태 업데이트 */}
+        <ExchangeRateTable
+          rates={rates}
+          selectedCurrency={selectedCurrency}
+          onRowClick={(currency) => setSelectedCurrency(currency)}
+        />
+      </section>
+    </main>
   );
 };
 
