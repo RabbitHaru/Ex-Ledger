@@ -15,6 +15,10 @@ import {
   Copy,
   Users,
   ShieldAlert,
+  RefreshCcw,
+  CreditCard,
+  ArrowRightLeft,
+  Coins,
 } from "lucide-react";
 import { useToast } from "../notification/ToastProvider";
 
@@ -28,8 +32,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { showToast } = useToast();
   const [userRole, setUserRole] = useState<string | null>(null);
 
-  // 🌟 WalletContext 데이터 구독
-  const { hasAccount, userAccount, balances } = useWallet();
+  // 🌟 WalletContext에서 잔액 및 초기화 로직 구독
+  const { hasAccount, userAccount, balances, resetAccount } = useWallet();
 
   useEffect(() => {
     const token = getAuthToken();
@@ -47,7 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return userRole.includes(role) || userRole.includes(cleanRole);
   };
 
-  // 🌟 [권한 필터링] Integrated Admin 및 비회원 제외
+  // 🏛️ 금융 서비스 이용 가능 대상 (어드민 제외 일반/기업 유저)
   const isFinanceTarget =
     !hasRole("ROLE_INTEGRATED_ADMIN") &&
     (hasRole("ROLE_USER") ||
@@ -62,14 +66,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     showToast("계좌번호가 복사되었습니다.", "SUCCESS");
   };
 
-  // 🌟 [방어 로직] 오염된 데이터를 숫자로 강제 정제
-  const formatBalance = (val: any) => {
-    const num =
-      typeof val === "number"
-        ? val
-        : parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
-    return isNaN(num) ? 0 : num;
-  };
+  // 🌟 잔액 오염 방지 로직 적용
+  const safeKrwBalance = typeof balances.KRW === "number" ? balances.KRW : 0;
 
   return (
     <div
@@ -77,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         isOpen ? "translate-x-0" : "-translate-x-full"
       }`}
     >
-      {/* 로고 섹션 */}
+      {/* 🚀 로고 섹션 */}
       <div className="flex items-center justify-between p-8">
         <Link
           to="/"
@@ -104,6 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </button>
       </div>
 
+      {/* 🧭 네비게이션 메뉴 */}
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
         <Link
           to="/"
@@ -120,27 +119,33 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 Financial Services
               </p>
             </div>
+
+            {/* 🌟 [신규] 자산 관리: 충전 및 전체 내역 확인 */}
+            <Link
+              to="/wallet/overview"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/wallet/overview") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+            >
+              <Wallet size={18} /> 자산 관리 (Wallet)
+            </Link>
+
+            {/* 🌟 [기능 중심] 개인/기업 거래 실행 */}
             <Link
               to="/seller/dashboard"
               onClick={onClose}
               className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/seller/dashboard") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
             >
-              <LayoutDashboard size={18} /> 셀러 대시보드
+              <ArrowRightLeft size={18} /> 개인/기업 거래
             </Link>
-            <Link
-              to="/exchange/dashboard"
-              onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/exchange/dashboard") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-            >
-              <SendHorizontal size={18} /> 해외 송금 (Payout)
-            </Link>
+
             <Link
               to="/settlement"
               onClick={onClose}
               className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/settlement") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
             >
-              <ArrowDownLeft size={18} /> 수익 정산 (Settlement)
+              <Coins size={18} /> 정산 관리 (Settlement)
             </Link>
+
             <Link
               to="/seller/history"
               onClick={onClose}
@@ -151,6 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </>
         )}
 
+        {/* 🛠️ 시스템 관리자 전용 섹션 */}
         {hasRole("ROLE_INTEGRATED_ADMIN") && (
           <div className="mt-8 space-y-1">
             <div className="px-4 py-2 border-t border-slate-50">
@@ -176,42 +182,56 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         )}
       </nav>
 
-      {/* 🌟 [수정] 지갑 카드 레이아웃 보강: 텍스트 겹침 절대 방지 */}
+      {/* 💳 하단 지갑 요약 카드 */}
       {isFinanceTarget && hasAccount && (
         <div className="p-6 m-4 bg-slate-900 rounded-[32px] text-white shadow-2xl space-y-4 overflow-hidden border border-white/5 animate-in slide-in-from-bottom-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-teal-500 rounded-lg">
-                <Wallet size={14} className="text-white" />
+                <CreditCard size={14} className="text-white" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">
                 Ex-Wallet
               </span>
             </div>
-            <button
-              onClick={copyAccount}
-              className="transition-colors text-slate-500 hover:text-white"
-            >
-              <Copy size={14} />
-            </button>
+            <div className="flex gap-2">
+              {/* 🌟 데이터 정화/세탁용 리셋 버튼 */}
+              <button
+                onClick={() => {
+                  if (window.confirm("계좌 데이터를 초기화하시겠습니까?"))
+                    resetAccount();
+                }}
+                className="transition-colors text-slate-500 hover:text-red-400"
+                title="데이터 초기화"
+              >
+                <RefreshCcw size={14} />
+              </button>
+              <button
+                onClick={copyAccount}
+                className="transition-colors text-slate-500 hover:text-white"
+                title="계좌번호 복사"
+              >
+                <Copy size={14} />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1">
             <p className="text-[10px] font-bold text-slate-500 font-mono tracking-tighter uppercase truncate">
               {userAccount}
             </p>
-            {/* 🌟 숫자가 아무리 길어도 레이아웃을 깨지 않게 폰트 크기 조절 및 줄바꿈 방지 */}
             <h3 className="block font-sans text-xl italic font-black leading-tight tracking-tighter truncate">
-              ₩ {formatBalance(balances.KRW).toLocaleString()}
+              ₩ {safeKrwBalance.toLocaleString()}
             </h3>
           </div>
 
+          {/* 🌟 [수정] 버튼 클릭 시 통합 자산 관리 페이지(/wallet/overview)로 이동 */}
           <Link
-            to="/seller/dashboard"
+            to="/wallet/overview"
             onClick={onClose}
             className="block w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-center text-[10px] font-black uppercase tracking-widest transition-all"
           >
-            Manage Assets
+            Manage My Assets
           </Link>
         </div>
       )}

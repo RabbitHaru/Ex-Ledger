@@ -31,6 +31,9 @@ import CompanyJoin from "../pages/company/CompanyJoin";
 import PendingUsers from "../pages/company/PendingUsers";
 import CompanyReview from "../pages/integratedadmin/CompanyReview";
 import SellerDashboard from "../components/widgets/finance/SellerDashboard";
+import WalletOverview from "../components/pages/wallet/WalletOverview";
+import PersonalHistory from "../components/pages/history/PersonalHistory";
+import CorporateWallet from "../components/pages/wallet/CorporateWallet";
 
 const AppRoutes = () => {
   return (
@@ -73,8 +76,10 @@ const AppRoutes = () => {
             <Route path="/seller/dashboard" element={<SellerDashboard />} />
             <Route path="/company/join" element={<CompanyJoin />} />
             <Route path="/list" element={<MySettlementList />} />
-            <Route path="/seller/history" element={<TransactionHistory />} />
             <Route path="/settlement" element={<SettlementDashboard />} />
+            <Route path="/wallet/overview" element={<WalletOverview />} />
+            <Route path="/seller/history" element={<PersonalHistory />} />
+            <Route path="/corporate/wallet" element={<CorporateWallet />} />
           </Route>
 
           {/* ----- 기업 관리자(Company Admin) 전용 라우트 ----- */}

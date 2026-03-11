@@ -7,7 +7,6 @@ import React, {
 } from "react";
 import { getAuthToken, parseJwt } from "../utils/auth";
 
-// 🌟 Transaction 타입에 category 추가
 export interface Transaction {
   id: string;
   date: string;
@@ -18,7 +17,7 @@ export interface Transaction {
   status: "COMPLETED" | "WAITING" | "FAILED";
   title: string;
   type: "TRANSFER" | "CHARGE" | "EXCHANGE" | "INCOMING";
-  category: "PERSONAL" | "BUSINESS"; // 🌟 개인/기업 구분 필드
+  category: "PERSONAL" | "BUSINESS";
 }
 
 interface WalletContextType {
@@ -26,25 +25,49 @@ interface WalletContextType {
   setHasAccount: (status: boolean) => void;
   userAccount: string;
   setUserAccount: (acc: string) => void;
-  balances: { KRW: number; USD: number; JPY: number; EUR: number };
-  setBalances: React.Dispatch<
-    React.SetStateAction<{ KRW: number; USD: number; JPY: number; EUR: number }>
-  >;
+  balances: Record<string, number>;
+  setBalances: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   transactions: Transaction[];
   addTransaction: (tx: Transaction) => void;
-  // 🌟 executeTransfer에 category 인자 추가
   executeTransfer: (
-    toAccount: string,
-    amount: number,
-    currency: string,
+    toAcc: string,
+    amt: number,
+    cur: string,
     rate: number,
-    debitAmount: number,
-    creditAmount: number,
+    debit: number,
+    credit: number,
     title: string,
     category: "PERSONAL" | "BUSINESS",
   ) => void;
+  chargeKrw: (amount: number) => void;
   resetAccount: () => void;
 }
+
+export const SUPPORTED_CURRENCIES = [
+  "KRW",
+  "AED",
+  "AUD",
+  "BHD",
+  "BND",
+  "CAD",
+  "CHF",
+  "CNH",
+  "DKK",
+  "EUR",
+  "GBP",
+  "HKD",
+  "IDR",
+  "JPY",
+  "KWD",
+  "MYR",
+  "NOK",
+  "NZD",
+  "SAR",
+  "SEK",
+  "SGD",
+  "THB",
+  "USD",
+];
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
@@ -52,60 +75,93 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const [userId, setUserId] = useState<string>("guest");
   const [hasAccount, setHasAccount] = useState(false);
   const [userAccount, setUserAccount] = useState("");
-  const [balances, setBalances] = useState({ KRW: 0, USD: 0, JPY: 0, EUR: 0 });
+  const initialBalances = SUPPORTED_CURRENCIES.reduce(
+    (acc, cur) => ({ ...acc, [cur]: 0 }),
+    {} as Record<string, number>,
+  );
+  const [balances, setBalances] =
+    useState<Record<string, number>>(initialBalances);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const sanitizeNumber = (val: any): number => {
-    if (typeof val === "number") return isNaN(val) ? 0 : val;
-    const sanitized = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
-    return isNaN(sanitized) ? 0 : sanitized;
+    const num =
+      typeof val === "number"
+        ? val
+        : parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
+    return isNaN(num) || num < 0 ? 0 : num;
   };
 
   const loadUserData = (id: string) => {
+    if (!id || id === "guest") return;
     const savedData = localStorage.getItem(`wallet_data_${id}`);
     if (savedData) {
       const parsed = JSON.parse(savedData);
       setHasAccount(parsed.hasAccount || false);
       setUserAccount(parsed.userAccount || "");
-      setBalances({
-        KRW: sanitizeNumber(parsed.balances?.KRW),
-        USD: sanitizeNumber(parsed.balances?.USD),
-        JPY: sanitizeNumber(parsed.balances?.JPY),
-        EUR: sanitizeNumber(parsed.balances?.EUR),
+      const sanitizedBalances: Record<string, number> = {};
+      SUPPORTED_CURRENCIES.forEach((cur) => {
+        sanitizedBalances[cur] = sanitizeNumber(parsed.balances?.[cur] || 0);
       });
+      setBalances(sanitizedBalances);
       setTransactions(parsed.transactions || []);
-    } else {
-      setHasAccount(false);
-      setUserAccount("");
-      setBalances({ KRW: 0, USD: 0, JPY: 0, EUR: 0 });
-      setTransactions([]);
     }
   };
 
   useEffect(() => {
-    const checkAuth = () => {
+    const syncAuth = () => {
       const token = getAuthToken();
       if (token) {
-        const decoded = parseJwt(token);
-        const currentId = decoded?.sub || decoded?.email || "guest";
-        if (userId !== currentId) {
-          setUserId(currentId);
-          loadUserData(currentId);
+        try {
+          const decoded = parseJwt(token);
+          const currentId = decoded?.sub || decoded?.email || "guest";
+          if (userId !== currentId) {
+            setUserId(currentId);
+            loadUserData(currentId);
+          }
+        } catch (e) {
+          console.error("Auth sync error");
         }
       }
     };
-    checkAuth();
-    const interval = setInterval(checkAuth, 1000);
+    syncAuth();
+    const interval = setInterval(syncAuth, 2000);
     return () => clearInterval(interval);
   }, [userId]);
 
   useEffect(() => {
     if (userId !== "guest" && userAccount !== "") {
-      const dataToSave = { hasAccount, userAccount, balances, transactions };
-      localStorage.setItem(`wallet_data_${userId}`, JSON.stringify(dataToSave));
+      localStorage.setItem(
+        `wallet_data_${userId}`,
+        JSON.stringify({ hasAccount, userAccount, balances, transactions }),
+      );
     }
   }, [hasAccount, userAccount, balances, transactions, userId]);
 
+  const chargeKrw = (amount: number) => {
+    const cleanAmount = sanitizeNumber(amount);
+    if (cleanAmount <= 0) return;
+    setBalances((prev) => ({
+      ...prev,
+      KRW: sanitizeNumber(prev.KRW) + cleanAmount,
+    }));
+    setTransactions((prev) => [
+      {
+        id: `CHG-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        type: "CHARGE",
+        category: "PERSONAL",
+        title: "포트원 결제 충전",
+        amount: cleanAmount,
+        currency: "KRW",
+        rate: 1,
+        finalKrw: cleanAmount,
+        status: "COMPLETED",
+      },
+      ...prev,
+    ]);
+  };
+
+  // 🌟 송금 로직: 상대방 계좌 존재 여부 체크 포함
   const executeTransfer = (
     toAccount: string,
     amount: number,
@@ -116,28 +172,19 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     title: string,
     category: "PERSONAL" | "BUSINESS",
   ) => {
-    if (toAccount === userAccount) return;
+    if (toAccount === userAccount) {
+      throw new Error("본인 계좌로는 송금할 수 없습니다.");
+    }
 
-    // 1. 내 출금 처리
-    setBalances((prev) => ({
-      ...prev,
-      KRW: sanitizeNumber(prev.KRW) - debitAmount,
-    }));
-    const outTx: Transaction = {
-      id: `TX-${category === "BUSINESS" ? "BIZ" : "PER"}-${Date.now()}`, // 🌟 ID 접두사 구분
-      date: new Date().toISOString().split("T")[0],
-      type: "TRANSFER",
-      category, // 🌟 카테고리 기록
-      title: `${title} (${category === "BUSINESS" ? "기업 정산" : "개인 송금"})`,
-      amount: -amount,
-      currency,
-      rate,
-      finalKrw: debitAmount,
-      status: "COMPLETED",
-    };
-    setTransactions((prev) => [outTx, ...prev]);
+    const cleanDebit = sanitizeNumber(debitAmount);
+    const cleanCredit = sanitizeNumber(creditAmount);
 
-    // 2. 상대방 입금 처리 (로컬 스토리지 수정)
+    if (balances.KRW < cleanDebit) {
+      throw new Error("잔액이 부족합니다.");
+    }
+
+    // 🔍 [DB 시뮬레이션] 모든 유저 데이터를 검색하여 수취인 계좌 확인
+    let targetUserKey = null;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith("wallet_data_")) {
@@ -145,26 +192,59 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         if (rawData) {
           const otherData = JSON.parse(rawData);
           if (otherData.userAccount === toAccount) {
-            otherData.balances.KRW =
-              sanitizeNumber(otherData.balances?.KRW) + creditAmount;
-            const inTx: Transaction = {
-              id: `TX-IN-${Date.now()}`,
-              date: new Date().toISOString().split("T")[0],
-              type: "INCOMING",
-              category, // 🌟 상대방에게도 카테고리 전달
-              title: `가상계좌 입금 확인 (${category === "BUSINESS" ? "정산금" : "개인"})`,
-              amount: amount,
-              currency,
-              rate,
-              finalKrw: creditAmount,
-              status: "COMPLETED",
-            };
-            otherData.transactions = [inTx, ...(otherData.transactions || [])];
-            localStorage.setItem(key, JSON.stringify(otherData));
+            targetUserKey = key;
             break;
           }
         }
       }
+    }
+
+    // ❌ 상대방 계좌가 DB(localStorage)에 없으면 에러 발생
+    if (!targetUserKey) {
+      throw new Error("존재하지 않는 계좌번호입니다. 다시 확인해 주세요.");
+    }
+
+    // ✅ 내 잔액 차감 및 내역 저장
+    setBalances((prev) => ({
+      ...prev,
+      KRW: sanitizeNumber(prev.KRW) - cleanDebit,
+    }));
+    setTransactions((prev) => [
+      {
+        id: `TX-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        type: "TRANSFER",
+        category,
+        title: `${title}`,
+        amount: -amount,
+        currency,
+        rate,
+        finalKrw: cleanDebit,
+        status: "COMPLETED",
+      },
+      ...prev,
+    ]);
+
+    // ✅ 상대방 잔액 증액 및 입금 내역 저장
+    const rawTargetData = localStorage.getItem(targetUserKey);
+    if (rawTargetData) {
+      const targetData = JSON.parse(rawTargetData);
+      targetData.balances.KRW =
+        sanitizeNumber(targetData.balances.KRW) + cleanCredit;
+      const inTx = {
+        id: `IN-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        type: "INCOMING",
+        category,
+        title: `입금 확인 (${userAccount})`,
+        amount: amount,
+        currency,
+        rate,
+        finalKrw: cleanCredit,
+        status: "COMPLETED",
+      };
+      targetData.transactions = [inTx, ...(targetData.transactions || [])];
+      localStorage.setItem(targetUserKey, JSON.stringify(targetData));
     }
   };
 
@@ -174,9 +254,6 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       window.location.reload();
     }
   };
-
-  const addTransaction = (tx: Transaction) =>
-    setTransactions((prev) => [tx, ...prev]);
 
   return (
     <WalletContext.Provider
@@ -188,9 +265,10 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         balances,
         setBalances,
         transactions,
-        addTransaction,
         executeTransfer,
+        chargeKrw,
         resetAccount,
+        addTransaction: (tx) => setTransactions((prev) => [tx, ...prev]),
       }}
     >
       {children}
