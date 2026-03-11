@@ -54,11 +54,13 @@ public class AuditLogAspect {
         log.info("[AUDIT-START] User: [{}], Action: [{}], IP: [{}], URI: [{}]", userEmail, action, clientIp,
                 requestUri);
 
-        Object result;
+        Object result = null;
         long startTime = System.currentTimeMillis();
+        String errorMsg = null;
         try {
             result = joinPoint.proceed();
         } catch (Throwable th) {
+            errorMsg = th.getMessage();
             log.error("[AUDIT-ERROR] User: [{}], Action: [{}], IP: [{}], Error: {}", userEmail, action, clientIp,
                     th.getMessage());
             throw th;
@@ -73,7 +75,7 @@ public class AuditLogAspect {
                         .clientIp(clientIp)
                         .requestUri(requestUri)
                         .durationMs(duration)
-                        .errorMessage(null)
+                        .errorMessage(errorMsg)
                         .build();
                 systemAuditLogRepository.save(auditEntity);
             } catch (Exception e) {

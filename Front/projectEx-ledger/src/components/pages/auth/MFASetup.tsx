@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import http from '../../../config/http';
+import { getToken, parseJwt } from '../../../config/auth';
 import { Button } from '../common/Button';
 import { OtpInput } from '../common/OtpInput';
 import { ShieldCheck, ShieldAlert, KeyRound } from 'lucide-react';
@@ -10,14 +11,25 @@ import { toast } from 'sonner';
 const MFASetup: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const email = location.state?.email;
-
     const [qrCodeUrl, setQrCodeUrl] = useState('');
     const [secretKey, setSecretKey] = useState('');
     const [otpCode, setOtpCode] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const fetchedRef = React.useRef(false);
+
+    // Get email from state or JWT
+    const getTargetEmail = () => {
+        if (location.state?.email) return location.state.email;
+        const token = getToken();
+        if (token) {
+            const decoded = parseJwt(token);
+            return decoded?.sub || decoded?.email;
+        }
+        return null;
+    };
+
+    const email = getTargetEmail();
 
     useEffect(() => {
         if (!email) {

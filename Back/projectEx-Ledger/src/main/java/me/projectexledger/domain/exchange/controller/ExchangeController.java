@@ -5,6 +5,8 @@ import me.projectexledger.domain.exchange.dto.ExchangeRateDTO;
 import me.projectexledger.domain.exchange.service.ExchangeRateService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import me.projectexledger.common.annotation.RequireMfa;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
@@ -29,6 +31,8 @@ public class ExchangeController {
      * 비상 버튼: 지난 10일치 데이터를 강제로 수집합니다.
      * 브라우저에서 http://localhost:8080/api/exchange/backfill 입력
      */
+    @PreAuthorize("hasRole('INTEGRATED_ADMIN')")
+    @RequireMfa
     @GetMapping("/backfill")
     public ResponseEntity<String> forceBackfill() {
         exchangeRateService.backfillHistoricalData();

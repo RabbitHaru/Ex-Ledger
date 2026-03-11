@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
+import me.projectexledger.common.annotation.RequireMfa;
 
 @Slf4j
 @RestController
@@ -29,6 +30,7 @@ public class AdminSettlementController {
     private final SettlementPolicyService policyService;
 
     // 1. 실시간 동기화 (AdminDashboard.tsx - handleSync 연동)
+    @RequireMfa
     @GetMapping("/sync")
     public ResponseEntity<ApiResponse<Void>> syncDailySettlement(@RequestParam(required = false) String date) {
         String targetDate = (date != null) ? date : LocalDate.now().toString();
@@ -56,6 +58,7 @@ public class AdminSettlementController {
     }
 
     // 4. 오차 수정 API (상세 페이지의 수동 수정 기능)
+    @RequireMfa
     @PatchMapping("/{settlementId}/resolve")
     public ResponseEntity<ApiResponse<Void>> resolveDiscrepancy(
             @PathVariable Long settlementId,
@@ -70,7 +73,7 @@ public class AdminSettlementController {
     }
 
     // 🌟 5. [에러 해결 핵심] 송금 재시도 API
-    // 프론트엔드에서 보낸 '/retry' 요청을 받아 엔진의 retryRemittance를 실행합니다.
+    @RequireMfa
     @PostMapping("/{id}/retry")
     public ResponseEntity<ApiResponse<Void>> retrySettlement(@PathVariable Long id) {
         log.info("[Admin] 송금 실패 건 재전송(retry) 요청. ID: {}", id);
@@ -79,6 +82,7 @@ public class AdminSettlementController {
     }
 
     // 6. 가맹점별 정산 정책 업데이트
+    @RequireMfa
     @PostMapping("/policy/{merchantId}")
     public ResponseEntity<ApiResponse<Void>> updateSettlementPolicy(
             @PathVariable String merchantId,
@@ -104,6 +108,7 @@ public class AdminSettlementController {
     }
 
     // 8. 수동 정산 승인 (ReconciliationList.tsx - handleApprove 연동)
+    @RequireMfa
     @PostMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<Void>> approveSettlement(@PathVariable Long id) {
         log.info("[Admin] 정산 건 수동 승인 처리 요청. ID: {}", id);

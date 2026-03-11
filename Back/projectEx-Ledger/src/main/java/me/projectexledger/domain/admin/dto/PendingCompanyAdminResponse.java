@@ -13,6 +13,7 @@ public class PendingCompanyAdminResponse {
     private String email;
     private String name;
     private String businessNumber;
+    private String companyName;
     private String licenseFileUuid;
     private String createdAt;
 
@@ -21,8 +22,9 @@ public class PendingCompanyAdminResponse {
                 .userId(member.getId())
                 .email(member.getEmail())
                 .name(member.getName())
-                .businessNumber(member.getBusinessNumber())
-                .licenseFileUuid(member.getLicenseFileUuid())
+                .businessNumber(member.getCompany() != null ? member.getCompany().getBusinessNumber() : null)
+                .companyName(member.getCompany() != null ? member.getCompany().getCompanyName() : null)
+                .licenseFileUuid(member.getCompany() != null ? member.getCompany().getLicenseFileUuid() : null)
                 .createdAt(member.getCreatedAt() != null ? member.getCreatedAt().toString() : null)
                 .build();
     }

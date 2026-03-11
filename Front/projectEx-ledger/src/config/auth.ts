@@ -15,3 +15,11 @@ export const parseJwt = (token: string) => {
         return null;
     }
 };
+export const logout = (showModal = true) => {
+    removeToken();
+    if (showModal) {
+        window.dispatchEvent(new CustomEvent('mfa-session-expired'));
+    } else {
+        window.location.href = '/login';
+    }
+};

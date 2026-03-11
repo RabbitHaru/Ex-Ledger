@@ -17,7 +17,7 @@ public class TurnstileService {
 
     private final WebClient.Builder webClientBuilder;
 
-    @Value("${turnstile.secret:dummy_secret}")
+    @Value("${turnstile.secret-key:dummy_secret}")
     private String turnstileSecret;
 
     public boolean verifyToken(String token) {

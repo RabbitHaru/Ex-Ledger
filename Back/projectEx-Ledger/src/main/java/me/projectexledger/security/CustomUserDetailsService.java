@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import me.projectexledger.domain.member.entity.Member;
 import me.projectexledger.domain.member.repository.MemberRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -23,9 +22,10 @@ public class CustomUserDetailsService implements UserDetailsService {
         Member member = memberRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
-        return new User(
+        return new CustomUserDetails(
                 member.getEmail(),
                 member.getPassword(),
-                Collections.singletonList(new SimpleGrantedAuthority(member.getRole().name())));
+                Collections.singletonList(new SimpleGrantedAuthority(member.getRole().name())),
+                member.isApproved());
     }
 }

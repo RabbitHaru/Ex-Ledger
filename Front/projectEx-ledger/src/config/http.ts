@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getToken, removeToken, getRefreshToken, setToken, setRefreshToken } from './auth';
+import { getToken, removeToken, getRefreshToken, setToken, setRefreshToken, logout } from './auth';
 
 const http = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
@@ -35,6 +35,18 @@ http.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+
+        // MFA 세션 만료 에러 처리
+        if (error.response?.data?.message?.includes("MFA_SESSION_EXPIRED")) {
+            logout();
+            return Promise.reject(error);
+        }
+
+        // MFA 미설정 에러 처리 (금융 작업 접근 시)
+        if (error.response?.data?.message?.includes("MFA_SETUP_REQUIRED")) {
+            window.location.href = '/auth/mfa';
+            return Promise.reject(error);
+        }
 
         if (error.response && error.response.status === 401 && !originalRequest._retry) {
             if (isRefreshing) {

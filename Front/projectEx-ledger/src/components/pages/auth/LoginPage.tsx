@@ -6,129 +6,108 @@ import { OtpInput } from "../common/OtpInput";
 import http from "../../../config/http";
 import { setToken, setRefreshToken } from "../../../config/auth";
 import { Turnstile } from "@marsidev/react-turnstile";
+import type { TurnstileInstance } from "@marsidev/react-turnstile";
+import { PasswordStrength } from "../common/PasswordStrength";
+import { toast } from 'sonner';
 
 const LoginPage: React.FC = () => {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = React.useRef<TurnstileInstance>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [isMfaRequired, setIsMfaRequired] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent, mfaCodeArg?: string) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    const routeByUserRole = () => {
-      window.location.href = "/";
-    };
-
     if (!turnstileToken) {
       setError("Turnstile (봇 방지) 인증이 완료되지 않았습니다.");
       return;
     }
 
+    setError("");
+    setLoading(true);
     try {
-      if (isMfaRequired) {
-        // MFA 검증 로직
-        const codeNum = mfaCodeArg ? Number(mfaCodeArg) : Number(otpCode);
-        const response = await http.post('/auth/login/mfa', { email, password, code: codeNum, turnstileToken });
-        if (response.data && response.data.data) {
-          const { accessToken, refreshToken } = response.data.data;
-          setToken(accessToken);
-          if (refreshToken) setRefreshToken(refreshToken);
-          routeByUserRole();
-        }
-      } else {
-        // 1차 로그인 라우트
-        const response = await http.post('/auth/login', { email, password, turnstileToken });
-        if (response.data && response.data.data) {
-          const { accessToken, refreshToken, mfaRequired, mfaSetupRequired } = response.data.data;
-
-          if (mfaSetupRequired) {
-            setError('보안 강화를 위해 구글 OTP 최초 설정이 필요합니다. 설정 페이지로 이동합니다.');
-            setTimeout(() => {
-              navigate('/auth/mfa', { state: { email } });
-            }, 1500);
-            return;
-          }
-
-          if (mfaRequired) {
-            setIsMfaRequired(true);
-            setError(''); // 이전 에러 초기화
-          } else {
-            setToken(accessToken);
-            if (refreshToken) setRefreshToken(refreshToken);
-            routeByUserRole();
-          }
-        }
+      const response = await http.post('/auth/login', { email, password, turnstileToken });
+      if (response.data && response.data.data) {
+        const { accessToken, refreshToken } = response.data.data;
+        
+        setToken(accessToken);
+        if (refreshToken) setRefreshToken(refreshToken);
+        window.location.href = "/";
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data?.data || '로그인에 실패했습니다.');
+      const msg = err.response?.data?.message || err.response?.data?.data || '로그인에 실패했습니다.';
+      setError(msg);
+      toast.error(msg);
+      // Reset Turnstile on failure
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="w-full">
-      <h2 className="mb-8 text-2xl font-bold text-center text-slate-800 tracking-tight">
-        환영합니다
-      </h2>
+    <div className="w-full max-w-lg mx-auto py-12">
+      <header className="text-center mb-12">
+        <h2 className="text-5xl font-black text-slate-900 tracking-tight italic">로그인</h2>
+        <p className="text-slate-400 font-bold text-[14px] uppercase tracking-[0.2em] mt-3">Ex-Ledger 서비스에 접속합니다</p>
+      </header>
 
       {error && (
-        <div className="px-4 py-3 mb-4 text-red-700 bg-red-100 border border-red-400 rounded">
+        <div className="px-6 py-5 mb-8 text-[14px] font-bold text-red-500 bg-red-50 border border-red-100 rounded-[28px] animate-in fade-in slide-in-from-top-1">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleLogin} className="space-y-4">
-        <Input
-          label="이메일"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <Input
-          label="비밀번호"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          disabled={isMfaRequired}
-        />
-
-        {isMfaRequired && (
-          <div className="space-y-4">
-            <div className="text-center text-sm font-bold text-gray-700">구글 OTP 앱 6자리 코드</div>
-            <OtpInput
-              value={otpCode}
-              onChange={setOtpCode}
-              onComplete={(code) => {
-                // e.preventDefault doesn't exist here, but we can pass code directly
-                handleLogin({ preventDefault: () => { } } as any, code);
-              }}
+      <form onSubmit={handleLogin} className="space-y-6">
+        <div className="space-y-5 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative">
+          <Input
+            label="이메일"
+            type="email"
+            placeholder="example@exledger.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+          />
+          <div>
+            <Input
+              label="비밀번호"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
             />
+            <PasswordStrength password={password} />
           </div>
-        )}
+        </div>
 
-        <div className="flex justify-center my-4">
+        <div className="flex justify-center my-8">
           <Turnstile
-            siteKey="1x00000000000000000000AA"
+            ref={turnstileRef}
+            siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY}
             onSuccess={(token) => setTurnstileToken(token)}
           />
         </div>
 
-        <Button type="submit" className="w-full mt-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-[14px] font-bold text-[14px] transition-all shadow-lg active:scale-[0.98]">
-          로그인
+        <Button 
+          type="submit" 
+          disabled={loading || !turnstileToken}
+          className="w-full py-5 bg-slate-900 hover:bg-slate-800 text-white rounded-[24px] font-black text-[16px] transition-all shadow-xl shadow-slate-200 active:scale-[0.98] disabled:opacity-50"
+        >
+          {loading ? "확인 중..." : "들어가기"}
         </Button>
       </form>
 
-      <div className="mt-8 text-[13px] font-medium text-center text-slate-500">
-        계정이 없으신가요?{" "}
-        <Link to="/signup" className="text-teal-600 font-bold hover:text-teal-700 transition-colors">
-          무료로 회원가입
+      <div className="mt-12 text-[14px] font-bold text-center text-slate-400">
+        아직 회원이 아니신가요?{" "}
+        <Link to="/signup" className="text-teal-600 hover:underline transition-all ml-1">
+          회원가입 하기
         </Link>
       </div>
     </div>

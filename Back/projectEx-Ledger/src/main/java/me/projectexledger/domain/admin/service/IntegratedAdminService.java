@@ -3,8 +3,10 @@ package me.projectexledger.domain.admin.service;
 import lombok.RequiredArgsConstructor;
 import me.projectexledger.domain.admin.dto.PendingCompanyAdminResponse;
 import me.projectexledger.domain.auth.service.EmailService;
-import me.projectexledger.domain.member.entity.Member;
+import me.projectexledger.domain.company.entity.Company;
+import me.projectexledger.domain.company.repository.CompanyRepository;
 import me.projectexledger.domain.member.entity.AdminApprovalStatus;
+import me.projectexledger.domain.member.entity.Member;
 import me.projectexledger.domain.member.repository.MemberRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -23,6 +25,7 @@ import java.util.stream.Collectors;
 public class IntegratedAdminService {
 
     private final MemberRepository memberRepository;
+    private final CompanyRepository companyRepository;
     private final EmailService emailService;
 
     @Value("${app.upload.dir:${user.home}/.exledger/uploads}")
@@ -30,10 +33,12 @@ public class IntegratedAdminService {
 
     @Transactional(readOnly = true)
     public List<PendingCompanyAdminResponse> getPendingCompanyAdmins() {
-        return memberRepository
-                .findByRoleAndAdminApprovalStatus(Member.Role.ROLE_COMPANY_ADMIN, AdminApprovalStatus.PENDING)
+        // PENDING 상태의 Company를 조회하고, 각 Company에 소속된 COMPANY_ADMIN 멤버를 찾음
+        return companyRepository.findByAdminApprovalStatus(AdminApprovalStatus.PENDING)
                 .stream()
-                .map(PendingCompanyAdminResponse::from)
+                .flatMap(company -> memberRepository.findByCompanyAndIsApprovedFalse(company).stream()
+                        .filter(m -> m.getRole() == Member.Role.ROLE_COMPANY_ADMIN)
+                        .map(PendingCompanyAdminResponse::from))
                 .collect(Collectors.toList());
     }
 
@@ -46,11 +51,17 @@ public class IntegratedAdminService {
             throw new IllegalArgumentException("기업 관리자 권한을 요청한 사용자가 아닙니다.");
         }
 
-        if (member.getAdminApprovalStatus() == AdminApprovalStatus.APPROVED) {
+        Company company = member.getCompany();
+        if (company == null) {
+            throw new IllegalArgumentException("소속 기업 정보가 없습니다.");
+        }
+
+        if (company.getAdminApprovalStatus() == AdminApprovalStatus.APPROVED) {
             throw new IllegalArgumentException("이미 승인된 기업 관리자입니다.");
         }
 
-        member.approveByAdmin(); // 엔티티에 메서드 필요 (isApproved = true, adminApprovalStatus = APPROVED)
+        company.approveByAdmin();
+        member.approveCompany();
 
         emailService.sendApprovalEmail(member.getEmail(), member.getName(), "COMPANY_ADMIN");
     }
@@ -64,7 +75,10 @@ public class IntegratedAdminService {
             throw new IllegalArgumentException("기업 관리자 권한을 요청한 사용자가 아닙니다.");
         }
 
-        member.rejectByAdmin(); // 엔티티에 메서드 필요 (adminApprovalStatus = REJECTED)
+        Company company = member.getCompany();
+        if (company != null) {
+            company.rejectByAdmin();
+        }
     }
 
     public Resource loadLicenseFileAsResource(String fileName) {

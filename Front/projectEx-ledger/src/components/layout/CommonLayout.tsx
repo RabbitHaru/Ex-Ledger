@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { MfaHeaderTimer } from "./MfaHeaderTimer";
+import { Github, LogOut } from "lucide-react";
+import { MfaExpiryModal } from "./MfaExpiryModal";
+import { logout as authLogout } from "../../config/auth";
 
 interface LayoutProps {
   children?: ReactNode;
@@ -26,6 +30,7 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
   const [notifications, setNotifications] = useState<string[]>([
     "시스템 연결됨",
   ]);
+  const [isExpiryModalOpen, setIsExpiryModalOpen] = useState(false);
 
   const location = useLocation();
   const token = localStorage.getItem("access_token");
@@ -55,15 +60,17 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
         },
         onmessage: (event) => {
           if (event.event === "remittance_update") {
-            const receivedMessage = event.data;
-            setNotifications((prev) => [receivedMessage, ...prev].slice(0, 5));
+            setNotifications((prev) => [`💸 ${event.data}`, ...prev].slice(0, 10));
+          } else if (event.event === "login_alert") {
+            setNotifications((prev) => [`🔐 ${event.data}`, ...prev].slice(0, 10));
+          } else if (event.event === "announcement") {
+            setNotifications((prev) => [`📢 ${event.data}`, ...prev].slice(0, 10));
           } else if (event.event === "connect") {
             // connection established event from Spring
           }
         },
         onerror: (err) => {
           console.error("❌ SSE 연결 오류", err);
-          // throw Error to trigger retry, or return retry interval
           return 5000;
         },
       });
@@ -71,8 +78,13 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
 
     connectSSE();
 
+    // MFA 세션 만료 이벤트 리스너
+    const handleMfaExpired = () => setIsExpiryModalOpen(true);
+    window.addEventListener('mfa-session-expired', handleMfaExpired);
+
     return () => {
       abortController.abort();
+      window.removeEventListener('mfa-session-expired', handleMfaExpired);
     };
   }, [token]);
 
@@ -184,25 +196,28 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
                             className="flex items-start gap-3 p-5 transition-colors border-b border-slate-50 hover:bg-slate-50"
                           >
                             <div className="mt-0.5">
-                              {msg.includes("COMPLETED") ? (
+                              {msg.startsWith("💸") ? (
                                 <CheckCircle
                                   size={16}
                                   className="text-teal-500"
                                 />
-                              ) : msg.includes("DISCREPANCY") ? (
+                              ) : msg.startsWith("🔐") ? (
                                 <AlertCircle
                                   size={16}
-                                  className="text-red-500"
+                                  className="text-amber-500"
+                                />
+                              ) : msg.startsWith("📢") ? (
+                                <Bell
+                                  size={16}
+                                  className="text-blue-500"
                                 />
                               ) : (
-                                <Clock size={16} className="text-amber-500" />
+                                <Clock size={16} className="text-slate-400" />
                               )}
                             </div>
                             <div>
                               <p className="text-[12px] font-bold text-slate-700 leading-snug">
-                                {msg === "WAITING_USER_CONSENT"
-                                  ? "정산 금액 확인 및 동의가 필요합니다."
-                                  : msg}
+                                {msg}
                               </p>
                               <p className="text-[10px] text-slate-300 font-bold mt-1 uppercase">
                                 Just Now
@@ -228,19 +243,26 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
                 )}
               </div>
 
+              <MfaHeaderTimer />
+
               {/* 사용자 버튼 */}
               <div className="h-6 w-[1px] bg-slate-100 mx-1" />
               {token ? (
-                <button
-                  onClick={() => {
-                    localStorage.removeItem("access_token");
-                    window.location.href = "/";
-                  }}
-                  className="flex items-center gap-2 pl-2 pr-4 py-2 bg-slate-800 text-white rounded-2xl text-[12px] font-black hover:bg-slate-900 transition-all shadow-lg shadow-slate-200 active:scale-95"
-                >
-                  <UserCircle size={20} className="text-slate-400" />
-                  로그아웃
-                </button>
+                <div className="flex items-center gap-2">
+                  <Link to="/mypage">
+                    <button className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-100 text-slate-600 rounded-2xl text-[12px] font-black hover:bg-slate-50 transition-all active:scale-95 shadow-sm h-10">
+                      <UserCircle size={16} className="text-slate-400" />
+                      마이페이지
+                    </button>
+                  </Link>
+                  <button
+                    onClick={() => authLogout(false)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 text-white rounded-2xl text-[12px] font-black hover:bg-slate-900 transition-all shadow-lg shadow-slate-200 active:scale-95 h-10"
+                  >
+                    <LogOut size={16} className="text-slate-300" />
+                    로그아웃
+                  </button>
+                </div>
               ) : (
                 <Link to="/login">
                   <button className="px-6 py-2.5 text-[12px] font-black text-white bg-teal-600 rounded-2xl shadow-lg shadow-teal-100 hover:bg-teal-700 transition-all active:scale-95">
@@ -252,61 +274,111 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </header>
 
+        <MfaExpiryModal 
+            isOpen={isExpiryModalOpen} 
+            onClose={() => setIsExpiryModalOpen(false)}
+            onLogin={() => {
+                setIsExpiryModalOpen(false);
+                window.location.href = '/login';
+            }}
+        />
+
         {/* 메인 콘텐츠 영역 */}
         <main className="flex-grow">{children ? children : <Outlet />}</main>
 
-        {/* 푸터 영역 (고급스럽게 다듬음) */}
-        <footer className="px-6 py-16 bg-slate-900 text-slate-500">
-          <div className="flex flex-col items-center gap-8 mx-auto max-w-7xl">
-            <div className="flex items-center gap-2 opacity-30 grayscale invert">
-              <Activity size={20} />
-              <span className="text-lg font-black tracking-tighter">
-                Ex-Ledger
-              </span>
+        {/* 푸터 영역 (고밀도 컴팩트 프리미엄 레이아웃) */}
+        <footer className="bg-white/90 backdrop-blur-xl text-slate-500 py-10 px-6 border-t border-slate-100 mt-auto shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.03)] font-sans">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-10">
+              {/* 서비스 정체성 */}
+              <div className="lg:col-span-2">
+                <div className="flex items-center gap-2.5 mb-4 font-black">
+                  <div className="w-9 h-9 bg-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-teal-600/20">
+                    <Activity className="text-white" size={20} strokeWidth={3} />
+                  </div>
+                  <span className="text-xl text-slate-900 tracking-tighter">Ex-<span className="text-teal-600">Ledger</span></span>
+                </div>
+                <p className="text-[13px] leading-relaxed text-slate-400 font-medium max-w-sm">
+                  기업의 복잡한 정산 프로세스를 자동화하고 실시간 환율 기반의 안전한 자금 흐름을 보장하는 차세대 핀테크 플랫폼입니다.
+                </p>
+                <div className="flex gap-3 mt-6">
+                  <a href="https://github.com/RabbitHaru/Ex-Ledger" target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-900 transition-all border border-slate-100">
+                    <Github size={18} />
+                  </a>
+                </div>
+              </div>
+
+              {/* 핵심 기술 스택 (데이터 밀도 향상) */}
+              <div>
+                <h4 className="text-slate-900 font-black text-[11px] lg:text-[10px] uppercase tracking-widest mb-5 border-l-2 border-teal-500 pl-2">기술 스택</h4>
+                <ul className="space-y-3 text-[12px] font-bold text-slate-600">
+                  <li className="flex items-center gap-2 group cursor-default">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500 group-hover:scale-125 transition-transform" /> 
+                    Spring Boot 4 / Java 17
+                  </li>
+                  <li className="flex items-center gap-2 group cursor-default">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 group-hover:scale-125 transition-transform" /> 
+                    React 18 / TypeScript
+                  </li>
+                  <li className="flex items-center gap-2 group cursor-default">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 group-hover:scale-125 transition-transform" /> 
+                    Redis / MariaDB / AOP
+                  </li>
+                </ul>
+              </div>
+
+              {/* 연동 서비스 (데이터 밀도 향상) */}
+              <div>
+                <h4 className="text-slate-900 font-black text-[11px] lg:text-[10px] uppercase tracking-widest mb-5 border-l-2 border-blue-500 pl-2">연동 및 보안</h4>
+                <ul className="space-y-2.5 text-[12px] font-bold text-slate-600">
+                  <li className="flex items-center gap-2 hover:text-teal-600 transition-colors">
+                    <CheckCircle size={13} className="text-teal-500" /> 
+                    포트원 / KG 이니시스
+                  </li>
+                  <li className="flex items-center gap-2 hover:text-teal-600 transition-colors">
+                    <CheckCircle size={13} className="text-teal-500" /> 
+                    수출입은행(환율) / 국세청
+                  </li>
+                  <li className="flex items-center gap-2 hover:text-teal-600 transition-colors">
+                    <CheckCircle size={13} className="text-blue-500" /> 
+                    Google OTP / Cloudflare
+                  </li>
+                </ul>
+              </div>
+
+              {/* 개발 및 지원 */}
+              <div>
+                <h4 className="text-slate-900 font-black text-[11px] lg:text-[10px] uppercase tracking-widest mb-5 border-l-2 border-slate-300 pl-2">지원 및 도구</h4>
+                <ul className="space-y-3 text-[12px] font-bold">
+                  <li><Link to="/notice" className="text-slate-500 hover:text-teal-600 transition-colors">공지사항</Link></li>
+                  <li><Link to="/terms" className="text-slate-500 hover:text-teal-600 transition-colors">이용약관</Link></li>
+                  <li><Link to="/privacy" className="text-slate-500 hover:text-teal-600 transition-colors">개인정보처리방침</Link></li>
+                  <li><Link to="/policy" className="text-slate-500 hover:text-teal-600 transition-colors">운영정책</Link></li>
+                </ul>
+              </div>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-6 opacity-40">
-              {["ISO 27001", "PCI-DSS", "ISMS", "SOC2"].map((cert) => (
-                <span
-                  key={cert}
-                  className="px-3 py-1 text-[10px] font-bold border rounded-full border-slate-700 uppercase tracking-widest"
-                >
-                  {cert}
-                </span>
-              ))}
-            </div>
-
-            <div className="space-y-4 text-center">
-              <div className="flex flex-wrap justify-center gap-8 text-[11px] font-black uppercase tracking-widest text-slate-600">
-                <a href="#" className="transition-colors hover:text-teal-500">
-                  이용약관
-                </a>
-                <a
-                  href="#"
-                  className="transition-colors text-slate-400 hover:text-teal-500"
-                >
-                  개인정보처리방침
-                </a>
-                <a href="#" className="transition-colors hover:text-teal-500">
-                  운영정책
-                </a>
-                <a href="#" className="transition-colors hover:text-teal-500">
-                  공지사항
-                </a>
-              </div>
-              <div className="pt-4 border-t border-slate-800/50">
-                <p className="text-[11px] font-medium leading-relaxed">
-                  Ex-Ledger Co., Ltd. | 대표이사: 홍길동 | 사업자등록번호:
-                  000-00-00000
-                  <br />
-                  서울특별시 강남구 테헤란로 핀테크 타워 22층
+            <div className="pt-8 border-t border-slate-100/60 flex flex-col md:flex-row justify-between items-center gap-6">
+              <div className="flex flex-col gap-1.5 text-center md:text-left">
+                <p className="text-[11px] font-bold text-slate-400">
+                  Ex-Ledger Co., Ltd. | 대표이사: 홍길동 | 사업자등록번호: 000-00-00000
                 </p>
-                <p className="text-[10px] text-slate-700 mt-4 font-bold uppercase tracking-widest">
-                  © 2026 Ex-Ledger. All rights reserved. Secure Global
-                  Settlement System.
+                <p className="text-[10px] font-medium text-slate-300">
+                  서울특별시 강남구 테헤란로 22층 | 고객센터: support@ex-ledger.com
                 </p>
               </div>
+              <div className="flex gap-4 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+                {["ISO 27001", "ISMS", "SOC2"].map((cert) => (
+                  <span key={cert} className="px-2.5 py-1 text-[9px] font-black border border-slate-200 rounded-lg text-slate-400 tracking-tighter shadow-sm bg-slate-50/50">
+                    {cert}
+                  </span>
+                ))}
+              </div>
             </div>
+            
+            <p className="mt-8 text-[10px] text-slate-300 font-black uppercase tracking-[0.5em] text-center">
+              © 2026 Ex-Ledger. Global Secure Settlement Infrastructure.
+            </p>
           </div>
         </footer>
       </div>

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from 'sonner';
+import { OtpInput } from "../common/OtpInput";
+import { Button } from "../common/Button";
+import http from "../../../config/http";
 
 const RemittancePage = () => {
   const [formData, setFormData] = useState({
@@ -13,34 +16,61 @@ const RemittancePage = () => {
 
   const [feeDetail, setFeeDetail] = useState<any>(null);
   const [currentRate, setCurrentRate] = useState(1450);
+  const [showOtp, setShowOtp] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (formData.amount > 0) {
       const fetchFee = async () => {
-        const response = await axios.post("/api/v1/remittance/fee/calculate", {
-          amount: formData.amount,
-          currency: formData.currency,
-          exchangeRate: currentRate,
-          clientGrade: "NORMAL",
-        });
-        setFeeDetail(response.data);
+        try {
+          const response = await http.post("/remittance/fee/calculate", {
+            amount: formData.amount,
+            currency: formData.currency,
+            exchangeRate: currentRate,
+            clientGrade: "NORMAL",
+          });
+          setFeeDetail(response.data.data);
+        } catch (error) {
+          console.error("Fee calculation failed", error);
+        }
       };
       fetchFee();
     }
   }, [formData.amount, formData.currency]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (code?: string) => {
+    setLoading(true);
     try {
-      const response = await axios.post("/api/v1/remittance/request", {
+      const headers: any = {};
+      if (code) {
+        headers['X-MFA-Code'] = code;
+      }
+
+      const response = await http.post("/remittance/request", {
         ...formData,
         exchangeRate: currentRate,
         feeAmount: feeDetail.totalFeeAmount,
         totalPayment: feeDetail.totalPayment,
-      });
-      toast.success(`송금 신청 완료! 거래번호: ${response.data.transactionId}`);
-    } catch (error) {
-      toast.error("송금 신청 중 오류가 발생했습니다.");
+      }, { headers });
+
+      toast.success(`송금 신청 완료! 거래번호: ${response.data.data.transactionId}`);
+      setShowOtp(false);
+      setOtpCode("");
+    } catch (error: any) {
+      const message = error.response?.data?.message || "";
+      if (message.includes("MFA_REQUIRED") || message.includes("HIGH_VALUE_MFA_REQUIRED")) {
+        setShowOtp(true);
+        if (message.includes("HIGH_VALUE_MFA_REQUIRED")) {
+          toast.info("고액 처리로 인해 OTP 인증이 필요합니다.");
+        }
+      } else {
+        toast.error(message || "송금 신청 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
+
 
   return (
     <div className="max-w-2xl p-8 mx-auto bg-white border border-gray-100 shadow-2xl rounded-3xl">
@@ -84,13 +114,42 @@ const RemittancePage = () => {
           </div>
         )}
 
-        <button
-          onClick={handleSubmit}
+        <Button
+          onClick={() => handleSubmit()}
+          disabled={loading}
           className="w-full py-5 text-lg font-bold text-white transition-all bg-blue-600 shadow-lg rounded-2xl hover:bg-blue-700 shadow-blue-200"
         >
-          송금 신청하기
-        </button>
+          {loading ? "처리 중..." : "송금 신청하기"}
+        </Button>
       </div>
+
+      {showOtp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-sm p-8 bg-white shadow-2xl rounded-[40px] border border-slate-100 animate-in zoom-in-95 duration-300">
+            <div className="mb-8 text-center">
+              <h3 className="text-xl font-black text-slate-800">보안 인증</h3>
+              <p className="mt-2 text-sm font-medium text-slate-500">
+                안전한 거래를 위해 구글 OTP 번호를 입력해주세요.
+              </p>
+            </div>
+            
+            <OtpInput
+              value={otpCode}
+              onChange={setOtpCode}
+              onComplete={(code) => handleSubmit(code)}
+              disabled={loading}
+            />
+
+            <Button
+              onClick={() => setShowOtp(false)}
+              variant="ghost"
+              className="w-full mt-6 text-slate-400 font-bold hover:text-slate-600"
+            >
+              취소
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

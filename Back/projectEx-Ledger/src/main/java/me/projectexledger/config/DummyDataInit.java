@@ -8,6 +8,8 @@ import me.projectexledger.domain.client.entity.Client;
 import me.projectexledger.domain.client.entity.ClientGrade;
 import me.projectexledger.domain.client.entity.ClientStatus;
 import me.projectexledger.domain.client.dto.repository.ClientRepository;
+import me.projectexledger.domain.company.entity.Company;
+import me.projectexledger.domain.company.repository.CompanyRepository;
 import me.projectexledger.domain.member.entity.AdminApprovalStatus;
 import me.projectexledger.domain.member.entity.Member;
 import me.projectexledger.domain.member.repository.MemberRepository;
@@ -22,11 +24,12 @@ import java.util.List;
 
 @Slf4j
 @Component
-@Profile("!test") // 테스트 환경에서는 실행되지 않도록 설정
+@Profile("!test")
 @RequiredArgsConstructor
 public class DummyDataInit implements CommandLineRunner {
 
     private final MemberRepository memberRepository;
+    private final CompanyRepository companyRepository;
     private final ClientRepository clientRepository;
     private final SystemAuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
@@ -37,7 +40,7 @@ public class DummyDataInit implements CommandLineRunner {
         log.info("[DummyDataInit] 더미 데이터 초기화를 시작합니다...");
 
         initClients();
-        initMembers();
+        initCompaniesAndMembers();
         initAuditLogs();
 
         log.info("[DummyDataInit] 더미 데이터 초기화 완료!");
@@ -91,49 +94,114 @@ public class DummyDataInit implements CommandLineRunner {
         log.info("더미 Client(가맹점) 생성 완료");
     }
 
-    private void initMembers() {
+    private void initCompaniesAndMembers() {
         if (memberRepository.findByEmail("admin@exledger.com").isPresent()) {
             log.info("Member 데이터가 이미 존재합니다. 스킵.");
             return;
         }
 
-        // 1. 최고 관리자 (사이트 관리자)
+        // ========== Company 생성 ==========
+
+        // 기업A: 승인 대기 (사업자 심사 테스트용)
+        Company companyA = companyRepository.save(Company.builder()
+                .businessNumber("1234567890")
+                .companyName("(주)테스트기업A")
+                .representative("김대표")
+                .adminApprovalStatus(AdminApprovalStatus.PENDING)
+                .build());
+
+        // 기업B: 이미 승인됨 (정상 기업 테스트용)
+        Company companyB = companyRepository.save(Company.builder()
+                .businessNumber("9876543210")
+                .companyName("(주)엑스레저글로벌")
+                .representative("이사장")
+                .adminApprovalStatus(AdminApprovalStatus.APPROVED)
+                .build());
+
+        // 기업C: 승인 대기
+        Company companyC = companyRepository.save(Company.builder()
+                .businessNumber("1112233333")
+                .companyName("(주)글로벌무역")
+                .representative("박매니저")
+                .adminApprovalStatus(AdminApprovalStatus.PENDING)
+                .build());
+
+        // ========== 사이트 관리자 (기업 소속 없음) ==========
         Member admin = Member.builder()
                 .email("admin@exledger.com")
                 .password(passwordEncoder.encode("admin123!"))
                 .name("최고관리자")
                 .role(Member.Role.ROLE_INTEGRATED_ADMIN)
                 .build();
-        // 최고관리자는 생성자에서 기본으로 승인됨
 
-        // 2. 기업 관리자 대기 상태 (기업심사 테스트용)
-        Member pendingCompanyAdmin = Member.builder()
+        // ========== 개인 유저 (기업 소속 없음) ==========
+        Member user1 = Member.builder()
+                .email("user@example.com")
+                .password(passwordEncoder.encode("user1234!"))
+                .name("홍길동")
+                .role(Member.Role.ROLE_USER)
+                .build();
+
+        Member user2 = Member.builder()
+                .email("user2@example.com")
+                .password(passwordEncoder.encode("user1234!"))
+                .name("김철수")
+                .role(Member.Role.ROLE_USER)
+                .build();
+
+        // ========== 기업A: 심사 대기 중인 기업 관리자 ==========
+        Member companyAdminA = Member.builder()
                 .email("ceo@testcompany.com")
                 .password(passwordEncoder.encode("test1234!"))
                 .name("김대표")
                 .role(Member.Role.ROLE_COMPANY_ADMIN)
-                .businessNumber("123-45-67890")
+                .company(companyA)
                 .build();
-        // 생성자에서 자동 대기 상태
 
-        Member pendingCompanyAdmin2 = Member.builder()
+        // ========== 기업B: 승인된 기업 관리자 + 소속 직원 ==========
+        Member companyAdminB = Member.builder()
+                .email("boss@exglobal.com")
+                .password(passwordEncoder.encode("test1234!"))
+                .name("이사장")
+                .role(Member.Role.ROLE_COMPANY_ADMIN)
+                .company(companyB)
+                .build();
+        companyAdminB.approveCompany(); // 승인된 기업이므로 관리자도 승인 처리
+
+        Member companyStaff1 = Member.builder()
+                .email("staff1@exglobal.com")
+                .password(passwordEncoder.encode("test1234!"))
+                .name("김직원")
+                .role(Member.Role.ROLE_COMPANY_USER)
+                .company(companyB)
+                .build();
+        companyStaff1.approveCompany(); // 승인된 직원
+
+        Member companyStaff2 = Member.builder()
+                .email("staff2@exglobal.com")
+                .password(passwordEncoder.encode("test1234!"))
+                .name("박직원")
+                .role(Member.Role.ROLE_COMPANY_USER)
+                .company(companyB)
+                .build();
+        // 이 직원은 아직 승인 대기 상태
+
+        // ========== 기업C: 심사 대기 관리자 ==========
+        Member companyAdminC = Member.builder()
                 .email("manager@globaltrade.com")
                 .password(passwordEncoder.encode("test1234!"))
                 .name("박매니저")
                 .role(Member.Role.ROLE_COMPANY_ADMIN)
-                .businessNumber("111-22-33333")
+                .company(companyC)
                 .build();
 
-        // 3. 일반 유저
-        Member user = Member.builder()
-                .email("user@example.com")
-                .password(passwordEncoder.encode("user1234!"))
-                .name("일반유저")
-                .role(Member.Role.ROLE_USER)
-                .build();
-
-        memberRepository.saveAll(List.of(admin, pendingCompanyAdmin, pendingCompanyAdmin2, user));
-        log.info("더미 Member(사용자) 생성 완료");
+        memberRepository.saveAll(List.of(
+                admin, user1, user2,
+                companyAdminA,
+                companyAdminB, companyStaff1, companyStaff2,
+                companyAdminC
+        ));
+        log.info("더미 Company(기업) 및 Member(사용자) 생성 완료");
     }
 
     private void initAuditLogs() {

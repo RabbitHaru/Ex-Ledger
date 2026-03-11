@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import me.projectexledger.common.dto.ApiResponse;
 import me.projectexledger.domain.company.dto.JoinCompanyRequest;
 import me.projectexledger.domain.company.dto.PendingUserResponse;
+import me.projectexledger.domain.company.dto.CompanyUserResponse;
 import me.projectexledger.domain.company.service.CompanyService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -36,5 +37,25 @@ public class CompanyController {
     public ApiResponse<Void> approveUser(@PathVariable Long userId) {
         companyService.approveUser(userId);
         return ApiResponse.success("사용자 승인이 완료되었습니다.", null);
+    }
+
+    @GetMapping("/users/approved")
+    @PreAuthorize("hasAnyRole('COMPANY_ADMIN', 'INTEGRATED_ADMIN')")
+    public ApiResponse<List<CompanyUserResponse>> getCompanyUsers() {
+        return ApiResponse.success("소속 사용자 목록 조회 성공", companyService.getCompanyUsers());
+    }
+
+    @PostMapping("/users/{userId}/revoke")
+    @PreAuthorize("hasAnyRole('COMPANY_ADMIN', 'INTEGRATED_ADMIN')")
+    public ApiResponse<Void> revokeUser(@PathVariable Long userId) {
+        companyService.revokeUser(userId);
+        return ApiResponse.success("사용자 권한 박탈이 완료되었습니다.", null);
+    }
+
+    @PostMapping("/users/revoke-me")
+    @PreAuthorize("hasRole('COMPANY_USER')")
+    public ApiResponse<Void> revokeMe() {
+        companyService.revokeMe();
+        return ApiResponse.success("기업 소속 해제가 완료되었습니다.", null);
     }
 }

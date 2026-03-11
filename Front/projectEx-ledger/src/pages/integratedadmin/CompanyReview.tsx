@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import http from "../../utils/http";
+import http from "../../config/http";
 import { CheckCircle, XCircle, FileImage, ShieldAlert, FileText } from "lucide-react";
 import { toast } from 'sonner';
 
@@ -19,9 +19,10 @@ const CompanyReview: React.FC = () => {
 
     const fetchPendingCompanies = async () => {
         try {
-            const { data } = await http.get("/admin/companies/pending");
-            if (data.status === "SUCCESS") {
-                setPendingList(data.data);
+            const res = await http.get("/admin/companies/pending");
+            const apiResponse = res.data;
+            if (apiResponse.status === "SUCCESS") {
+                setPendingList(apiResponse.data);
             }
         } catch (err) {
             console.error("Failed to fetch pending companies:", err);

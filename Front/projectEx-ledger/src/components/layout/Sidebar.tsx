@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getAuthToken, parseJwt } from "../../utils/auth";
-import { useWallet } from "../../context/WalletContext"; // 🌟 전역 데이터 구독
+import { useWallet } from "../../context/WalletContext";
 import {
   LayoutDashboard,
   X,
@@ -13,12 +13,14 @@ import {
   ArrowDownLeft,
   Wallet,
   Copy,
-  Users,
   ShieldAlert,
   RefreshCcw,
   CreditCard,
   ArrowRightLeft,
   Coins,
+  Users,
+  CheckCircle,
+  Bell,
 } from "lucide-react";
 import { useToast } from "../notification/ToastProvider";
 
@@ -31,16 +33,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { showToast } = useToast();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [isApproved, setIsApproved] = useState<boolean>(true);
 
-  // 🌟 WalletContext에서 잔액 및 초기화 로직 구독
+  // 🌟 WalletContext 데이터 구독
   const { hasAccount, userAccount, balances, resetAccount } = useWallet();
 
   useEffect(() => {
     const token = getAuthToken();
     if (token) {
       const decoded = parseJwt(token);
-      if (decoded && decoded.auth) {
-        setUserRole(decoded.auth);
+      if (decoded) {
+        if (decoded.auth) setUserRole(decoded.auth);
+        if (decoded.isApproved !== undefined) {
+          setIsApproved(decoded.isApproved);
+        }
       }
     }
   }, []);
@@ -66,7 +72,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     showToast("계좌번호가 복사되었습니다.", "SUCCESS");
   };
 
-  // 🌟 잔액 오염 방지 로직 적용
   const safeKrwBalance = typeof balances.KRW === "number" ? balances.KRW : 0;
 
   return (
@@ -75,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         isOpen ? "translate-x-0" : "-translate-x-full"
       }`}
     >
-      {/* 🚀 로고 섹션 */}
+      {/* 로고 섹션 */}
       <div className="flex items-center justify-between p-8">
         <Link
           to="/"
@@ -102,8 +107,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </button>
       </div>
 
-      {/* 🧭 네비게이션 메뉴 */}
-      <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 px-4 space-y-1 overflow-y-auto max-h-[calc(100vh-120px)] custom-scrollbar">
+        {/* 1. 공통 메뉴 */}
         <Link
           to="/"
           onClick={onClose}
@@ -112,6 +117,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <BarChart2 size={18} /> 실시간 환율 정보
         </Link>
 
+        {/* 2 & 3. 금융 서비스 및 기업 관리 메뉴 병합 처리 */}
         {isFinanceTarget && (
           <>
             <div className="px-4 pt-10 pb-2 mt-6 border-t border-slate-50">
@@ -120,7 +126,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </p>
             </div>
 
-            {/* 🌟 [신규] 자산 관리: 충전 및 전체 내역 확인 */}
             <Link
               to="/wallet/overview"
               onClick={onClose}
@@ -129,7 +134,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <Wallet size={18} /> 자산 관리 (Wallet)
             </Link>
 
-            {/* 🌟 [기능 중심] 개인/기업 거래 실행 */}
             <Link
               to="/seller/dashboard"
               onClick={onClose}
@@ -153,88 +157,73 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             >
               <History size={18} /> 거래 상세 내역
             </Link>
+
+            {/* 기업 관리자 전용 탭 (금융 서비스 블록 내부에 포함) */}
+            {hasRole("ROLE_COMPANY_ADMIN") && (
+              <Link
+                to="/admin/company/pending"
+                onClick={onClose}
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/company/pending") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+              >
+                <Users size={18} /> 멤버 및 권한 관리
+              </Link>
+            )}
           </>
         )}
 
-        {/* 🛠️ 시스템 관리자 전용 섹션 */}
+        {/* 4. 사이트 총괄 관리자 메뉴 */}
         {hasRole("ROLE_INTEGRATED_ADMIN") && (
-          <div className="mt-8 space-y-1">
-            <div className="px-4 py-2 border-t border-slate-50">
-              <p className="text-[10px] font-black text-red-400 uppercase tracking-widest italic">
-                System Management
+          <>
+            <div className="px-4 pt-10 pb-2 mt-6 border-t border-slate-50">
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                Site Management
               </p>
             </div>
             <Link
-              to="/admin/users"
+              to="/client"
               onClick={onClose}
-              className="flex items-center gap-3 px-4 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 rounded-xl"
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/client") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
             >
-              <Users size={18} /> 사용자 관리
+              <Building2 size={18} /> 가맹점 및 수수료 관리
             </Link>
             <Link
-              to="/admin/audit"
+              to="/admin/logs"
               onClick={onClose}
-              className="flex items-center gap-3 px-4 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 rounded-xl"
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/logs") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
             >
-              <ShieldAlert size={18} /> 시스템 감사
+              <ShieldAlert size={18} /> 감사로그
             </Link>
-          </div>
+            <Link
+              to="/admin/list"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/list") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+            >
+              <History size={18} /> 전체 정산/환전 내역 관리
+            </Link>
+            <Link
+              to="/admin/license-approval"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/license-approval") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+            >
+              <CheckCircle size={18} /> 사업자등록증 승인 관리
+            </Link>
+            <Link
+              to="/remittance"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/remittance") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+            >
+              <SendHorizontal size={18} /> 자금 이체 프로세싱
+            </Link>
+            <Link
+              to="/admin/broadcast"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/broadcast") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+            >
+              <Bell size={18} /> 전체 공지 발송
+            </Link>
+          </>
         )}
       </nav>
-
-      {/* 💳 하단 지갑 요약 카드 */}
-      {isFinanceTarget && hasAccount && (
-        <div className="p-6 m-4 bg-slate-900 rounded-[32px] text-white shadow-2xl space-y-4 overflow-hidden border border-white/5 animate-in slide-in-from-bottom-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-teal-500 rounded-lg">
-                <CreditCard size={14} className="text-white" />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">
-                Ex-Wallet
-              </span>
-            </div>
-            <div className="flex gap-2">
-              {/* 🌟 데이터 정화/세탁용 리셋 버튼 */}
-              <button
-                onClick={() => {
-                  if (window.confirm("계좌 데이터를 초기화하시겠습니까?"))
-                    resetAccount();
-                }}
-                className="transition-colors text-slate-500 hover:text-red-400"
-                title="데이터 초기화"
-              >
-                <RefreshCcw size={14} />
-              </button>
-              <button
-                onClick={copyAccount}
-                className="transition-colors text-slate-500 hover:text-white"
-                title="계좌번호 복사"
-              >
-                <Copy size={14} />
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-[10px] font-bold text-slate-500 font-mono tracking-tighter uppercase truncate">
-              {userAccount}
-            </p>
-            <h3 className="block font-sans text-xl italic font-black leading-tight tracking-tighter truncate">
-              ₩ {safeKrwBalance.toLocaleString()}
-            </h3>
-          </div>
-
-          {/* 🌟 [수정] 버튼 클릭 시 통합 자산 관리 페이지(/wallet/overview)로 이동 */}
-          <Link
-            to="/wallet/overview"
-            onClick={onClose}
-            className="block w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-center text-[10px] font-black uppercase tracking-widest transition-all"
-          >
-            Manage My Assets
-          </Link>
-        </div>
-      )}
     </div>
   );
 };

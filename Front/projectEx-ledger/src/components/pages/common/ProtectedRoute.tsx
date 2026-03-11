@@ -18,15 +18,26 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    if (allowedRoles && allowedRoles.length > 0 && token) {
+    if (token) {
         const payload = parseJwt(token);
         const authorities: string = payload?.auth || '';
         const userRoles = authorities.split(',');
+        const isApproved: boolean = payload?.isApproved ?? true;
 
-        const hasRequiredRole = allowedRoles.some(role => userRoles.includes(role));
-        if (!hasRequiredRole) {
-            // 권한이 없으면 루트 경로(또는 렌딩 페이지)로 이동
-            return <Navigate to="/" replace />;
+        if (allowedRoles && allowedRoles.length > 0) {
+            const hasRequiredRole = allowedRoles.some(role => userRoles.includes(role));
+            if (!hasRequiredRole) {
+                return <Navigate to="/" replace />;
+            }
+        }
+
+        // 기업 관련 기능이면서 아직 승인되지 않은 경우
+        const isCorporateFunction = allowedRoles?.some(r => r.includes('COMPANY'));
+        if (isCorporateFunction && !isApproved && !userRoles.includes('ROLE_INTEGRATED_ADMIN')) {
+            // 여기서는 페이지 내부에서 '승인 대기' UI를 띄워주는 것이 UX상 좋으므로 통과 시키고,
+            // 실제 데이터 처리(POST 등) 시 백엔드에서 막아줌. 
+            // 만약 접근 자체를 막고 싶다면 아래처럼 리다이렉트 가능:
+            // return <Navigate to="/pending" replace />;
         }
     }
 

@@ -12,5 +12,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequireMfa {
-    // 필요한 경우 추가 속성 정의 가능 (예: String message() default "MFA 코드가 필요합니다";)
+    /**
+     * 고액 거래 여부. true일 경우 15분 MFA 세션과 상관없이 무조건 실시간 OTP 인증을 요구합니다.
+     */
+    boolean highValue() default false;
 }

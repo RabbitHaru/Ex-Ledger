@@ -30,7 +30,6 @@ public class AdminSeederConfig {
                         .password(passwordEncoder.encode("admin1234!"))
                         .name("운영관리자")
                         .role(Member.Role.ROLE_INTEGRATED_ADMIN)
-                        .businessNumber("0000000000")
                         .build();
 
                 memberRepository.save(admin);

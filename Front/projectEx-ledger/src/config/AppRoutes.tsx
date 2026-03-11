@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import CommonLayout from "../components/layout/CommonLayout";
 import AuthLayout from "../components/layout/AuthLayout";
+import NotFound from "../pages/error/NotFound";
 import { ProtectedRoute } from "../components/pages/common/ProtectedRoute";
 
 // Common Pages
@@ -25,15 +26,20 @@ import TransactionHistory from "../components/dashboard/TransactionHistory";
 import RemittanceTracking from "../components/pages/remittance/Tracking/RemittanceTracking";
 import ExchangePage from "../components/widgets/finance/ExchangePage";
 import SettlementDashboard from "../components/pages/settlement/SettlementDashboard";
+import MyPage from "../components/pages/user/MyPage";
 
 // Company
 import CompanyJoin from "../pages/company/CompanyJoin";
-import PendingUsers from "../pages/company/PendingUsers";
+import CompanyMemberManagement from "../pages/company/PendingUsers";
 import CompanyReview from "../pages/integratedadmin/CompanyReview";
 import SellerDashboard from "../components/widgets/finance/SellerDashboard";
 import WalletOverview from "../components/pages/wallet/WalletOverview";
 import PersonalHistory from "../components/pages/history/PersonalHistory";
 import CorporateWallet from "../components/pages/wallet/CorporateWallet";
+
+// Resource Pages
+import { TermsPage, PrivacyPage, NoticePage, OperationPolicyPage } from "../components/pages/resources/ResourcePages";
+import AdminBroadcast from "../components/pages/admin/AdminBroadcast";
 
 const AppRoutes = () => {
   return (
@@ -43,10 +49,13 @@ const AppRoutes = () => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/exchange" element={<ExchangePage />} />
         <Route path="/finance" element={<LandingPage />} />
-        <Route
-          path="/pages/remittance/Tracking"
-          element={<RemittanceTracking />}
-        />
+        <Route path="/pages/remittance/Tracking" element={<RemittanceTracking />} />
+
+        {/* 리소스/정보 페이지 */}
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/notice" element={<NoticePage />} />
+        <Route path="/policy" element={<OperationPolicyPage />} />
 
         {/* 2. 인증 불필요 라우트 (로그인/회원가입 등) */}
         <Route element={<AuthLayout />}>
@@ -58,64 +67,44 @@ const AppRoutes = () => {
         {/* 3. 보안/인증 필요 라우트 영역 */}
         <Route element={<ProtectedRoute />}>
           {/* ----- 일반 로그인 사용자 공통 (User, Company User, Company Admin) ----- */}
-          <Route
-            element={
-              <ProtectedRoute
-                allowedRoles={[
-                  "ROLE_USER",
-                  "USER",
-                  "ROLE_COMPANY_USER",
-                  "COMPANY_USER",
-                  "ROLE_COMPANY_ADMIN",
-                  "COMPANY_ADMIN",
-                ]}
-              />
-            }
-          >
-            <Route path="/exchange/dashboard" element={<ExchangeDashboard />} />
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_USER", "USER", "ROLE_COMPANY_USER", "COMPANY_USER", "ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]} />}>
             <Route path="/seller/dashboard" element={<SellerDashboard />} />
             <Route path="/company/join" element={<CompanyJoin />} />
             <Route path="/list" element={<MySettlementList />} />
             <Route path="/settlement" element={<SettlementDashboard />} />
+            <Route path="/mypage" element={<MyPage />} />
+              <Route path="/wallet/overview" element={<WalletOverview />} />
+              <Route path="/seller/history" element={<PersonalHistory />} />
+
             <Route path="/wallet/overview" element={<WalletOverview />} />
             <Route path="/seller/history" element={<PersonalHistory />} />
             <Route path="/corporate/wallet" element={<CorporateWallet />} />
           </Route>
 
           {/* ----- 기업 관리자(Company Admin) 전용 라우트 ----- */}
-          <Route
-            element={
-              <ProtectedRoute
-                allowedRoles={["ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]}
-              />
-            }
-          >
-            <Route path="/admin/company/pending" element={<PendingUsers />} />
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]} />}>
+            <Route path="/admin/company/pending" element={<CompanyMemberManagement />} />
+              <Route path="/corporate/wallet" element={<CorporateWallet />} />
           </Route>
 
           {/* ----- 최고 관리자(Integrated Admin) 전용 라우트 ----- */}
-          <Route
-            element={
-              <ProtectedRoute
-                allowedRoles={["ROLE_INTEGRATED_ADMIN", "INTEGRATED_ADMIN"]}
-              />
-            }
-          >
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_INTEGRATED_ADMIN", "INTEGRATED_ADMIN"]} />}>
             <Route path="/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/list" element={<ReconciliationList />} />
-            <Route
-              path="/admin/settlement/:id"
-              element={<ReconciliationDetail />}
-            />
+            <Route path="/admin/settlement/:id" element={<ReconciliationDetail />} />
             <Route path="/client" element={<ClientManagement />} />
             <Route path="/admin/logs" element={<AdminLogList />} />
             <Route path="/admin/health" element={<SystemHealth />} />
             <Route path="/admin/companies/review" element={<CompanyReview />} />
+            <Route path="/admin/license-approval" element={<CompanyReview />} />
             <Route path="/remittance" element={<RemittanceManagement />} />
-          </Route>
+            <Route path="/admin/broadcast" element={<AdminBroadcast />} />
         </Route>
       </Route>
-    </Routes>
+    </Route>
+
+    <Route path="*" element={<NotFound />} />
+  </Routes>
   );
 };
 

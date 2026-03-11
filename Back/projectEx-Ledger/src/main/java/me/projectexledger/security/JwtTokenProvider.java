@@ -12,7 +12,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
-
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Arrays;
 import java.util.Collection;
@@ -33,7 +33,23 @@ public class JwtTokenProvider {
     public JwtTokenProvider(
             @Value("${jwt.secret}") String secretKey,
             @Value("${jwt.token-validity-in-seconds}") long tokenValidityInSeconds) {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        byte[] keyBytes;
+        try {
+            // Base64 디코딩 시도
+            keyBytes = Decoders.BASE64.decode(secretKey);
+        } catch (Exception e) {
+            // 실패 시 일반 문자열 바이트 사용
+            keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
+        }
+
+        // HMAC-SHA256을 위한 최소 키 길이(256비트/32바이트) 보장
+        if (keyBytes.length < 32) {
+            log.warn("JWT secret key is too short. Minimum 32 bytes required. Padding with zeros.");
+            byte[] paddedKey = new byte[32];
+            System.arraycopy(keyBytes, 0, paddedKey, 0, Math.min(keyBytes.length, 32));
+            keyBytes = paddedKey;
+        }
+
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.tokenValidityInMilliseconds = tokenValidityInSeconds * 1000;
         this.refreshTokenValidityInMilliseconds = tokenValidityInSeconds * 1000 * 24 * 7;
@@ -44,12 +60,18 @@ public class JwtTokenProvider {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
 
+        boolean isApproved = false;
+        if (authentication.getPrincipal() instanceof CustomUserDetails) {
+            isApproved = ((CustomUserDetails) authentication.getPrincipal()).isApproved();
+        }
+
         long now = (new Date()).getTime();
         Date validity = new Date(now + this.tokenValidityInMilliseconds);
 
         return Jwts.builder()
                 .setSubject(authentication.getName())
                 .claim("auth", authorities)
+                .claim("isApproved", isApproved)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .setExpiration(validity)
                 .compact();

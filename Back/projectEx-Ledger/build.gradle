@@ -25,56 +25,72 @@ repositories {
 }
 
 dependencies {
-    // Security & JWT
+    // ===============================================================
+    // Spring Boot Core & Web
+    // ===============================================================
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+    // ===============================================================
+    // Security & Authentication
+    // ===============================================================
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    
+    // JWT (JSON Web Token)
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+    
+    // MFA (Google Authenticator / TOTP)
+    implementation 'com.warrenstrange:googleauth:1.5.0'
 
-    // Spring Boot Core
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-
-    // Database & JPA
+    // ===============================================================
+    // Data Persistence & Cache
+    // ===============================================================
+    
+    // Relational Database (MariaDB & JPA)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
-
-    // Utilities (Lombok)
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-
-    // Swagger (API Docs)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
-
-    // Testing
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    // WebFlux
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
-
-    // Redis
+    
+    // NoSQL & In-Memory (Redis)
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation('it.ozimov:embedded-redis:0.7.3') {
         exclude group: 'org.slf4j', module: 'slf4j-simple'
     }
+
+    // ===============================================================
+    // Aspects & Cross-Cutting Concerns
+    // ===============================================================
+    implementation 'org.springframework.boot:spring-boot-starter-aop:3.2.1'
+
+    // ===============================================================
+    // Utilities & API Documentation
+    // ===============================================================
+    
+    // Lombok (Boilerplate reduction)
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Swagger UI / OpenAPI 3
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
+
+    // JSON Processing
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
     implementation 'com.fasterxml.jackson.core:jackson-annotations'
 
-    // Google Authenticator (TOTP)
-    implementation 'com.warrenstrange:googleauth:1.5.0'
-
-    // Spring AOP (For MFA and Audit logs)
-    implementation 'org.springframework.boot:spring-boot-starter-aop:3.2.1'
-
-    // JUnit 5 & AssertJ
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-
-    // Image compression
+    // Image Handling
     implementation 'net.coobird:thumbnailator:0.4.20'
+
+    // ===============================================================
+    // Testing
+    // ===============================================================
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {

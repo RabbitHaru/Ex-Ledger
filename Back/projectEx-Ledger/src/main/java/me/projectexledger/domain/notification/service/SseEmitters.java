@@ -1,26 +1,35 @@
 package me.projectexledger.domain.notification.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.projectexledger.domain.member.entity.Member;
+import me.projectexledger.domain.member.repository.MemberRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SseEmitters {
 
-    // 🌟 Thread-safe한 Map으로 셀러별 연결 관리
+    private final MemberRepository memberRepository;
+
+    // Thread-safe한 Map으로 사용자별 연결 관리
     private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     public SseEmitter add(String userId) {
         // 만료 시간 1시간 설정 (금융 대시보드 특성 반영)
         SseEmitter emitter = new SseEmitter(60 * 60 * 1000L);
         this.emitters.put(userId, emitter);
 
-        // 연결 종료/만료 시 메모리 누수 방지를 위해 Map에서 제거
         emitter.onCompletion(() -> {
             log.info("SSE 연결 종료: {}", userId);
             this.emitters.remove(userId);
@@ -31,7 +40,6 @@ public class SseEmitters {
         });
 
         try {
-            // 🌟 최초 연결 시 프론트엔드의 .addEventListener("connect", ...)와 매칭
             emitter.send(SseEmitter.event()
                     .name("connect")
                     .data("connected!"));
@@ -42,18 +50,78 @@ public class SseEmitters {
         return emitter;
     }
 
-    public void sendNotification(String userId, String message) {
+    /**
+     * 특정 사용자에게 알림 발송 (알림 수신 설정 체크)
+     */
+    public void sendNotification(String userId, String eventType, String message) {
+        // 알림 수신 설정 체크
+        if (!isNotificationAllowed(userId)) {
+            log.debug("알림 수신 거부 사용자: {}", userId);
+            return;
+        }
+
         SseEmitter emitter = emitters.get(userId);
         if (emitter != null) {
             try {
+                String payload = message + " | " + LocalDateTime.now().format(TIME_FMT);
                 emitter.send(SseEmitter.event()
-                        .name("remittance_update")
-                        .data(message));
-                log.info("🔔 [SSE] 알림 발송 성공: 셀러({}) -> {}", userId, message);
+                        .name(eventType)
+                        .data(payload));
+                log.info("🔔 [SSE] 알림 발송 성공: {}({}) -> {}", userId, eventType, message);
             } catch (IOException e) {
                 log.error("❌ [SSE] 알림 발송 실패, 세션 제거: {}", userId);
                 emitters.remove(userId);
             }
+        }
+    }
+
+    /**
+     * 송금 관련 알림
+     */
+    public void sendRemittanceNotification(String userId, String message) {
+        sendNotification(userId, "remittance_update", message);
+    }
+
+    /**
+     * 로그인 시도 경고 알림
+     */
+    public void sendLoginAlert(String userId, String message) {
+        sendNotification(userId, "login_alert", message);
+    }
+
+    /**
+     * 전체 사용자에게 공지 브로드캐스트
+     */
+    public void broadcastAnnouncement(String message) {
+        String payload = message + " | " + LocalDateTime.now().format(TIME_FMT);
+        int successCount = 0;
+
+        for (Map.Entry<String, SseEmitter> entry : emitters.entrySet()) {
+            try {
+                entry.getValue().send(SseEmitter.event()
+                        .name("announcement")
+                        .data(payload));
+                successCount++;
+            } catch (IOException e) {
+                log.error("❌ [SSE] 공지 발송 실패 ({}), 세션 제거", entry.getKey());
+                emitters.remove(entry.getKey());
+            }
+        }
+
+        log.info("📢 [SSE] 공지 브로드캐스트 완료: {} / {} 명 수신", successCount, emitters.size() + successCount);
+    }
+
+    /**
+     * 알림 수신 허용 여부 확인
+     */
+    private boolean isNotificationAllowed(String userId) {
+        try {
+            return memberRepository.findByEmail(userId)
+                    .map(Member::isAllowNotifications)
+                    .orElse(true);
+        } catch (Exception e) {
+            log.warn("알림 수신 설정 확인 실패, 기본 허용: {}", userId);
+            return true;
         }
     }
 }

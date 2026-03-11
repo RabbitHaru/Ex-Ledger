@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import me.projectexledger.domain.notification.service.SseEmitters;
+
 @Service
 @RequiredArgsConstructor
 public class RemittanceService {
@@ -26,6 +28,7 @@ public class RemittanceService {
     private final RemittanceRepository remittanceRepository;
     private final CurrencyCalculator currencyCalculator;
     private final SystemConfigService configService;
+    private final SseEmitters sseEmitters;
 
     @Transactional
     public RemittanceDTO.Response processRemittanceRequest(String requesterId, RemittanceDTO.Request requestDTO) {
@@ -46,6 +49,11 @@ public class RemittanceService {
         remittanceRepository.save(remittance);
 
         String transactionId = "TRX_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "_" + UUID.randomUUID().toString().substring(0, 8);
+
+        // 실시간 알림 발송
+        String notiMsg = String.format("[송금 요청] %s %s %s → %s 접수 완료",
+                requestDTO.getCurrency(), requestDTO.getAmount(), requestDTO.getRecipientName(), requestDTO.getRecipientBank());
+        sseEmitters.sendRemittanceNotification(requesterId, notiMsg);
 
         return RemittanceDTO.Response.builder()
                 .transactionId(transactionId)
