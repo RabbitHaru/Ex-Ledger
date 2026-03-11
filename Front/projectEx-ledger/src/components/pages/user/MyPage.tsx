@@ -3,9 +3,15 @@ import { UserCircle, ShieldCheck, Key, RefreshCw, CheckCircle2, AlertCircle, Bui
 import http from "../../../config/http";
 import { useToast } from "../../notification/ToastProvider";
 import { QRCodeSVG } from "qrcode.react";
+import { useWallet } from "../../../context/WalletContext";
+import { useNavigate } from "react-router-dom";
+import { Wallet, ArrowRight, CreditCard, Landmark, AlertTriangle, XCircle, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 
 const MyPage: React.FC = () => {
     const { showToast } = useToast();
+    const navigate = useNavigate();
+    const { getWalletDataById } = useWallet();
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -38,6 +44,8 @@ const MyPage: React.FC = () => {
         adminApprovalStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
         mfaResetAt: string | null;
         mfaCooldownEnd: string | null;
+        realName: string | null;
+        withdrawalRequestedAt: string | null;
     } | null>(null);
 
     useEffect(() => {
@@ -133,7 +141,11 @@ const MyPage: React.FC = () => {
                 showToast("사용자 이메일 정보를 찾을 수 없습니다.", "ERROR");
                 return;
             }
-            await http.post("/auth/mfa/enable", { email: userEmail, code: Number(otpCode) });
+            if (!otpCode || otpCode.length !== 6) {
+                showToast("6자리 OTP 번호를 입력해주세요.", "ERROR");
+                return;
+            }
+            await http.post("/auth/mfa/enable", { email: userEmail, code: otpCode });
             showToast("MFA(OTP)가 성공적으로 설정되었습니다.", "SUCCESS");
             setIsMfaSetting(false);
             setMfaData(null);
@@ -157,15 +169,34 @@ const MyPage: React.FC = () => {
     };
 
     const handleWithdraw = async () => {
-        if (!window.confirm("정말로 회원 탈퇴를 진행하시겠습니까? 모든 개인 정보가 삭제되며 복구할 수 없습니다.")) return;
+        toast("정말 회원 탈퇴를 진행하시겠습니까?", {
+            description: "7일간의 유예 기간이 주어지며, 이후 모든 정보가 삭제됩니다.",
+            action: {
+                label: "탈퇴하기",
+                onClick: async () => {
+                    try {
+                        await http.delete("/auth/withdraw");
+                        showToast("탈퇴 요청이 접수되었습니다. 7일 후 자동 탈퇴됩니다.", "SUCCESS");
+                        fetchProfile();
+                    } catch (err: any) {
+                        showToast(err.response?.data?.message || "탈퇴 요청 실패", "ERROR");
+                    }
+                },
+            },
+            cancel: {
+                label: "취소",
+                onClick: () => console.log("Withdrawal cancelled by user"),
+            },
+        });
+    };
+
+    const handleCancelWithdraw = async () => {
         try {
-            await http.delete("/auth/withdraw");
-            showToast("회원 탈퇴가 완료되었습니다. 이용해주셔서 감사합니다.", "SUCCESS");
-            // 로컬 스토리지 정리 및 로그인 페이지 이동
-            localStorage.clear();
-            window.location.href = "/login";
+            await http.post("/auth/withdraw/cancel");
+            showToast("회원 탈퇴 요청이 철회되었습니다.", "SUCCESS");
+            fetchProfile();
         } catch (err: any) {
-            showToast(err.response?.data?.message || "회원 탈퇴 실패", "ERROR");
+            showToast(err.response?.data?.message || "탈퇴 철회 실패", "ERROR");
         }
     };
 
@@ -211,11 +242,44 @@ const MyPage: React.FC = () => {
                             </div>
                         ) : null}
                     </div>
-                    <p className="text-slate-400 font-bold text-sm uppercase tracking-widest mt-2">
+                    <p className="text-slate-400 font-bold text-sm uppercase tracking-widest mt-2 flex items-center gap-2">
                         {profile?.role.replace("ROLE_", "").replace("_", " ")} | {profile?.email}
+                        {profile?.realName && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-teal-500/10 text-teal-500 rounded text-[10px] font-black lowercase tracking-normal">
+                                <CheckCircle2 size={10} />
+                                실명인증: {profile.realName}
+                            </span>
+                        )}
                     </p>
                 </div>
             </header>
+
+            {/* ★ 회원 탈퇴 유예 기간 안내 배너 */}
+            {profile?.withdrawalRequestedAt && (
+                <div className="p-8 bg-rose-50 border border-rose-100 rounded-[40px] flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-700">
+                    <div className="flex items-center gap-6">
+                        <div className="p-5 bg-white rounded-3xl shadow-sm text-rose-500">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xl font-black text-rose-900 tracking-tight">회원 탈퇴가 대기 중입니다</h3>
+                            <p className="text-sm font-bold text-rose-600/80 leading-relaxed">
+                                {new Date(new Date(profile.withdrawalRequestedAt).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR', {
+                                    year: 'numeric', month: 'long', day: 'numeric'
+                                })}에 모든 정보가 삭제될 예정입니다. <br />
+                                아직 마음이 바뀌셨다면 아래 버튼을 눌러 탈퇴를 철회하실 수 있습니다.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleCancelWithdraw}
+                        className="px-8 py-4 bg-rose-500 text-white rounded-2xl font-black text-[14px] hover:bg-rose-600 transition-all shadow-lg shadow-rose-200 flex items-center gap-2"
+                    >
+                        <RotateCcw size={18} />
+                        탈퇴 요청 철회하기
+                    </button>
+                </div>
+            )}
 
             {/* 🌟 세련된 탭 네비게이션 */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-100/50 rounded-[32px] w-fit border border-slate-100">
@@ -632,28 +696,123 @@ const MyPage: React.FC = () => {
                 )}
 
                 {activeTab === 'banking' && (
-                    <div className="flex flex-col items-center justify-center py-24 space-y-8 animate-in fade-in slide-in-from-bottom-8">
-                        <div className="w-32 h-32 bg-slate-50 rounded-[40px] flex items-center justify-center text-slate-200 relative">
-                            <Key size={56} />
-                            <div className="absolute -right-2 -top-2 w-10 h-10 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-lg rotate-12">
-                                <RefreshCw size={20} className="animate-spin-slow" />
+                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-500">
+                        <section className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-12">
+                            <div className="flex items-center gap-4">
+                                <div className="p-4 bg-teal-50 text-teal-600 rounded-2xl">
+                                    <Landmark size={24} />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-black tracking-tight text-slate-800">연결된 가상계좌 정보</h2>
+                                    <p className="text-slate-400 font-bold text-[11px] uppercase tracking-widest mt-1">Virtual Account Summary</p>
+                                </div>
                             </div>
-                        </div>
-                        <div className="text-center space-y-4 max-w-md">
-                            <h3 className="text-3xl font-black text-slate-800 tracking-tight">가상계좌 서비스 준비 중</h3>
-                            <p className="text-slate-400 font-bold leading-relaxed">
-                                더욱 안전하고 편리한 통합 결제 및 가상계좌 관리 기능을 준비하고 있습니다. <br />
-                                서비스 고도화 완료 후 이곳에서 가상계좌 발급 및 내역 확인이 가능합니다.
-                            </p>
-                        </div>
-                        <div className="flex gap-3">
-                            <div className="px-5 py-2 bg-slate-100 rounded-full text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                                Phase 2: Virtual Accounts
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {/* 개인 계좌 카드 */}
+                                <div className="p-10 bg-slate-50 rounded-[40px] space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-slate-200 hover:-translate-y-2 border border-transparent hover:border-slate-100">
+                                    <div className="flex justify-between items-start">
+                                        <div className="space-y-2">
+                                            <div className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg w-fit uppercase tracking-widest">Personal</div>
+                                            <h3 className="text-xl font-black text-slate-900">개인 활동 계좌</h3>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:text-teal-500 transition-colors">
+                                            <Landmark size={20} />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">계좌 번호</label>
+                                            <p className="font-mono text-xl font-bold text-slate-900">
+                                                {getWalletDataById(profile?.email || '')?.userAccount || '미발급'}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">보유 잔액</label>
+                                            <p className="text-3xl font-black text-slate-900 italic">
+                                                ₩ {(getWalletDataById(profile?.email || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={() => navigate('/wallet/overview')}
+                                        className="w-full py-5 bg-white border border-slate-100 rounded-2xl font-black text-[13px] text-slate-600 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center gap-2 group/btn"
+                                    >
+                                        개인 자산관리 바로가기
+                                        <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                                    </button>
+                                </div>
+
+                                {/* 기업 공금 계좌 카드 (기업 사용자만) */}
+                                {(profile?.role === 'ROLE_COMPANY_ADMIN' || profile?.role === 'ROLE_COMPANY_USER') ? (
+                                    <div className="p-10 bg-indigo-50/50 rounded-[40px] border border-indigo-100 space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-indigo-100 hover:-translate-y-2 hover:border-indigo-100">
+                                        <div className="flex justify-between items-start">
+                                            <div className="space-y-2">
+                                                <div className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-lg w-fit uppercase tracking-widest">Corporate</div>
+                                                <h3 className="text-xl font-black text-slate-900">기업 공금 계좌</h3>
+                                            </div>
+                                            <div className="p-3 bg-white rounded-2xl shadow-sm text-indigo-400 group-hover:text-indigo-600 transition-colors">
+                                                <Building2 size={20} />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="space-y-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">공용 계좌 번호</label>
+                                                <p className="font-mono text-xl font-bold text-slate-900">
+                                                    {getWalletDataById(profile?.businessNumber || '')?.userAccount || '미발급 (관리자 확인 필요)'}
+                                                </p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">공금 잔액</label>
+                                                <p className="text-3xl font-black text-slate-900 italic">
+                                                    ₩ {(getWalletDataById(profile?.businessNumber || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <button 
+                                            onClick={() => navigate('/corporate/wallet')}
+                                            className="w-full py-5 bg-white border border-indigo-100 rounded-2xl font-black text-[13px] text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 group/btn"
+                                        >
+                                            기업 자산관리 바로가기
+                                            <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="p-10 bg-slate-50/50 border border-slate-100 rounded-[40px] flex flex-col items-center justify-center text-center space-y-4">
+                                        <div className="p-4 bg-white/50 rounded-2xl text-slate-300">
+                                            <CreditCard size={32} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[14px] font-black text-slate-400 uppercase tracking-widest">No Corporate Account</p>
+                                            <p className="text-[12px] font-bold text-slate-300">기업 회원이 아닌 경우 공금 계좌가 표시되지 않습니다.</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            <div className="px-5 py-2 bg-amber-50 rounded-full text-[11px] font-black text-amber-600 uppercase tracking-widest border border-amber-100">
-                                Coming Soon
-                            </div>
-                        </div>
+                        </section>
+
+                        <section className="bg-slate-900 p-12 rounded-[48px] text-white relative overflow-hidden group">
+                           <div className="absolute top-0 right-0 w-64 h-64 -mt-20 -mr-20 rounded-full bg-teal-500/10 blur-3xl group-hover:bg-teal-500/20 transition-all duration-700" />
+                           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                               <div className="space-y-4">
+                                   <div className="flex items-center gap-2">
+                                       <span className="px-2 py-0.5 bg-teal-500/20 text-teal-400 text-[9px] font-black rounded uppercase tracking-widest">Next Phase</span>
+                                       <h4 className="text-2xl font-black italic tracking-tighter">Advanced Corporate Banking</h4>
+                                   </div>
+                                   <p className="text-slate-400 text-sm font-bold leading-relaxed max-w-lg">
+                                       Ex-Ledger V2에서는 실시간 다중 통화 가상계좌 발급 및 <br />
+                                       법인카드 통합 관리 기능을 제공할 예정입니다.
+                                   </p>
+                               </div>
+                               <div className="p-6 bg-white/5 rounded-[32px] border border-white/5 backdrop-blur-sm">
+                                   <RefreshCw size={40} className="text-teal-400 animate-spin-slow" />
+                               </div>
+                           </div>
+                        </section>
                     </div>
                 )}
             </div>
@@ -662,13 +821,23 @@ const MyPage: React.FC = () => {
             {profile?.role !== 'ROLE_INTEGRATED_ADMIN' && (
                 <footer className="mt-20 pt-12 border-t border-slate-50 flex flex-col items-center gap-6">
                     <p className="text-slate-300 text-[13px] font-bold">더 이상 서비스를 이용하지 않으시나요?</p>
-                    <button
-                        onClick={handleWithdraw}
-                        className="text-slate-300 hover:text-rose-500 text-[11px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 opacity-50 hover:opacity-100"
-                    >
-                        <LogOut size={12} />
-                        회원 탈퇴하기
-                    </button>
+                    {profile?.withdrawalRequestedAt ? (
+                        <button
+                            onClick={handleCancelWithdraw}
+                            className="text-teal-500 hover:text-teal-600 text-[11px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5"
+                        >
+                            <RotateCcw size={12} />
+                            회원 탈퇴 철회하기
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleWithdraw}
+                            className="text-slate-300 hover:text-rose-500 text-[11px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 opacity-50 hover:opacity-100"
+                        >
+                            <LogOut size={12} />
+                            회원 탈퇴하기
+                        </button>
+                    )}
                     <p className="text-slate-200 text-[10px] font-medium mt-4">© 2026 Ex-Ledger Team. All rights reserved.</p>
                 </footer>
             )}

@@ -24,6 +24,8 @@ public class UserProfileResponse {
     private String adminApprovalStatus;
     private java.time.LocalDateTime mfaResetAt;
     private java.time.LocalDateTime mfaCooldownEnd;
+    private String realName;
+    private java.time.LocalDateTime withdrawalRequestedAt;
 
     public static UserProfileResponse from(Member member) {
         java.time.LocalDateTime cooldownEnd = null;
@@ -45,6 +47,8 @@ public class UserProfileResponse {
                 .mfaEnabled(member.isMfaEnabled())
                 .mfaResetAt(member.getMfaResetAt())
                 .mfaCooldownEnd(cooldownEnd)
+                .realName(member.getRealName())
+                .withdrawalRequestedAt(member.getWithdrawalRequestedAt())
                 .build();
     }
 }

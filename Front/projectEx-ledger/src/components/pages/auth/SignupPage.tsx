@@ -291,7 +291,7 @@ const SignupPage: React.FC = () => {
                 </div>
             )}
 
-            <form onSubmit={handleSignup}>
+            <form onSubmit={handleSignup} noValidate>
                 {/* ====== STEP 1: 기본 정보 + 유형 선택 ====== */}
                 <div className={`transition-all duration-500 ${contentStep === 1 ? 'opacity-100 translate-y-0' : 'opacity-0 absolute -translate-y-4 pointer-events-none'}`}>
                     <div className="flex p-1.5 bg-slate-100 rounded-[24px] mb-8 shadow-inner">

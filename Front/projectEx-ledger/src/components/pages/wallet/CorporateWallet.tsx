@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import CommonLayout from "../../../components/layout/CommonLayout";
+
 import { useWallet, type Transaction } from "../../../context/WalletContext";
 import {
   Building2,
@@ -18,8 +18,14 @@ import { useToast } from "../../../components/notification/ToastProvider";
 
 const CorporateWallet: React.FC = () => {
   const { showToast } = useToast();
-  const { balances, transactions, userAccount, setUserAccount, setHasAccount } =
-    useWallet();
+  const { 
+    corpBalances, 
+    corpTransactions, 
+    corpAccount, 
+    setCorpAccount, 
+    setCorpBalances, 
+    setCorpTransactions 
+  } = useWallet();
   const [searchTerm, setSearchTerm] = useState("");
   const [isActivating, setIsActivating] = useState(false);
 
@@ -31,19 +37,18 @@ const CorporateWallet: React.FC = () => {
     setTimeout(() => {
       // 기업용 식별 번호 대역대 (2003) 할당 시뮬레이션
       const newCorpAccount = `EX-2003-${Math.floor(1000 + Math.random() * 9000)}`;
-      setUserAccount(newCorpAccount);
-      setHasAccount(true);
+      setCorpAccount(newCorpAccount);
       setIsActivating(false);
       showToast("기업 전용 마스터 계좌가 발급되었습니다.", "SUCCESS");
     }, 2000);
   };
 
-  const businessTxs = transactions.filter((tx) => tx.category === "BUSINESS");
+  const businessTxs = corpTransactions.filter((tx: Transaction) => tx.category === "BUSINESS");
 
   // 1. 계좌가 없을 때 보여줄 "발급 신청" 화면
-  if (!userAccount || !userAccount.includes("2003")) {
+  if (!corpAccount || !corpAccount.includes("2003")) {
     return (
-      <CommonLayout>
+      <>
         <div className="max-w-4xl px-6 py-32 mx-auto space-y-12 text-center animate-in fade-in">
           <div className="space-y-6">
             <div className="bg-indigo-50 w-24 h-24 rounded-[32px] flex items-center justify-center mx-auto text-indigo-600 shadow-xl shadow-indigo-100/50">
@@ -74,13 +79,13 @@ const CorporateWallet: React.FC = () => {
             )}
           </button>
         </div>
-      </CommonLayout>
+      </>
     );
   }
 
   // 2. 계좌가 있을 때 보여줄 "기업 대시보드" 화면 (image_ee9806.png 스타일)
   return (
-    <CommonLayout>
+    <>
       <div className="p-8 mx-auto space-y-10 max-w-7xl animate-in fade-in font-sans bg-[#F8FAFC]">
         {/* 기업 정보 카드 */}
         <header className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -124,7 +129,7 @@ const CorporateWallet: React.FC = () => {
               </p>
               <div className="flex items-center justify-between">
                 <h3 className="font-mono text-3xl italic font-bold tracking-tighter">
-                  {userAccount}
+                  {corpAccount}
                 </h3>
                 <button className="p-2 transition-colors bg-white/10 rounded-xl hover:bg-white/20">
                   <Copy size={14} />
@@ -133,7 +138,7 @@ const CorporateWallet: React.FC = () => {
             </div>
             <div className="relative z-10 flex items-end justify-between pt-6 border-t border-white/5">
               <p className="text-2xl italic font-black tracking-tighter">
-                ₩ {balances.KRW.toLocaleString()}
+                ₩ {corpBalances.KRW.toLocaleString()}
               </p>
               <div className="p-3 bg-indigo-600 shadow-lg rounded-2xl shadow-indigo-500/20">
                 <Briefcase size={20} />
@@ -197,7 +202,7 @@ const CorporateWallet: React.FC = () => {
           </aside>
         </div>
       </div>
-    </CommonLayout>
+    </>
   );
 };
 

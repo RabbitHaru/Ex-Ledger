@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import me.projectexledger.common.util.ReconciliationUtil;
 import me.projectexledger.domain.BaseEntity;
+import me.projectexledger.common.config.AesCryptoConverter;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.math.BigDecimal;
 
@@ -23,14 +24,16 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
     @Column(name = "transaction_id", nullable = false, unique = true)
     private String transactionId;
 
-    @Column(nullable = false)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(nullable = false, length = 255)
     private String clientName;
 
     // 🌟 [입금 대상 정보] - 프론트엔드 및 송금 실행 시 필수
     @Column(name = "bank_name", length = 50)
     private String bankName;
 
-    @Column(name = "account_number", length = 50)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(name = "account_number", length = 255)
     private String accountNumber;
 
     // 🌟 [금액 데이터] - 금융권 표준 정밀도(19, 4) 적용

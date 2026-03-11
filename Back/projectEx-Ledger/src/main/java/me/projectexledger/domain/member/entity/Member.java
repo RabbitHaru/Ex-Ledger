@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import me.projectexledger.domain.BaseEntity;
 import me.projectexledger.domain.company.entity.Company;
+import me.projectexledger.common.config.AesCryptoConverter;
 
 import java.time.LocalDateTime;
 
@@ -28,8 +29,13 @@ public class Member extends BaseEntity {
     @Column(nullable = false)
     private String password;
 
-    @Column(length = 50)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(length = 255)
     private String name;
+
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(length = 255)
+    private String realName; // PortOne 실명 정보
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -38,7 +44,8 @@ public class Member extends BaseEntity {
     @Column(nullable = false)
     private boolean mfaEnabled = false;
 
-    @Column(length = 100)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(length = 255)
     private String totpSecret;
 
     // 기업 FK (nullable — 개인 회원은 null)
@@ -50,17 +57,23 @@ public class Member extends BaseEntity {
     private boolean isApproved = false;
 
     // 포트원 본인인증 고유 번호
-    @Column(length = 100)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(length = 255)
     private String portoneImpUid;
+
+    @Column
+    private java.time.LocalDateTime withdrawalRequestedAt;
 
     // 개인 계좌 정보
     @Column(length = 50)
     private String bankName;
 
-    @Column(length = 50)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(length = 255)
     private String accountNumber;
 
-    @Column(length = 50)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(length = 255)
     private String accountHolder;
 
     // 알림 설정
@@ -79,6 +92,7 @@ public class Member extends BaseEntity {
         this.role = role;
         this.company = company;
         this.portoneImpUid = portoneImpUid;
+        this.realName = name; // 초기값은 name으로 설정
 
         if (role == Role.ROLE_INTEGRATED_ADMIN) {
             this.isApproved = true;
@@ -132,10 +146,26 @@ public class Member extends BaseEntity {
         this.password = encodedPassword;
     }
 
+    public void updateRealName(String realName) {
+        this.realName = realName;
+    }
+
     public void updateAccountInfo(String bankName, String accountNumber, String accountHolder) {
         this.bankName = bankName;
         this.accountNumber = accountNumber;
         this.accountHolder = accountHolder;
+    }
+
+    public void requestWithdrawal() {
+        this.withdrawalRequestedAt = java.time.LocalDateTime.now();
+    }
+
+    public void cancelWithdrawal() {
+        this.withdrawalRequestedAt = null;
+    }
+
+    public boolean isWithdrawalPending() {
+        return this.withdrawalRequestedAt != null;
     }
 
     public void updateNotificationSettings(boolean allowNotifications) {

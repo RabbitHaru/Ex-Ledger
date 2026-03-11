@@ -17,4 +17,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     // 기업 소속 + 승인된 유저 조회
     List<Member> findByCompanyAndIsApprovedTrue(Company company);
+
+    // 탈퇴 유예 기간이 만료된 유저 조회
+    List<Member> findByWithdrawalRequestedAtBefore(java.time.LocalDateTime expiryDate);
 }

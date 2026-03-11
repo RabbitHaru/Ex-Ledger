@@ -41,6 +41,14 @@ interface WalletContextType {
   ) => void;
   chargeKrw: (amount: number) => void;
   resetAccount: () => void;
+  getWalletDataById: (id: string) => { balances: Record<string, number>; userAccount: string } | null;
+  // 기업용
+  corpAccount: string;
+  setCorpAccount: (acc: string) => void;
+  corpBalances: Record<string, number>;
+  setCorpBalances: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  corpTransactions: Transaction[];
+  setCorpTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
 }
 
 export const SUPPORTED_CURRENCIES = [
@@ -73,6 +81,7 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const [userId, setUserId] = useState<string>("guest");
+  const [businessNumber, setBusinessNumber] = useState<string>("");
   const [hasAccount, setHasAccount] = useState(false);
   const [userAccount, setUserAccount] = useState("");
   const initialBalances = SUPPORTED_CURRENCIES.reduce(
@@ -83,6 +92,11 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     useState<Record<string, number>>(initialBalances);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
+  // 기업용 데이터 (공유)
+  const [corpAccount, setCorpAccount] = useState("");
+  const [corpBalances, setCorpBalances] = useState<Record<string, number>>(initialBalances);
+  const [corpTransactions, setCorpTransactions] = useState<Transaction[]>([]);
+
   const sanitizeNumber = (val: any): number => {
     const num =
       typeof val === "number"
@@ -91,8 +105,10 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     return isNaN(num) || num < 0 ? 0 : num;
   };
 
-  const loadUserData = (id: string) => {
+  const loadUserData = (id: string, bNo?: string) => {
     if (!id || id === "guest") return;
+    
+    // 1. 개인 데이터 로드
     const savedData = localStorage.getItem(`wallet_data_${id}`);
     if (savedData) {
       const parsed = JSON.parse(savedData);
@@ -105,6 +121,21 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       setBalances(sanitizedBalances);
       setTransactions(parsed.transactions || []);
     }
+
+    // 2. 기업 공금 데이터 로드 (사업자 번호가 있는 경우)
+    if (bNo) {
+      const savedCorpData = localStorage.getItem(`wallet_data_${bNo}`);
+      if (savedCorpData) {
+        const parsed = JSON.parse(savedCorpData);
+        setCorpAccount(parsed.userAccount || "");
+        const sanitizedBalances: Record<string, number> = {};
+        SUPPORTED_CURRENCIES.forEach((cur) => {
+          sanitizedBalances[cur] = sanitizeNumber(parsed.balances?.[cur] || 0);
+        });
+        setCorpBalances(sanitizedBalances);
+        setCorpTransactions(parsed.transactions || []);
+      }
+    }
   };
 
   useEffect(() => {
@@ -114,9 +145,13 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         try {
           const decoded = parseJwt(token);
           const currentId = decoded?.sub || decoded?.email || "guest";
+          // 토큰에서 businessNumber 추출 시도 (프로필 API 결과가 더 정확하겠지만 초기 로딩용)
+          const currentBNo = decoded?.businessNumber || ""; 
+          
           if (userId !== currentId) {
             setUserId(currentId);
-            loadUserData(currentId);
+            setBusinessNumber(currentBNo);
+            loadUserData(currentId, currentBNo);
           }
         } catch (e) {
           console.error("Auth sync error");
@@ -128,6 +163,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(interval);
   }, [userId]);
 
+  // 개인 데이터 저장
   useEffect(() => {
     if (userId !== "guest" && userAccount !== "") {
       localStorage.setItem(
@@ -136,6 +172,16 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       );
     }
   }, [hasAccount, userAccount, balances, transactions, userId]);
+
+  // 기업 공금 데이터 저장
+  useEffect(() => {
+    if (businessNumber && corpAccount !== "") {
+      localStorage.setItem(
+        `wallet_data_${businessNumber}`,
+        JSON.stringify({ hasAccount: true, userAccount: corpAccount, balances: corpBalances, transactions: corpTransactions }),
+      );
+    }
+  }, [businessNumber, corpAccount, corpBalances, corpTransactions]);
 
   const chargeKrw = (amount: number) => {
     const cleanAmount = sanitizeNumber(amount);
@@ -255,6 +301,21 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const getWalletDataById = (id: string) => {
+    if (!id || id === "guest") return null;
+    const data = localStorage.getItem(`wallet_data_${id}`);
+    if (!data) return null;
+    try {
+      const parsed = JSON.parse(data);
+      return {
+        balances: parsed.balances || initialBalances,
+        userAccount: parsed.userAccount || "미발급",
+      };
+    } catch (e) {
+      return null;
+    }
+  };
+
   return (
     <WalletContext.Provider
       value={{
@@ -268,6 +329,13 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         executeTransfer,
         chargeKrw,
         resetAccount,
+        getWalletDataById,
+        corpAccount,
+        setCorpAccount,
+        corpBalances,
+        setCorpBalances,
+        corpTransactions,
+        setCorpTransactions,
         addTransaction: (tx) => setTransactions((prev) => [tx, ...prev]),
       }}
     >

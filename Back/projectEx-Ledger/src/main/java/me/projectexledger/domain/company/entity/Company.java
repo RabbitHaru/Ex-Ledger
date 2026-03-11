@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import me.projectexledger.domain.BaseEntity;
 import me.projectexledger.domain.member.entity.AdminApprovalStatus;
+import me.projectexledger.common.config.AesCryptoConverter;
 
 /**
  * 기업 엔티티 — 사업자 단위의 정보를 관리
@@ -21,13 +22,15 @@ public class Company extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(nullable = false, unique = true, length = 255)
     private String businessNumber;
 
     @Column(length = 100)
     private String companyName;
 
-    @Column(length = 50)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(length = 255)
     private String representative;
 
     @Enumerated(EnumType.STRING)

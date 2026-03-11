@@ -16,7 +16,7 @@ public class MfaLoginRequest {
     @NotBlank(message = "Password is required")
     private String password;
 
-    private int code;
+    private String code;
 
     private String turnstileToken;
 }

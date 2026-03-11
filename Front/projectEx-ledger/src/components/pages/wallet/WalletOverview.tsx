@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import CommonLayout from "../../../components/layout/CommonLayout";
+
 import { useWallet, type Transaction } from "../../../context/WalletContext";
 import {
   Wallet,
@@ -109,7 +109,7 @@ const WalletOverview: React.FC = () => {
   };
 
   return (
-    <CommonLayout>
+    <>
       <div className="p-10 mx-auto space-y-12 font-sans max-w-7xl animate-in fade-in">
         {/* 상단 섹션 생략 (이전과 동일) */}
         <header className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -306,7 +306,7 @@ const WalletOverview: React.FC = () => {
           </div>
         </div>
       )}
-    </CommonLayout>
+    </>
   );
 };
 

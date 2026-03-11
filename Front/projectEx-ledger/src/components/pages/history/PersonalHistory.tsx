@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import CommonLayout from "../../../components/layout/CommonLayout";
+
 import { useWallet, type Transaction } from "../../../context/WalletContext";
 import {
   ArrowLeft,
@@ -28,7 +28,7 @@ const PersonalHistory: React.FC = () => {
   );
 
   return (
-    <CommonLayout>
+    <>
       <div className="p-10 mx-auto space-y-10 font-sans max-w-7xl animate-in fade-in">
         {/* 헤더 섹션 */}
         <header className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
@@ -129,7 +129,7 @@ const PersonalHistory: React.FC = () => {
           </div>
         </section>
       </div>
-    </CommonLayout>
+    </>
   );
 };
 

@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import me.projectexledger.domain.notification.service.SseEmitters;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -37,6 +38,7 @@ public class ExchangeRateService {
     private final FrankfurterClient frankfurterClient;
     private final ExchangeRateRepository exchangeRateRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final SseEmitters sseEmitters;
 
     private static final String REDIS_KEY = "LATEST_RATES";
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -61,6 +63,10 @@ public class ExchangeRateService {
             deleteRatesByDate(today);
             saveToDatabaseTransactional(dtos);
             log.info("✅ 환율 데이터 업데이트 성공 (수집된 통화 수: {})", dtos.size());
+            
+            // 🌟 실시간 SSE 브로드캐스트 전송
+            sseEmitters.broadcastExchangeUpdate(dtos);
+            
             return getLatestRatesFromCacheOrDb();
         }
 

@@ -104,6 +104,15 @@ public class AuthService {
                 .portoneImpUid(request.getPortoneImpUid())
                 .build();
 
+        // 본인인증된 실명이 있으면 realName 업데이트
+        if (request.getPortoneImpUid() != null) {
+            Map<String, Object> verification = portOneVerificationService.getIdentityVerification(request.getPortoneImpUid());
+            String verifiedName = (String) verification.get("verifiedName");
+            if (verifiedName != null) {
+                member.updateRealName(verifiedName);
+            }
+        }
+
         return memberRepository.save(member).getId();
     }
 
@@ -168,7 +177,14 @@ public class AuthService {
             throw new IllegalArgumentException("MFA가 활성화되어 있지 않습니다.");
         }
 
-        boolean isCodeValid = googleAuthenticator.authorize(member.getTotpSecret(), request.getCode());
+        int codeInt;
+        try {
+            codeInt = Integer.parseInt(request.getCode());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("OTP 코드는 숫자여부야 합니다.");
+        }
+
+        boolean isCodeValid = googleAuthenticator.authorize(member.getTotpSecret(), codeInt);
         if (!isCodeValid) {
             throw new IllegalArgumentException("잘못된 OTP 코드입니다. 다시 입력해주세요.");
         }
@@ -231,8 +247,8 @@ public class AuthService {
         }
 
         GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
-        member.updateTotpSecret(key.getKey());
         member.disableMfa();
+        member.updateTotpSecret(key.getKey());
 
         String qrCodeUrl = String.format("otpauth://totp/Ex-Ledger:%s?secret=%s&issuer=Ex-Ledger", email, key.getKey());
         return new MfaSetupResponse(key.getKey(), qrCodeUrl);
@@ -243,7 +259,14 @@ public class AuthService {
         Member member = memberRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        boolean isCodeValid = googleAuthenticator.authorize(member.getTotpSecret(), request.getCode());
+        int codeInt;
+        try {
+            codeInt = Integer.parseInt(request.getCode());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("OTP 코드는 숫자여야 합니다.");
+        }
+
+        boolean isCodeValid = googleAuthenticator.authorize(member.getTotpSecret(), codeInt);
         if (!isCodeValid) {
             throw new IllegalArgumentException("잘못된 OTP 코드입니다.");
         }
@@ -277,8 +300,8 @@ public class AuthService {
 
         // 본인인증 성공 → OTP 초기화 + 새 키 발급
         GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
-        member.updateTotpSecret(key.getKey());
         member.disableMfa();
+        member.updateTotpSecret(key.getKey());
         member.recordMfaReset(); // 24시간 쿨다운
 
         log.info("[MFA-RESET-BY-IDENTITY] User: {}, OTP 초기화 완료 (본인인증)", email);
@@ -359,11 +382,18 @@ public class AuthService {
             throw new IllegalArgumentException("시스템 총괄 관리자는 회원 탈퇴가 불가능합니다.");
         }
 
-        // 관련 데이터 삭제 로직 (필요시 추가)
-        memberRepository.delete(member);
+        // 즉시 삭제 대신 탈퇴 요청 일시 기록 (Soft Delete 유예 기간)
+        member.requestWithdrawal();
         
-        // 리프레시 토큰 삭제
+        // 리프레시 토큰 삭제 (세션 종료)
         redisTemplate.delete("RT:" + email);
         redisTemplate.delete("MFA_VERIFIED:" + email);
+    }
+
+    @Transactional
+    public void cancelWithdrawal(String email) {
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        member.cancelWithdrawal();
     }
 }
