@@ -90,7 +90,7 @@ const LoginPage: React.FC = () => {
         <div className="flex justify-center my-8">
           <Turnstile
             ref={turnstileRef}
-            siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY}
+            siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || "1x00000000000000000000AA"}
             onSuccess={(token) => setTurnstileToken(token)}
           />
         </div>

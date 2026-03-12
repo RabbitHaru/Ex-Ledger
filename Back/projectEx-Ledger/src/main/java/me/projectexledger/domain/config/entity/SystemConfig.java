@@ -29,6 +29,8 @@ public class SystemConfig {
 
     private LocalDateTime updatedAt; // 수정 일시
 
+    private Long lastSettlementBatchId; // 마지막 정산 배치 ID
+
     @PreUpdate
     @PrePersist
     public void updateTime() {

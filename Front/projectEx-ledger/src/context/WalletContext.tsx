@@ -8,7 +8,7 @@ import React, {
 import axios from "axios";
 import { getAuthToken } from "../utils/auth";
 
-// --- Constants (B담당 통화 리스트 반영) ---
+// --- Constants (수출입은행 지원 통화 리스트 통합) ---
 export const SUPPORTED_CURRENCIES = [
     "KRW", "AED", "AUD", "BHD", "BND", "CAD", "CHF", "CNH", "DKK", "EUR",
     "GBP", "HKD", "IDR", "JPY", "KWD", "MYR", "NOK", "NZD", "SAR", "SEK",
@@ -29,45 +29,40 @@ export interface Transaction {
 }
 
 interface WalletContextType {
-    // 상태 제어
+    // 🌟 상태 제어 (새로고침 방어용)
     isLoading: boolean;
 
-    // 개인 지갑 (C담당 구조 + B담당 명칭 호환)
+    // 개인 지갑 (C구조 + B호환)
     hasPersonalAccount: boolean;
     personalAccount: string;
     personalBalances: Record<string, number>;
-    userAccount: string; // Alias for B
-    balances: Record<string, number>; // Alias for B
+    userAccount: string; // B담당 호환용 Alias
+    balances: Record<string, number>; // B담당 호환용 Alias
 
-    // 기업 지갑 (C담당 구조 + B담당 명칭 호환)
+    // 기업 지갑 (C구조 + B호환)
     hasCorporateAccount: boolean;
     corporateAccount: string;
     corporateBalances: Record<string, number>;
     companyName: string;
-    corpAccount: string; // Alias for B
-    corpBalances: Record<string, number>; // Alias for B
+    corpAccount: string; // B담당 호환용 Alias
+    corpBalances: Record<string, number>; // B담당 호환용 Alias
 
     // 내역
     transactions: Transaction[];
-    corpTransactions: Transaction[]; // Filtered for B
+    corpTransactions: Transaction[]; // B담당 필터링 호환용
 
-    // 메서드 (C담당 실결합 로직)
+    // 🌟 실제 서버 API 메서드
     fetchWalletData: () => Promise<void>;
     setPersonalAccount: (acc: string) => void;
     setCorporateAccount: (acc: string, name: string) => void;
     executeTransfer: (
-        toAcc: string,
-        amt: number,
-        cur: string,
-        rate: number,
-        debit: number,
-        credit: number,
-        title: string,
-        category: "PERSONAL" | "BUSINESS",
+        toAcc: string, amt: number, cur: string, rate: number,
+        debit: number, credit: number, title: string, category: "PERSONAL" | "BUSINESS"
     ) => Promise<void>;
     chargeKrw: (amount: number, category: "PERSONAL" | "BUSINESS") => Promise<void>;
     activatePersonalWallet: (impUid: string) => Promise<void>;
     resetAccount: () => void;
+    setBusinessNumber: (bNo: string) => void; // B담당 프로필 동기화용
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -75,23 +70,23 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080
 
 export const WalletProvider = ({ children }: { children: ReactNode }) => {
     const [isLoading, setIsLoading] = useState(true);
+    const [businessNumber, setBusinessNumberState] = useState("");
 
-    // 개인 상태
+    // 개인 지갑 상태
     const [personalAccount, setPersonalAccountState] = useState("");
     const [personalBalances, setPersonalBalances] = useState<Record<string, number>>({ KRW: 0 });
 
-    // 기업 상태
+    // 기업 지갑 상태
     const [corporateAccount, setCorporateAccountState] = useState("");
     const [corporateBalances, setCorporateBalances] = useState<Record<string, number>>({ KRW: 0 });
     const [companyName, setCompanyName] = useState("");
 
-    // 공통 내역
+    // 공통 거래 내역
     const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-    const token = getAuthToken();
-
-    // 🌟 [C담당 실결합] 서버 데이터 동기화
+    // 🌟 [C담당 실결합] 서버 데이터 동기화 로직
     const fetchWalletData = async () => {
+        const token = getAuthToken();
         if (!token) {
             setIsLoading(false);
             return;
@@ -115,73 +110,53 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
             setTransactions(txs || []);
         } catch (error) {
-            console.error("WalletContext: 데이터 로드 실패", error);
+            console.error("WalletContext: 데이터 동기화 실패", error);
         } finally {
-            setIsLoading(false); // 로딩 종료 (새로고침 이슈 해결 핵심)
+            setIsLoading(false); // 로딩 종료 -> UI 렌더링 허용
         }
     };
 
     useEffect(() => {
         fetchWalletData();
-    }, [token]);
+    }, []);
 
-    // 🌟 [C담당 실결합] 본인인증 및 지갑 활성화
+    // 본인인증 및 지갑 활성화
     const activatePersonalWallet = async (impUid: string) => {
-        if (!token) return;
-        try {
-            await axios.post(
-                `${API_BASE_URL}/wallet/verify-identity`,
-                { impUid },
-                { headers: { Authorization: `Bearer ${token}` } },
-            );
-            await fetchWalletData();
-        } catch (error) {
-            console.error("Wallet activation failed:", error);
-            throw error;
-        }
+        const token = getAuthToken();
+        await axios.post(`${API_BASE_URL}/wallet/verify-identity`,
+            { impUid },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        await fetchWalletData();
     };
 
-    // 🌟 [C담당 실결합] 토스 페이먼츠 충전
+    // 토스 페이먼츠 결제 충전
     const chargeKrw = async (amount: number, category: "PERSONAL" | "BUSINESS") => {
-        if (!token) return;
-        try {
-            const response = await axios.post(
-                `${API_BASE_URL}/wallet/charge`,
-                { amount, category },
-                { headers: { Authorization: `Bearer ${token}` } },
-            );
-            const { orderId, amount: resAmt, orderName, customerName, clientKey } = response.data;
+        const token = getAuthToken();
+        const response = await axios.post(`${API_BASE_URL}/wallet/charge`,
+            { amount, category },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const { amount: resAmt, orderId, orderName, customerName, clientKey } = response.data;
 
-            // @ts-ignore
-            const tossPayments = (window as any).TossPayments(clientKey);
-            await tossPayments.requestPayment("카드", {
-                amount: resAmt,
-                orderId,
-                orderName,
-                customerName,
-                successUrl: `${window.location.origin}/wallet/success`,
-                failUrl: `${window.location.origin}/wallet/fail`,
-            });
-        } catch (error) {
-            console.error("Charge failed:", error);
-        }
+        // @ts-ignore
+        const tossPayments = (window as any).TossPayments(clientKey);
+        await tossPayments.requestPayment("카드", {
+            amount: resAmt, orderId, orderName, customerName,
+            successUrl: `${window.location.origin}/wallet/success`,
+            failUrl: `${window.location.origin}/wallet/fail`,
+        });
     };
 
-    // 🌟 [C담당 실결합] 실제 서버 송금 실행
+    // 실제 서버 송금 실행
     const executeTransfer = async (
-        toAccount: string,
-        amount: number,
-        currency: string,
-        rate: number,
-        debitAmount: number,
-        creditAmount: number,
-        title: string,
-        category: "PERSONAL" | "BUSINESS",
+        toAccount: string, amount: number, currency: string, rate: number,
+        debitAmount: number, creditAmount: number, title: string, category: "PERSONAL" | "BUSINESS"
     ) => {
-        await axios.post(
-            `${API_BASE_URL}/wallet/transfer`,
+        const token = getAuthToken();
+        await axios.post(`${API_BASE_URL}/wallet/transfer`,
             { toAccount, amount, currency, rate, debitAmount, creditAmount, title, category },
-            { headers: { Authorization: `Bearer ${token}` } },
+            { headers: { Authorization: `Bearer ${token}` } }
         );
         await fetchWalletData();
     };
@@ -200,20 +175,20 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
                 hasPersonalAccount: !!personalAccount,
                 personalAccount,
                 personalBalances,
-                userAccount: personalAccount, // B담당 호환용
-                balances: personalBalances, // B담당 호환용
+                userAccount: personalAccount,
+                balances: personalBalances,
 
                 // 기업 (C구조 + B호환)
                 hasCorporateAccount: !!corporateAccount,
                 corporateAccount,
                 corporateBalances,
                 companyName,
-                corpAccount: corporateAccount, // B담당 호환용
-                corpBalances: corporateBalances, // B담당 호환용
+                corpAccount: corporateAccount,
+                corpBalances: corporateBalances,
 
-                // 내역 필터링
+                // 내역
                 transactions,
-                corpTransactions: transactions.filter(tx => tx.category === "BUSINESS"), // B담당 호환용
+                corpTransactions: transactions.filter(tx => tx.category === "BUSINESS"),
 
                 // 메서드
                 fetchWalletData,
@@ -226,6 +201,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
                 chargeKrw,
                 activatePersonalWallet,
                 resetAccount,
+                setBusinessNumber: setBusinessNumberState
             }}
         >
             {children}
@@ -235,6 +211,6 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
 export const useWallet = () => {
     const context = useContext(WalletContext);
-    if (!context) throw new Error("useWallet must be used within a WalletProvider");
+    if (!context) throw new Error("useWallet error");
     return context;
 };

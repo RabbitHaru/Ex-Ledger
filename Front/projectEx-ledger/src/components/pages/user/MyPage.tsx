@@ -11,7 +11,7 @@ import { toast } from "sonner";
 const MyPage: React.FC = () => {
     const { showToast } = useToast();
     const navigate = useNavigate();
-    const { getWalletDataById } = useWallet();
+    const { getWalletDataById, setBusinessNumber: setWalletBNo } = useWallet();
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -39,6 +39,7 @@ const MyPage: React.FC = () => {
         email: string;
         role: string;
         isApproved: boolean;
+        companyName: string | null;
         businessNumber: string;
         mfaEnabled: boolean;
         adminApprovalStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
@@ -57,6 +58,10 @@ const MyPage: React.FC = () => {
             const response = await http.get("/auth/me");
             const data = response.data.data;
             setProfile(data);
+            
+            if (data.businessNumber) {
+                setWalletBNo(data.businessNumber); // WalletContext에 사업자 번호 동기화
+            }
             
             // 기존 상태값 동기화
             setBankName(data.bankName || "");
@@ -93,6 +98,13 @@ const MyPage: React.FC = () => {
 
     const handleAccountUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
+        const isCompanyRole =
+            profile?.role === "ROLE_COMPANY_ADMIN" ||
+            profile?.role === "ROLE_COMPANY_USER";
+        if (isCompanyRole && profile?.isApproved === false) {
+            showToast("소속 승인 후 계좌 관리를 이용할 수 있습니다.", "ERROR");
+            return;
+        }
         try {
             await http.post("/auth/update-account", { bankName, accountNumber, accountHolder });
             showToast("계좌 정보가 저장되었습니다.", "SUCCESS");
@@ -158,6 +170,10 @@ const MyPage: React.FC = () => {
     };
 
     const handleRevokeMe = async () => {
+        if (profile?.isApproved === false) {
+            showToast("승인 대기 중에는 소속 해제를 요청할 수 없습니다.", "ERROR");
+            return;
+        }
         if (!window.confirm("정말로 기업 소속을 해제하시겠습니까? 승인 대기 상태로 변경되며 기업 기능을 이용할 수 없게 됩니다.")) return;
         try {
             await http.post("/company/users/revoke-me");
@@ -201,6 +217,11 @@ const MyPage: React.FC = () => {
     };
 
     // 탭 구성을 위한 데이터
+    const isCompanyRole =
+        profile?.role === "ROLE_COMPANY_ADMIN" ||
+        profile?.role === "ROLE_COMPANY_USER";
+    const isCompanyPending = isCompanyRole && profile?.isApproved === false;
+
     const tabs = [
         { id: 'security', label: '보안 및 설정', icon: ShieldCheck },
         { 
@@ -209,17 +230,17 @@ const MyPage: React.FC = () => {
             icon: Building2, 
             show: profile?.role !== 'ROLE_USER' || !!profile?.businessNumber 
         },
-        { id: 'banking', label: '결제 및 계좌', icon: Key },
+        { id: 'banking', label: '결제 및 계좌', icon: Key, show: !isCompanyPending },
     ].filter(tab => tab.show !== false);
 
     return (
-        <div className="max-w-6xl mx-auto p-12 space-y-12 animate-in fade-in duration-500">
-            <header className="flex items-center gap-8 mb-4">
+        <div className="p-12 mx-auto space-y-12 max-w-6xl duration-500 animate-in fade-in">
+            <header className="flex gap-8 items-center mb-4">
                 <div className="w-20 h-20 bg-slate-900 rounded-[28px] flex items-center justify-center text-teal-400 shadow-2xl shadow-slate-200">
                     <UserCircle size={40} />
                 </div>
                 <div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex gap-4 items-center">
                         <h1 className="text-5xl font-black tracking-tighter text-slate-900">{profile?.name || "사용자"}</h1>
                         {profile?.role === "ROLE_COMPANY_ADMIN" ? (
                             <div className={`px-4 py-1.5 rounded-full text-[12px] font-black uppercase tracking-wider ${
@@ -242,7 +263,7 @@ const MyPage: React.FC = () => {
                             </div>
                         ) : null}
                     </div>
-                    <p className="text-slate-400 font-bold text-sm uppercase tracking-widest mt-2 flex items-center gap-2">
+                    <p className="flex gap-2 items-center mt-2 text-sm font-bold tracking-widest uppercase text-slate-400">
                         {profile?.role.replace("ROLE_", "").replace("_", " ")} | {profile?.email}
                         {profile?.realName && (
                             <span className="flex items-center gap-1 px-2 py-0.5 bg-teal-500/10 text-teal-500 rounded text-[10px] font-black lowercase tracking-normal">
@@ -257,13 +278,13 @@ const MyPage: React.FC = () => {
             {/* ★ 회원 탈퇴 유예 기간 안내 배너 */}
             {profile?.withdrawalRequestedAt && (
                 <div className="p-8 bg-rose-50 border border-rose-100 rounded-[40px] flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-700">
-                    <div className="flex items-center gap-6">
-                        <div className="p-5 bg-white rounded-3xl shadow-sm text-rose-500">
+                    <div className="flex gap-6 items-center">
+                        <div className="p-5 text-rose-500 bg-white rounded-3xl shadow-sm">
                             <AlertTriangle size={32} />
                         </div>
                         <div className="space-y-1">
-                            <h3 className="text-xl font-black text-rose-900 tracking-tight">회원 탈퇴가 대기 중입니다</h3>
-                            <p className="text-sm font-bold text-rose-600/80 leading-relaxed">
+                            <h3 className="text-xl font-black tracking-tight text-rose-900">회원 탈퇴가 대기 중입니다</h3>
+                            <p className="text-sm font-bold leading-relaxed text-rose-600/80">
                                 {new Date(new Date(profile.withdrawalRequestedAt).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR', {
                                     year: 'numeric', month: 'long', day: 'numeric'
                                 })}에 모든 정보가 삭제될 예정입니다. <br />
@@ -299,13 +320,13 @@ const MyPage: React.FC = () => {
                 ))}
             </div>
 
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="duration-500 animate-in fade-in slide-in-from-bottom-4">
                 {activeTab === 'security' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                    <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
                         {/* 비밀번호 변경 섹션 */}
                         <section className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-10">
-                            <div className="flex items-center gap-4">
-                                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl">
+                            <div className="flex gap-4 items-center">
+                                <div className="p-4 text-blue-600 bg-blue-50 rounded-2xl">
                                     <ShieldCheck size={24} />
                                 </div>
                                 <h2 className="text-2xl font-black tracking-tight text-slate-800">보안 비밀번호 변경</h2>
@@ -355,9 +376,9 @@ const MyPage: React.FC = () => {
                         <div className="space-y-10">
                             <section className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-12">
                                 <div className="space-y-6">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-4 bg-teal-50 text-teal-600 rounded-2xl">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex gap-4 items-center">
+                                            <div className="p-4 text-teal-600 bg-teal-50 rounded-2xl">
                                                 <ShieldCheck size={24} />
                                             </div>
                                             <h2 className="text-2xl font-black tracking-tight text-slate-800">서비스 알림 수신</h2>
@@ -377,9 +398,9 @@ const MyPage: React.FC = () => {
                                 <div className="h-[1px] bg-slate-50" />
 
                                 <div className="space-y-8">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex gap-4 items-center">
+                                            <div className="p-4 text-rose-600 bg-rose-50 rounded-2xl">
                                                 <RefreshCw size={24} />
                                             </div>
                                             <h2 className="text-2xl font-black tracking-tight text-slate-800">2차 인증 (MFA)</h2>
@@ -394,7 +415,7 @@ const MyPage: React.FC = () => {
                                     {/* ★ MFA 쿨다운 경고 (데이터가 있을 때만) */}
                                     {profile?.mfaCooldownEnd && new Date(profile.mfaCooldownEnd) > new Date() && (
                                         <div className="p-6 bg-rose-50 border border-rose-100 rounded-[32px] flex items-start gap-4 animate-in slide-in-from-top-4">
-                                            <div className="p-3 bg-white rounded-2xl shadow-sm text-rose-500">
+                                            <div className="p-3 text-rose-500 bg-white rounded-2xl shadow-sm">
                                                 <AlertCircle size={20} />
                                             </div>
                                             <div className="space-y-1">
@@ -523,11 +544,11 @@ const MyPage: React.FC = () => {
                                         <div className="space-y-8 animate-in slide-in-from-right-4">
                                             <div className="flex flex-col items-center gap-8 p-10 bg-slate-50 rounded-[40px]">
                                                 {mfaData?.qrCodeUrl && (
-                                                    <div className="p-6 bg-white rounded-3xl shadow-xl shadow-slate-200 border border-slate-100">
+                                                    <div className="p-6 bg-white rounded-3xl border shadow-xl shadow-slate-200 border-slate-100">
                                                         <QRCodeSVG value={mfaData.qrCodeUrl} size={160} />
                                                     </div>
                                                 )}
-                                                <div className="text-center space-y-3">
+                                                <div className="space-y-3 text-center">
                                                     <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest">인증 앱에서 코드를 생성하세요</p>
                                                 </div>
                                             </div>
@@ -566,10 +587,10 @@ const MyPage: React.FC = () => {
 
                 {activeTab === 'corporate' && (
                     <div className="space-y-10">
-                        {/* 상세 승인 상태 안내창 */}
-                        {!profile?.isApproved && (profile?.role === "ROLE_COMPANY_ADMIN" || profile?.role === "ROLE_COMPANY_USER") && (
+                        {/* 상세 승인 상태 안내창 - 최종 승인(APPROVED)이 아닌 경우에만 표시 */}
+                        {!profile?.isApproved && profile?.adminApprovalStatus !== 'APPROVED' && (profile?.role === "ROLE_COMPANY_ADMIN" || profile?.role === "ROLE_COMPANY_USER") && (
                             <div className={`${profile?.adminApprovalStatus === 'REJECTED' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'} rounded-[48px] p-12 flex flex-col gap-8 animate-in slide-in-from-top-4`}>
-                                <div className="flex items-start gap-8">
+                                <div className="flex gap-8 items-start">
                                     <div className={`p-6 bg-white rounded-3xl ${profile?.adminApprovalStatus === 'REJECTED' ? 'text-rose-500' : 'text-amber-500'} shadow-sm`}>
                                         <AlertCircle size={40} />
                                     </div>
@@ -592,12 +613,12 @@ const MyPage: React.FC = () => {
 
                                 {/* 재제출 UI — 반려된 기업 관리자에게만 표시 */}
                                 {profile?.adminApprovalStatus === 'REJECTED' && profile?.role === 'ROLE_COMPANY_ADMIN' && (
-                                    <div className="bg-white rounded-3xl p-8 border border-rose-200 space-y-5">
+                                    <div className="p-8 space-y-5 bg-white rounded-3xl border border-rose-200">
                                         <h4 className="text-[15px] font-black text-rose-800 flex items-center gap-2">
                                             📎 사업자등록증 재제출
                                         </h4>
-                                        <div className="flex items-center gap-4">
-                                            <label className="flex-1 flex items-center gap-3 px-5 py-4 bg-rose-50 rounded-2xl cursor-pointer hover:bg-rose-100 transition-all border border-rose-200 border-dashed">
+                                        <div className="flex gap-4 items-center">
+                                            <label className="flex flex-1 gap-3 items-center px-5 py-4 bg-rose-50 rounded-2xl border border-rose-200 border-dashed transition-all cursor-pointer hover:bg-rose-100">
                                                 <input
                                                     type="file"
                                                     accept="image/*,.pdf"
@@ -653,9 +674,9 @@ const MyPage: React.FC = () => {
                         )}
 
                         <section className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-12">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl">
+                            <div className="flex justify-between items-center">
+                                <div className="flex gap-4 items-center">
+                                    <div className="p-4 text-indigo-600 bg-indigo-50 rounded-2xl">
                                         <Building2 size={24} />
                                     </div>
                                     <div>
@@ -663,7 +684,7 @@ const MyPage: React.FC = () => {
                                         <p className="text-slate-400 font-bold text-[11px] uppercase tracking-widest mt-1">Corporate Details</p>
                                     </div>
                                 </div>
-                                {profile?.role === "ROLE_COMPANY_USER" && (
+                                {profile?.role === "ROLE_COMPANY_USER" && profile?.isApproved && (
                                     <button
                                         onClick={handleRevokeMe}
                                         className="px-6 py-3 bg-rose-50 text-rose-600 rounded-2xl font-black text-[13px] hover:bg-rose-100 transition-all flex items-center gap-2"
@@ -674,21 +695,23 @@ const MyPage: React.FC = () => {
                                 )}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
                                 <div className="p-10 bg-slate-50 rounded-[40px] space-y-3">
                                     <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">사업자 등록번호</label>
-                                    <p className="text-2xl font-black text-slate-900 tracking-tight">{profile?.businessNumber || "미등록"}</p>
+                                    <p className="text-2xl font-black tracking-tight text-slate-900">{profile?.businessNumber || "미등록"}</p>
                                 </div>
                                 <div className="p-10 bg-slate-50 rounded-[40px] space-y-3">
                                     <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">심사 상태</label>
-                                    <p className="text-2xl font-black text-slate-900 tracking-tight">
-                                        {profile?.adminApprovalStatus === 'APPROVED' ? "최종 승인됨" : 
-                                         profile?.adminApprovalStatus === 'REJECTED' ? "반려 처리" : "심사 진행 중"}
+                                    <p className="text-2xl font-black tracking-tight text-slate-900">
+                                        {profile?.role === "ROLE_COMPANY_USER"
+                                            ? (profile?.isApproved ? "소속 승인됨" : "소속 승인 대기")
+                                            : profile?.adminApprovalStatus === 'APPROVED' ? "최종 승인됨" :
+                                              profile?.adminApprovalStatus === 'REJECTED' ? "반려 처리" : "심사 진행 중"}
                                     </p>
                                 </div>
                                 <div className="p-10 bg-slate-50 rounded-[40px] space-y-3">
                                     <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">멤버십 등급</label>
-                                    <p className="text-2xl font-black text-slate-900 tracking-tight">Standard Corporate</p>
+                                    <p className="text-2xl font-black tracking-tight text-slate-900">Standard Corporate</p>
                                 </div>
                             </div>
                         </section>
@@ -696,10 +719,10 @@ const MyPage: React.FC = () => {
                 )}
 
                 {activeTab === 'banking' && (
-                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-500">
+                    <div className="space-y-10 duration-500 animate-in fade-in slide-in-from-bottom-8">
                         <section className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-12">
-                            <div className="flex items-center gap-4">
-                                <div className="p-4 bg-teal-50 text-teal-600 rounded-2xl">
+                            <div className="flex gap-4 items-center">
+                                <div className="p-4 text-teal-600 bg-teal-50 rounded-2xl">
                                     <Landmark size={24} />
                                 </div>
                                 <div>
@@ -708,52 +731,54 @@ const MyPage: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                {/* 개인 계좌 카드 */}
-                                <div className="p-10 bg-slate-50 rounded-[40px] space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-slate-200 hover:-translate-y-2 border border-transparent hover:border-slate-100">
-                                    <div className="flex justify-between items-start">
-                                        <div className="space-y-2">
-                                            <div className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg w-fit uppercase tracking-widest">Personal</div>
-                                            <h3 className="text-xl font-black text-slate-900">개인 활동 계좌</h3>
+                            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                                {/* 개인 계좌 카드 - 개인 유저인 경우에만 표시 */}
+                                {profile?.role === 'ROLE_USER' && (
+                                    <div className="p-10 bg-slate-50 rounded-[40px] space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-slate-200 hover:-translate-y-2 border border-transparent hover:border-slate-100">
+                                        <div className="flex justify-between items-start">
+                                            <div className="space-y-2">
+                                                <div className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg w-fit uppercase tracking-widest">Personal</div>
+                                                <h3 className="text-xl font-black text-slate-900">개인 활동 계좌</h3>
+                                            </div>
+                                            <div className="p-3 bg-white rounded-2xl shadow-sm transition-colors text-slate-400 group-hover:text-teal-500">
+                                                <Landmark size={20} />
+                                            </div>
                                         </div>
-                                        <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:text-teal-500 transition-colors">
-                                            <Landmark size={20} />
+                                        
+                                        <div className="space-y-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">계좌 번호</label>
+                                                <p className="font-mono text-xl font-bold text-slate-900">
+                                                    {getWalletDataById(profile?.email || '')?.userAccount || '미발급'}
+                                                </p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">보유 잔액</label>
+                                                <p className="text-3xl italic font-black text-slate-900">
+                                                    ₩ {(getWalletDataById(profile?.email || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    
-                                    <div className="space-y-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">계좌 번호</label>
-                                            <p className="font-mono text-xl font-bold text-slate-900">
-                                                {getWalletDataById(profile?.email || '')?.userAccount || '미발급'}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">보유 잔액</label>
-                                            <p className="text-3xl font-black text-slate-900 italic">
-                                                ₩ {(getWalletDataById(profile?.email || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
-                                            </p>
-                                        </div>
-                                    </div>
 
-                                    <button 
-                                        onClick={() => navigate('/wallet/overview')}
-                                        className="w-full py-5 bg-white border border-slate-100 rounded-2xl font-black text-[13px] text-slate-600 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center gap-2 group/btn"
-                                    >
-                                        개인 자산관리 바로가기
-                                        <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
-                                    </button>
-                                </div>
+                                        <button 
+                                            onClick={() => navigate('/wallet/overview')}
+                                            className="w-full py-5 bg-white border border-slate-100 rounded-2xl font-black text-[13px] text-slate-600 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center gap-2 group/btn"
+                                        >
+                                            개인 자산관리 바로가기
+                                            <ArrowRight size={16} className="transition-transform group-hover/btn:translate-x-1" />
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* 기업 공금 계좌 카드 (기업 사용자만) */}
                                 {(profile?.role === 'ROLE_COMPANY_ADMIN' || profile?.role === 'ROLE_COMPANY_USER') ? (
-                                    <div className="p-10 bg-indigo-50/50 rounded-[40px] border border-indigo-100 space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-indigo-100 hover:-translate-y-2 hover:border-indigo-100">
+                                    <div className="p-10 bg-indigo-50/50 rounded-[40px] border border-indigo-100 space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-indigo-100 hover:-translate-y-2 hover:border-indigo-100 lg:col-span-2">
                                         <div className="flex justify-between items-start">
                                             <div className="space-y-2">
-                                                <div className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-lg w-fit uppercase tracking-widest">Corporate</div>
-                                                <h3 className="text-xl font-black text-slate-900">기업 공금 계좌</h3>
-                                            </div>
-                                            <div className="p-3 bg-white rounded-2xl shadow-sm text-indigo-400 group-hover:text-indigo-600 transition-colors">
+                                                <div className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-lg w-fit uppercase tracking-widest">Corporate Account</div>
+                                            <h3 className="text-xl font-black text-slate-900">{profile?.companyName || '소속 기업 계좌'}</h3>
+                                        </div>
+                                            <div className="p-3 text-indigo-400 bg-white rounded-2xl shadow-sm transition-colors group-hover:text-indigo-600">
                                                 <Building2 size={20} />
                                             </div>
                                         </div>
@@ -767,7 +792,7 @@ const MyPage: React.FC = () => {
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">공금 잔액</label>
-                                                <p className="text-3xl font-black text-slate-900 italic">
+                                                <p className="text-3xl italic font-black text-slate-900">
                                                     ₩ {(getWalletDataById(profile?.businessNumber || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
                                                 </p>
                                             </div>
@@ -778,12 +803,12 @@ const MyPage: React.FC = () => {
                                             className="w-full py-5 bg-white border border-indigo-100 rounded-2xl font-black text-[13px] text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 group/btn"
                                         >
                                             기업 자산관리 바로가기
-                                            <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                                            <ArrowRight size={16} className="transition-transform group-hover/btn:translate-x-1" />
                                         </button>
                                     </div>
                                 ) : (
                                     <div className="p-10 bg-slate-50/50 border border-slate-100 rounded-[40px] flex flex-col items-center justify-center text-center space-y-4">
-                                        <div className="p-4 bg-white/50 rounded-2xl text-slate-300">
+                                        <div className="p-4 rounded-2xl bg-white/50 text-slate-300">
                                             <CreditCard size={32} />
                                         </div>
                                         <div className="space-y-1">
@@ -796,14 +821,14 @@ const MyPage: React.FC = () => {
                         </section>
 
                         <section className="bg-slate-900 p-12 rounded-[48px] text-white relative overflow-hidden group">
-                           <div className="absolute top-0 right-0 w-64 h-64 -mt-20 -mr-20 rounded-full bg-teal-500/10 blur-3xl group-hover:bg-teal-500/20 transition-all duration-700" />
-                           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                           <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 rounded-full blur-3xl transition-all duration-700 bg-teal-500/10 group-hover:bg-teal-500/20" />
+                           <div className="flex relative z-10 flex-col gap-8 justify-between items-center md:flex-row">
                                <div className="space-y-4">
-                                   <div className="flex items-center gap-2">
+                                   <div className="flex gap-2 items-center">
                                        <span className="px-2 py-0.5 bg-teal-500/20 text-teal-400 text-[9px] font-black rounded uppercase tracking-widest">Next Phase</span>
-                                       <h4 className="text-2xl font-black italic tracking-tighter">Advanced Corporate Banking</h4>
+                                       <h4 className="text-2xl italic font-black tracking-tighter">Advanced Corporate Banking</h4>
                                    </div>
-                                   <p className="text-slate-400 text-sm font-bold leading-relaxed max-w-lg">
+                                   <p className="max-w-lg text-sm font-bold leading-relaxed text-slate-400">
                                        Ex-Ledger V2에서는 실시간 다중 통화 가상계좌 발급 및 <br />
                                        법인카드 통합 관리 기능을 제공할 예정입니다.
                                    </p>
@@ -819,7 +844,7 @@ const MyPage: React.FC = () => {
 
             {/* 회원 탈퇴 영역 - 작고 은밀하게 */}
             {profile?.role !== 'ROLE_INTEGRATED_ADMIN' && (
-                <footer className="mt-20 pt-12 border-t border-slate-50 flex flex-col items-center gap-6">
+                <footer className="flex flex-col gap-6 items-center pt-12 mt-20 border-t border-slate-50">
                     <p className="text-slate-300 text-[13px] font-bold">더 이상 서비스를 이용하지 않으시나요?</p>
                     {profile?.withdrawalRequestedAt ? (
                         <button

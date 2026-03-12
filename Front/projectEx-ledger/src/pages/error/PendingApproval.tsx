@@ -7,8 +7,7 @@ const PendingApproval: React.FC = () => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    navigate('/login-required');
+    logout(false);
   };
 
   return (

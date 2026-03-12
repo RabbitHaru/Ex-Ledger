@@ -1,9 +1,8 @@
 import type { ExchangeRate } from "../../../types/exchange";
 import React, { Suspense, lazy, useState, useEffect } from "react";
-import FXTicker from "../../widgets/finance/FXTicker";
 import MiniConverter from "../../widgets/finance/MiniConverter";
 import ExchangeRateTable from "../../widgets/finance/ExchangeRateTable";
-import { BarChart3, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { BarChart3, ArrowUpRight, ArrowDownRight } from "lucide-react";
 
 const ExchangeRateChart = lazy(
   () => import("../../widgets/finance/ExchangeRateChart"),
@@ -31,7 +30,7 @@ const LandingPage: React.FC = () => {
 
     // SSE 실시간 업데이트 연결
     const eventSource = new EventSource("http://localhost:8080/api/connect");
-    eventSource.addEventListener("exchange-update", (event: any) => {
+    eventSource.addEventListener("exchange-update", (event: MessageEvent) => {
       try {
         const newData = JSON.parse(event.data);
         setRates(Array.isArray(newData) ? newData : []);

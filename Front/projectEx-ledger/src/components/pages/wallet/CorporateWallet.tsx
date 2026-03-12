@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import CommonLayout from "../../../components/layout/CommonLayout";
 import { useWallet } from "../../../context/WalletContext";
@@ -33,8 +33,24 @@ const CorporateWallet: React.FC = () => {
     const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
     const [chargeAmount, setChargeAmount] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
+    const [profile, setProfile] = useState<any>(null);
 
     const isCorpAdmin = hasRole("ROLE_COMPANY_ADMIN");
+
+    // 🌟 [B담당 로직 결합] 기업 상세 정보(사업자 번호 등) 조회를 위한 프로필 호출
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/auth/me`, {
+                    headers: { Authorization: `Bearer ${getAuthToken()}` },
+                });
+                setProfile(response.data.data);
+            } catch (err) {
+                console.error("기업 프로필 로드 실패");
+            }
+        };
+        fetchProfile();
+    }, []);
 
     // 🌟 [C담당 실결합] 실제 기업 마스터 계좌 발급 API 호출
     const handleActivate = async () => {
@@ -47,7 +63,6 @@ const CorporateWallet: React.FC = () => {
                 { headers: { Authorization: `Bearer ${getAuthToken()}` } },
             );
             const { accountNumber, companyName: name } = apiRes.data;
-            // Context 상태 업데이트
             setCorporateAccount(accountNumber, name);
             showToast(`${name} 마스터 계좌가 활성화되었습니다.`, "SUCCESS");
         } catch (err) {
@@ -62,7 +77,7 @@ const CorporateWallet: React.FC = () => {
             await chargeKrw(Number(chargeAmount), "BUSINESS");
             setIsChargeModalOpen(false);
             setChargeAmount("");
-            showToast("기업 자금 충전 요청 성공!", "SUCCESS");
+            showToast("기업 자금 충전 요청 완료!", "SUCCESS");
         } catch (err) {
             showToast("충전 처리 중 오류가 발생했습니다.", "ERROR");
         }
@@ -75,7 +90,7 @@ const CorporateWallet: React.FC = () => {
         }
     };
 
-    // 비즈니스 트랜잭션 필터링 및 검색 로직 (B담당 UX 반영)
+    // 비즈니스 트랜잭션 필터링 (C담당 로직 + B담당 검색 결합)
     const businessTxs = transactions.filter(
         (tx) =>
             tx.category === "BUSINESS" &&
@@ -83,7 +98,7 @@ const CorporateWallet: React.FC = () => {
     );
 
     // 1. 계좌가 없을 때 (발급 신청 UI)
-    if (!corporateAccount) {
+    if (!corporateAccount || !corporateAccount.includes("2003")) {
         return (
             <CommonLayout>
                 <div className="max-w-4xl px-6 py-32 mx-auto space-y-12 text-center animate-in fade-in">
@@ -92,11 +107,12 @@ const CorporateWallet: React.FC = () => {
                             <Building2 size={48} />
                         </div>
                         <h1 className="text-4xl italic font-black tracking-tighter uppercase text-slate-900">
-                            Corporate Wallet
+                            Corporate Activation
                         </h1>
                         <p className="max-w-md mx-auto font-bold leading-relaxed text-slate-500">
-                            {companyName ? `[${companyName}]` : "DB Syncing..."} 정보가 확인되었습니다. <br />
-                            정산 관리를 위한 <strong className="text-indigo-600">기업 마스터 계좌</strong>를 활성화해 주세요.
+                            기업 정보가 확인되었습니다. <br />
+                            정산 데이터 생성을 위한 <strong className="text-indigo-600">기업 전용 마스터 계좌</strong>를
+                            발급해 주세요.
                         </p>
                         {isCorpAdmin ? (
                             <button
@@ -116,8 +132,8 @@ const CorporateWallet: React.FC = () => {
                         ) : (
                             <div className="p-10 bg-slate-50 rounded-[40px] border border-slate-100 space-y-4 max-w-sm mx-auto">
                                 <ShieldAlert size={32} className="mx-auto text-slate-300" />
-                                <p className="text-[11px] font-bold leading-relaxed text-center text-slate-400 uppercase tracking-tighter">
-                                    관리자(Admin)가 기업 계좌를 <br /> 활성화할 때까지 기다려 주세요.
+                                <p className="text-xs font-medium text-slate-400">
+                                    관리자가 마스터 계좌를 활성화할 때까지 기다려 주세요.
                                 </p>
                             </div>
                         )}
@@ -127,35 +143,32 @@ const CorporateWallet: React.FC = () => {
         );
     }
 
-    // 2. 계좌가 있을 때 (기업 대시보드 UI)
+    // 2. 계좌가 있을 때 (통합 대시보드 UI)
     return (
         <CommonLayout>
             <div className="p-8 mx-auto space-y-10 font-sans max-w-7xl animate-in fade-in bg-[#F8FAFC]">
                 <header className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    {/* 기업 정보 카드 */}
+                    {/* 기업 상세 정보 카드 (B담당 정보 + C담당 스타일) */}
                     <div className="lg:col-span-2 bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
                         <div className="relative z-10 space-y-4">
                             <div className="flex items-center gap-2">
                 <span className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-lg uppercase tracking-widest">
                   Corporate
                 </span>
-                                <span className="text-slate-400 text-[10px] font-bold italic">
-                  사업자 전용 자산 관리
-                </span>
                             </div>
                             <h2 className="text-4xl italic font-black uppercase text-slate-900 leading-none tracking-tighter">
-                                {companyName}
+                                {companyName || profile?.companyName}
                             </h2>
                             <div className="flex items-center gap-4 text-[11px] font-bold text-slate-400">
-                                <p>Verified <span className="ml-1 text-slate-900">Business Unit</span></p>
+                                <p>사업자 번호 <span className="ml-1 text-slate-900">{profile?.businessNumber || "조회 중..."}</span></p>
                                 <div className="w-1.5 h-1.5 bg-slate-200 rounded-full"></div>
-                                <p>Status <span className="ml-1 text-teal-600 uppercase">Active</span></p>
+                                <p>대표자 <span className="ml-1 text-slate-900">{profile?.representative || profile?.name}</span></p>
                             </div>
                         </div>
                         <Building2 size={120} className="absolute bottom-0 right-0 p-8 opacity-[0.05] text-slate-900" />
                     </div>
 
-                    {/* 계좌 정보 카드 */}
+                    {/* 마스터 계좌 ID 카드 */}
                     <div className="bg-slate-900 rounded-[40px] p-10 text-white shadow-2xl flex flex-col justify-between relative overflow-hidden">
                         <div className="relative z-10">
                             <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-4">
@@ -172,7 +185,7 @@ const CorporateWallet: React.FC = () => {
                         </div>
                         <div className="relative z-10 flex items-end justify-between pt-6 border-t border-white/5">
                             <div className="space-y-1">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Balance</p>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Available Balance</p>
                                 <p className="text-3xl italic font-black tracking-tighter">
                                     ₩ {corporateBalances.KRW?.toLocaleString() || 0}
                                 </p>
@@ -180,7 +193,7 @@ const CorporateWallet: React.FC = () => {
                             {isCorpAdmin && (
                                 <button
                                     onClick={() => setIsChargeModalOpen(true)}
-                                    className="p-4 text-white transition-all bg-indigo-600 shadow-xl rounded-2xl hover:bg-indigo-500 active:scale-95 shadow-indigo-500/20"
+                                    className="p-4 text-white transition-all bg-indigo-600 shadow-xl rounded-2xl hover:bg-indigo-500 active:scale-95"
                                 >
                                     <Plus size={24} />
                                 </button>
@@ -190,14 +203,14 @@ const CorporateWallet: React.FC = () => {
                 </header>
 
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-                    {/* 왼쪽: 트랜잭션 내역 */}
+                    {/* 거래 내역 섹션 */}
                     <section className="space-y-6 lg:col-span-8">
                         <div className="flex items-center justify-between px-2">
                             <div className="space-y-1">
                                 <h3 className="text-xl italic font-black tracking-tighter uppercase text-slate-900">
-                                    Business Transactions
+                                    Business Ledger
                                 </h3>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Raw Source Ledger</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">정산 소스 데이터 (Raw Data)</p>
                             </div>
                             <div className="relative">
                                 <Search className="absolute -translate-y-1/2 left-4 top-1/2 text-slate-300" size={14} />
@@ -216,8 +229,8 @@ const CorporateWallet: React.FC = () => {
                                 <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
                                 <tr>
                                     <th className="px-10 py-6">Date</th>
-                                    <th className="px-10 py-6">Title</th>
-                                    <th className="px-10 py-6 text-right">Amount</th>
+                                    <th className="px-10 py-6">Transaction Title</th>
+                                    <th className="px-10 py-6 text-right">Amount (KRW)</th>
                                 </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
@@ -241,7 +254,7 @@ const CorporateWallet: React.FC = () => {
                                 ) : (
                                     <tr>
                                         <td colSpan={3} className="py-32 text-xs italic font-black tracking-widest text-center uppercase text-slate-200">
-                                            데이터를 찾을 수 없습니다.
+                                            표시할 데이터가 없습니다.
                                         </td>
                                     </tr>
                                 )}
@@ -250,9 +263,9 @@ const CorporateWallet: React.FC = () => {
                         </div>
                     </section>
 
-                    {/* 오른쪽: 사이드바 (B담당 Export 기능 연동) */}
+                    {/* 사이드바 (B담당 내보내기 도구 연동) */}
                     <aside className="space-y-6 lg:col-span-4">
-                        <div className="bg-indigo-600 rounded-[40px] p-10 text-white shadow-xl shadow-indigo-100 relative overflow-hidden group">
+                        <div className="bg-indigo-600 rounded-[40px] p-10 text-white shadow-xl relative overflow-hidden group">
                             <div className="absolute top-0 right-0 p-8 transition-transform opacity-10 group-hover:scale-110">
                                 <Download size={100} />
                             </div>
@@ -260,17 +273,17 @@ const CorporateWallet: React.FC = () => {
                                 Data Export Tool
                             </p>
                             <p className="mb-10 text-2xl italic font-black leading-tight tracking-tighter">
-                                정산 및 보고를 위한 <br />Raw Data 추출
+                                정산 담당자를 위한 <br />Raw Data 추출
                             </p>
-                            <button className="w-full py-5 text-xs font-black tracking-widest text-indigo-600 uppercase transition-all bg-white shadow-lg rounded-2xl hover:shadow-indigo-50 active:scale-95 flex items-center justify-center gap-2">
-                                <Download size={14} /> CSV 내보내기
+                            <button className="w-full py-5 text-xs font-black tracking-widest text-indigo-600 uppercase transition-all bg-white shadow-lg rounded-2xl hover:shadow-indigo-50 active:scale-95">
+                                CSV 데이터 내보내기
                             </button>
                         </div>
                     </aside>
                 </div>
             </div>
 
-            {/* 충전 모달 (C담당 로직 유지) */}
+            {/* 충전 모달 (C담당) */}
             {isChargeModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-md animate-in fade-in">
                     <div className="bg-white w-full max-w-md rounded-[56px] p-12 space-y-10 shadow-2xl text-center">

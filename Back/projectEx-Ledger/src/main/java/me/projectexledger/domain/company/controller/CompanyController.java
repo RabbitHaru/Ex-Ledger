@@ -7,6 +7,7 @@ import me.projectexledger.domain.company.dto.JoinCompanyRequest;
 import me.projectexledger.domain.company.dto.PendingUserResponse;
 import me.projectexledger.domain.company.dto.CompanyUserResponse;
 import me.projectexledger.domain.company.service.CompanyService;
+import me.projectexledger.common.annotation.RequireCompanyApproval;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -54,6 +55,7 @@ public class CompanyController {
 
     @PostMapping("/users/revoke-me")
     @PreAuthorize("hasRole('COMPANY_USER')")
+    @RequireCompanyApproval
     public ApiResponse<Void> revokeMe() {
         companyService.revokeMe();
         return ApiResponse.success("기업 소속 해제가 완료되었습니다.", null);
