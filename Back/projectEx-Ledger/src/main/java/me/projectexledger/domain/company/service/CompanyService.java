@@ -121,4 +121,25 @@ public class CompanyService {
 
         member.revokeCompany();
     }
+
+    /**
+     * 반려된 사업자등록증 재제출
+     */
+    @Transactional
+    public void resubmitLicense(String newLicenseFileUuid) {
+        String email = SecurityUtil.getCurrentUserEmail();
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (member.getRole() != Member.Role.ROLE_COMPANY_ADMIN) {
+            throw new IllegalArgumentException("기업 관리자만 재제출할 수 있습니다.");
+        }
+
+        Company company = member.getCompany();
+        if (company == null) {
+            throw new IllegalArgumentException("소속 기업 정보가 없습니다.");
+        }
+
+        company.resubmitForReview(newLicenseFileUuid);
+    }
 }

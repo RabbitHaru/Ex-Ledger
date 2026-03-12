@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { getAuthToken, parseJwt } from "../../utils/auth";
+import { getToken, parseJwt } from "../../config/auth";
 import { useWallet } from "../../context/WalletContext";
 import {
   X,
@@ -36,7 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   } = useWallet();
 
   useEffect(() => {
-    const token = getAuthToken();
+    const token = getToken();
     if (token) {
       const decoded = parseJwt(token);
       if (decoded && decoded.auth) setUserRole(decoded.auth);

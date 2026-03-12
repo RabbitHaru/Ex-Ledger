@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import CommonLayout from "../../layout/CommonLayout";
+
 import { useToast } from "../../notification/ToastProvider";
-import { hasRole } from "../../../utils/auth";
+import { hasRole } from "../../../config/auth";
 import {
   Building2,
   Send,
@@ -226,7 +226,7 @@ const SellerDashboard: React.FC = () => {
   };
 
   return (
-    <CommonLayout>
+    <>
       <div className="max-w-6xl mx-auto p-6 md:p-10 space-y-8 bg-[#fcfdfe] min-h-screen animate-in fade-in duration-500">
         <header className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-6">
@@ -527,7 +527,7 @@ const SellerDashboard: React.FC = () => {
           </div>
         )}
       </div>
-    </CommonLayout>
+    </>
   );
 };
 

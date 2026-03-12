@@ -19,6 +19,14 @@ const RemittancePage = () => {
   const [showOtp, setShowOtp] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    http.get("/auth/me").then(res => setProfile(res.data.data));
+  }, []);
+
+  const isCooldownActive = profile?.mfaCooldownEnd && new Date(profile.mfaCooldownEnd) > new Date();
+
   useEffect(() => {
     if (formData.amount > 0) {
       const fetchFee = async () => {
@@ -114,12 +122,27 @@ const RemittancePage = () => {
           </div>
         )}
 
+        {isCooldownActive && (
+          <div className="p-5 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-600 animate-in slide-in-from-top-2">
+            <span className="text-xl">⚠️</span>
+            <div className="space-y-0.5">
+              <p className="text-[13px] font-black">금융거래 제한 (쿨다운 활성)</p>
+              <p className="text-[11px] font-bold opacity-80">
+                OTP 재설정 후 24시간 동안은 송금이 제한됩니다. <br/>
+                해제 시각: {new Date(profile.mfaCooldownEnd).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        )}
+
         <Button
           onClick={() => handleSubmit()}
-          disabled={loading}
-          className="w-full py-5 text-lg font-bold text-white transition-all bg-blue-600 shadow-lg rounded-2xl hover:bg-blue-700 shadow-blue-200"
+          disabled={loading || isCooldownActive}
+          className={`w-full py-5 text-lg font-bold text-white transition-all rounded-2xl shadow-lg ${
+            isCooldownActive ? "bg-slate-300 shadow-none cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+          }`}
         >
-          {loading ? "처리 중..." : "송금 신청하기"}
+          {loading ? "처리 중..." : isCooldownActive ? "제한됨 (본인확인 대기)" : "송금 신청하기"}
         </Button>
       </div>
 

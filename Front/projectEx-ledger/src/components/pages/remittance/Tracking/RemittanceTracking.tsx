@@ -142,8 +142,7 @@ const RemittanceTracking: React.FC<RemittanceTrackingProps> = ({
 
   // --- 🌟 레이아웃 B: 전체 페이지용 (상세 버전) ---
   const renderPage = () => (
-    <CommonLayout>
-      <div className="max-w-6xl px-6 py-12 mx-auto duration-700 animate-in fade-in">
+    <div className="max-w-6xl px-6 py-12 mx-auto duration-700 animate-in fade-in">
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-slate-400 hover:text-teal-600 font-black text-[11px] mb-10 transition-all uppercase tracking-widest"
@@ -239,9 +238,8 @@ const RemittanceTracking: React.FC<RemittanceTrackingProps> = ({
               </div>
             </div>
           </div>
-        </div>
       </div>
-    </CommonLayout>
+    </div>
   );
 
   return isWidgetMode ? renderWidget() : renderPage();

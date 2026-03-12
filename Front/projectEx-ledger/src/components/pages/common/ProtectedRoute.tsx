@@ -6,6 +6,8 @@ interface ProtectedRouteProps {
     allowedRoles?: string[];
 }
 
+
+
 /**
  * 인증/권한 기반 라우트 보호 컴포넌트
  */
@@ -15,7 +17,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     const isAuth = isAuthenticated();
 
     if (!isAuth) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
+        return <Navigate to="/login-required" state={{ from: location }} replace />;
     }
 
     if (token) {
@@ -27,17 +29,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
         if (allowedRoles && allowedRoles.length > 0) {
             const hasRequiredRole = allowedRoles.some(role => userRoles.includes(role));
             if (!hasRequiredRole) {
-                return <Navigate to="/" replace />;
+                return <Navigate to="/unauthorized" replace />;
             }
         }
 
-        // 기업 관련 기능이면서 아직 승인되지 않은 경우
-        const isCorporateFunction = allowedRoles?.some(r => r.includes('COMPANY'));
-        if (isCorporateFunction && !isApproved && !userRoles.includes('ROLE_INTEGRATED_ADMIN')) {
-            // 여기서는 페이지 내부에서 '승인 대기' UI를 띄워주는 것이 UX상 좋으므로 통과 시키고,
-            // 실제 데이터 처리(POST 등) 시 백엔드에서 막아줌. 
-            // 만약 접근 자체를 막고 싶다면 아래처럼 리다이렉트 가능:
-            // return <Navigate to="/pending" replace />;
+        // 정산 및 외환 거래 등 핵심 금융 기능이 필요한 경로들
+        const financialPaths = [
+            '/seller', 
+            '/settlement', 
+            '/wallet', 
+            '/corporate', 
+            '/remittance', 
+            '/exchange', 
+            '/list',
+            '/admin/company/pending'
+        ];
+        
+        const isRestrictedPath = financialPaths.some(path => location.pathname.startsWith(path));
+        const isMyPage = location.pathname.startsWith('/mypage');
+        
+        // 기업 계정이면서 아직 승인되지 않은 경우, 핵심 금융 기능에 대해서만 정지 화면으로 보냄
+        if (!isApproved && !userRoles.includes('ROLE_INTEGRATED_ADMIN') && isRestrictedPath && !isMyPage) {
+             return <Navigate to="/pending-approval" replace />;
         }
     }
 

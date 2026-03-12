@@ -18,7 +18,8 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { MfaHeaderTimer } from "./MfaHeaderTimer";
 import { Github, LogOut } from "lucide-react";
 import { MfaExpiryModal } from "./MfaExpiryModal";
-import { logout as authLogout } from "../../config/auth";
+import { logout as authLogout, parseJwt } from "../../config/auth";
+
 
 interface LayoutProps {
   children?: ReactNode;
@@ -100,6 +101,8 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
       )}
 
       <div className="flex flex-col flex-1 min-w-0">
+
+        
         {/* 🌟 상단 내비게이션 바 (고급스러운 디자인 적용) */}
         <header className="sticky top-0 z-30 w-full h-20 px-6 border-b border-gray-100 bg-white/80 backdrop-blur-md">
           <div className="flex items-center justify-between h-full mx-auto max-w-7xl">
@@ -279,7 +282,7 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
             onClose={() => setIsExpiryModalOpen(false)}
             onLogin={() => {
                 setIsExpiryModalOpen(false);
-                window.location.href = '/login';
+                window.location.href = '/login-required';
             }}
         />
 

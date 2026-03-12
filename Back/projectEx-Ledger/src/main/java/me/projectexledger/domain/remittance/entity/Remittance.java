@@ -3,6 +3,7 @@ package me.projectexledger.domain.remittance.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import me.projectexledger.domain.BaseEntity;
+import me.projectexledger.common.config.AesCryptoConverter;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
@@ -22,10 +23,12 @@ public class Remittance extends BaseEntity {
     private String requesterId;
 
     // 2. 수취인 정보
-    @Column(name = "receiver_name", nullable = false)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(name = "receiver_name", nullable = false, length = 255)
     private String receiverName;
 
-    @Column(name = "receiver_account", nullable = false)
+    @Convert(converter = AesCryptoConverter.class)
+    @Column(name = "receiver_account", nullable = false, length = 255)
     private String receiverAccount;
 
     @Column(name = "receiver_bank", nullable = false)

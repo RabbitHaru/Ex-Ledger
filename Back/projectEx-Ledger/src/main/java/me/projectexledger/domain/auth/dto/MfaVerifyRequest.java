@@ -7,5 +7,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class MfaVerifyRequest {
     private String email;
-    private int code;
+    private String code;
 }

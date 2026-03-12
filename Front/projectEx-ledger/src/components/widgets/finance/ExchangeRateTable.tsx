@@ -78,12 +78,8 @@ const ExchangeRateTable: React.FC<ExchangeRateTableProps> = ({
             <tr>
               <th className="px-6 py-4 text-center">코드</th>
               <th className="px-6 py-4">국가/통화명</th>
-              <th className="px-6 py-4 text-right">어제 환율</th>{" "}
-              {/* 🌟 업데이트 대신 추가 */}
-              <th className="px-6 py-4 font-black text-right text-slate-900">
-                오늘 환율
-              </th>{" "}
-              {/* 🌟 이름 변경 및 강조 */}
+              <th className="px-6 py-4 text-right">어제 환율</th>
+              <th className="px-6 py-4 font-black text-right text-slate-900">오늘 환율</th>
               <th className="px-6 py-4 text-right">변동률</th>
               <th className="px-6 py-4 text-center">정산</th>
             </tr>

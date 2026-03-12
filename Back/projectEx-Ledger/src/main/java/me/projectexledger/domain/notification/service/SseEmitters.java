@@ -22,6 +22,9 @@ public class SseEmitters {
 
     // Thread-safe한 Map으로 사용자별 연결 관리
     private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+    
+    // 비로그인 사용자용 공용 SSE 연결 관리
+    private final Map<String, SseEmitter> publicEmitters = new ConcurrentHashMap<>();
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
@@ -45,6 +48,25 @@ public class SseEmitters {
                     .data("connected!"));
         } catch (IOException e) {
             log.error("SSE 초기 연결 알림 실패: {}", e.getMessage());
+        }
+
+        return emitter;
+    }
+
+    /**
+     * 비로그인 사용자용 (메인 페이지 환율 정보 조회용)
+     */
+    public SseEmitter addPublic(String clientId) {
+        SseEmitter emitter = new SseEmitter(60 * 60 * 1000L);
+        this.publicEmitters.put(clientId, emitter);
+
+        emitter.onCompletion(() -> this.publicEmitters.remove(clientId));
+        emitter.onTimeout(() -> this.publicEmitters.remove(clientId));
+
+        try {
+            emitter.send(SseEmitter.event().name("connect").data("public connected"));
+        } catch (IOException e) {
+            this.publicEmitters.remove(clientId);
         }
 
         return emitter;
@@ -109,6 +131,33 @@ public class SseEmitters {
         }
 
         log.info("📢 [SSE] 공지 브로드캐스트 완료: {} / {} 명 수신", successCount, emitters.size() + successCount);
+    }
+
+    /**
+     * 실시간 환율 정보 브로드캐스트 (로그인/비로그인 전체)
+     */
+    public void broadcastExchangeUpdate(Object data) {
+        // publicEmitters에 발송
+        for (Map.Entry<String, SseEmitter> entry : publicEmitters.entrySet()) {
+            try {
+                entry.getValue().send(SseEmitter.event()
+                        .name("exchange-update")
+                        .data(data));
+            } catch (IOException e) {
+                publicEmitters.remove(entry.getKey());
+            }
+        }
+
+        // emitters (로그인 사용자)에게도 발송 (필요시)
+        for (Map.Entry<String, SseEmitter> entry : emitters.entrySet()) {
+            try {
+                entry.getValue().send(SseEmitter.event()
+                        .name("exchange-update")
+                        .data(data));
+            } catch (IOException e) {
+                emitters.remove(entry.getKey());
+            }
+        }
     }
 
     /**

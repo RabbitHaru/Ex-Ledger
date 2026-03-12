@@ -55,12 +55,37 @@ public class AuthController {
     }
 
     @PostMapping("/mfa/setup")
-    public ApiResponse<MfaSetupResponse> setupMfa(Principal principal) {
+    public ApiResponse<MfaSetupResponse> setupMfa(Principal principal, @RequestBody(required = false) Map<String, Object> body) {
         if (principal == null) {
             return ApiResponse.fail("로그인이 필요합니다.");
         }
-        MfaSetupResponse response = authService.setupMfa(principal.getName());
+        Integer currentOtpCode = null;
+        if (body != null && body.get("currentOtpCode") != null) {
+            try {
+                currentOtpCode = Integer.valueOf(body.get("currentOtpCode").toString());
+            } catch (NumberFormatException e) {
+                return ApiResponse.fail("기존 OTP 코드가 올바르지 않은 형식입니다 (숫자 6자리).");
+            }
+        }
+        MfaSetupResponse response = authService.setupMfa(principal.getName(), currentOtpCode);
         return ApiResponse.success("MFA 설정 준비 완료 (기존 설정은 초기화되었습니다)", response);
+    }
+
+    /**
+     * OTP 분실 시 본인인증을 통한 MFA 초기화
+     * PortOne 본인인증 imp_uid를 받아 가입 시 저장된 값과 대조
+     */
+    @PostMapping("/mfa/reset-by-identity")
+    public ApiResponse<MfaSetupResponse> resetMfaByIdentity(Principal principal, @RequestBody Map<String, String> body) {
+        if (principal == null) {
+            return ApiResponse.fail("로그인이 필요합니다.");
+        }
+        String impUid = body.get("impUid");
+        if (impUid == null || impUid.isBlank()) {
+            return ApiResponse.fail("본인인증 정보가 필요합니다.");
+        }
+        MfaSetupResponse response = authService.resetMfaByIdentity(principal.getName(), impUid);
+        return ApiResponse.success("본인인증 확인 완료. OTP가 초기화되었습니다.", response);
     }
 
     @PostMapping("/mfa/enable")
@@ -148,6 +173,13 @@ public class AuthController {
     public ApiResponse<Void> withdraw(Principal principal) {
         if (principal == null) return ApiResponse.fail("로그인이 필요합니다.");
         authService.withdraw(principal.getName());
-        return ApiResponse.success("회원 탈퇴가 완료되었습니다. 그동안 이용해주셔서 감사합니다.", null);
+        return ApiResponse.success("회원 탈퇴 요청이 접수되었습니다. 7일 이내에 다시 로그인하여 철회할 수 있습니다.", null);
+    }
+
+    @PostMapping("/withdraw/cancel")
+    public ApiResponse<Void> cancelWithdraw(Principal principal) {
+        if (principal == null) return ApiResponse.fail("로그인이 필요합니다.");
+        authService.cancelWithdrawal(principal.getName());
+        return ApiResponse.success("회원 탈퇴 요청이 철회되었습니다.", null);
     }
 }

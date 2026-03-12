@@ -10,7 +10,7 @@ export const PasswordStrength: React.FC<PasswordStrengthProps> = ({ password }) 
         if (!pwd) return { score: 0, label: '', color: 'bg-slate-200' };
 
         if (pwd.length >= 8) score += 1;
-        if (/[a-z]/.test(pwd)) score += 1;
+        if (/[a-zA-Z]/.test(pwd)) score += 1;
         if (/[0-9]/.test(pwd)) score += 1;
         if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
 
@@ -23,7 +23,7 @@ export const PasswordStrength: React.FC<PasswordStrengthProps> = ({ password }) 
 
     const requirements = [
         { label: '8자 이상', met: password.length >= 8 },
-        { label: '소문자 포함', met: /[a-z]/.test(password) },
+        { label: '영문자 포함', met: /[a-zA-Z]/.test(password) },
         { label: '숫자 포함', met: /[0-9]/.test(password) },
         { label: '특수문자 포함', met: /[^A-Za-z0-9]/.test(password) },
     ];

@@ -33,7 +33,7 @@ const MFASetup: React.FC = () => {
 
     useEffect(() => {
         if (!email) {
-            navigate('/login');
+            navigate('/login-required');
             return;
         }
 
@@ -62,10 +62,10 @@ const MFASetup: React.FC = () => {
         setError('');
 
         try {
-            const codeNum = mfaCodeArg ? Number(mfaCodeArg) : Number(otpCode);
-            await http.post('/auth/mfa/enable', { email, code: codeNum });
+            const codeStr = mfaCodeArg || otpCode;
+            await http.post('/auth/mfa/enable', { email, code: codeStr });
             toast.success('구글 OTP 인증 설정이 완료되었습니다. 다시 로그인해 주세요.');
-            navigate('/login');
+            navigate('/login-required');
         } catch (err: any) {
             setError(err.response?.data?.message || 'OTP 코드 검증에 실패했습니다.');
         }

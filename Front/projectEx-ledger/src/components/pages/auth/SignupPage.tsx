@@ -15,6 +15,7 @@ const SignupPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'USER' | 'COMPANY_USER' | 'COMPANY_ADMIN'>('USER');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [name, setName] = useState('');
     const [businessNumber, setBusinessNumber] = useState('');
     const [isBusinessVerified, setIsBusinessVerified] = useState(false);
@@ -23,6 +24,7 @@ const SignupPage: React.FC = () => {
     const [portoneImpUid, setPortoneImpUid] = useState('');
     const [verifying, setVerifying] = useState(false);
     const [error, setError] = useState('');
+    const [capsLockOn, setCapsLockOn] = useState(false);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState('');
@@ -68,9 +70,13 @@ const SignupPage: React.FC = () => {
 
     const isPasswordStrong = (pwd: string) => {
         return pwd.length >= 8 &&
-               /[a-z]/.test(pwd) &&
+               /[a-zA-Z]/.test(pwd) &&
                /[0-9]/.test(pwd) &&
                /[^A-Za-z0-9]/.test(pwd);
+    };
+
+    const handlePasswordKeyEvent = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        setCapsLockOn(e.getModifierState('CapsLock'));
     };
 
     const handlePortoneVerification = async () => {
@@ -146,6 +152,7 @@ const SignupPage: React.FC = () => {
             if (!email) { setError('이메일을 입력해주세요.'); emailRef.current?.focus(); return false; }
             if (!password) { setError('비밀번호를 입력해주세요.'); passwordRef.current?.focus(); return false; }
             if (!isPasswordStrong(password)) { setError('비밀번호가 보안 요건을 충족하지 않습니다.'); passwordRef.current?.focus(); return false; }
+            if (password !== confirmPassword) { setError('비밀번호가 일치하지 않습니다.'); return false; }
             if (!name) { setError('이름을 입력해주세요.'); nameRef.current?.focus(); return false; }
             return true;
         }
@@ -245,7 +252,7 @@ const SignupPage: React.FC = () => {
 
     return (
         <>
-            <div className="w-full max-w-lg mx-auto py-12">
+            <div className="w-full max-w-xl mx-auto py-12">
             <header className="text-center mb-8">
                 <h2 className="text-5xl font-black text-slate-900 tracking-tight">계정 만들기</h2>
                 <p className="text-slate-400 font-bold text-[14px] uppercase tracking-[0.2em] mt-3">Ex-Ledger 글로벌 네트워크에 합류하세요</p>
@@ -291,7 +298,7 @@ const SignupPage: React.FC = () => {
                 </div>
             )}
 
-            <form onSubmit={handleSignup}>
+            <form onSubmit={handleSignup} noValidate>
                 {/* ====== STEP 1: 기본 정보 + 유형 선택 ====== */}
                 <div className={`transition-all duration-500 ${contentStep === 1 ? 'opacity-100 translate-y-0' : 'opacity-0 absolute -translate-y-4 pointer-events-none'}`}>
                     <div className="flex p-1.5 bg-slate-100 rounded-[24px] mb-8 shadow-inner">
@@ -312,8 +319,29 @@ const SignupPage: React.FC = () => {
                     <div className="space-y-5 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
                         <Input ref={emailRef} label="이메일" type="email" placeholder="example@exledger.com" value={email} onChange={(e) => setEmail(e.target.value)} className="text-[16px]" required autoFocus />
                         <div>
-                            <Input ref={passwordRef} label="비밀번호" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="text-[16px]" required />
+                            <Input ref={passwordRef} label="비밀번호" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handlePasswordKeyEvent} onKeyUp={handlePasswordKeyEvent} className="text-[16px]" required />
+                            {capsLockOn && (
+                                <div className="flex items-center gap-1.5 mt-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <span className="text-amber-500 text-sm">⚠</span>
+                                    <span className="text-[11px] font-bold text-amber-600">Caps Lock이 켜져 있습니다</span>
+                                </div>
+                            )}
                             <PasswordStrength password={password} />
+                        </div>
+                        <div>
+                            <Input label="비밀번호 재입력" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} onKeyDown={handlePasswordKeyEvent} onKeyUp={handlePasswordKeyEvent} className="text-[16px]" required />
+                            {confirmPassword && password !== confirmPassword && (
+                                <div className="flex items-center gap-1.5 mt-1.5 px-3 py-2 bg-red-50 border border-red-200 rounded-xl animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <span className="text-red-500 text-sm">✖</span>
+                                    <span className="text-[11px] font-bold text-red-500">비밀번호가 일치하지 않습니다</span>
+                                </div>
+                            )}
+                            {confirmPassword && password === confirmPassword && (
+                                <div className="flex items-center gap-1.5 mt-1.5 px-3 py-2 bg-teal-50 border border-teal-200 rounded-xl animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <span className="text-teal-500 text-sm">✔</span>
+                                    <span className="text-[11px] font-bold text-teal-600">비밀번호가 일치합니다</span>
+                                </div>
+                            )}
                         </div>
                         <Input ref={nameRef} label="이름" type="text" placeholder="홍길동" value={name} onChange={(e) => setName(e.target.value)} className="text-[16px]" required />
                     </div>
