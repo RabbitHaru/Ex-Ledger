@@ -1,69 +1,90 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
 import http from '../../config/http';
 import { toast } from 'sonner';
 import { Clock, RefreshCw } from 'lucide-react';
-import { logout } from '../../config/auth';
+import { getRefreshToken, getToken, logout, parseJwt, setRefreshToken, setToken } from '../../config/auth';
 
 export const MfaHeaderTimer: React.FC = () => {
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
-    const [isActive, setIsActive] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const lastTokenRef = useRef<string | null>(null);
 
-    const fetchSessionStatus = useCallback(async () => {
-        try {
-            const response = await http.get('/auth/mfa/session');
-            if (response.data && response.data.data) {
-                const { active, remainingSeconds } = response.data.data;
-                setIsActive(active);
-                if (active) {
-                    setTimeLeft(remainingSeconds);
-                } else {
-                    setTimeLeft(null);
-                }
+    useEffect(() => {
+        const tick = () => {
+            const token = getToken();
+            if (!token) {
+                lastTokenRef.current = null;
+                setTimeLeft(null);
+                return;
             }
-        } catch (error) {
-            console.error('Failed to fetch MFA session status', error);
-        }
-    }, []);
 
-    useEffect(() => {
-        fetchSessionStatus();
-        const interval = setInterval(fetchSessionStatus, 30000); 
-        return () => clearInterval(interval);
-    }, [fetchSessionStatus]);
+            const payload = parseJwt(token);
+            const exp = payload?.exp;
+            if (typeof exp !== 'number') {
+                lastTokenRef.current = null;
+                setTimeLeft(null);
+                return;
+            }
 
-    useEffect(() => {
-        if (timeLeft === null || timeLeft <= 0) return;
+            const authorities: string = payload?.auth || '';
+            const roles = authorities.split(',').filter(Boolean);
+            const isIntegratedAdmin = roles.includes('ROLE_INTEGRATED_ADMIN');
+            const capSeconds = isIntegratedAdmin ? Number.POSITIVE_INFINITY : 15 * 60;
 
-        const timer = setInterval(() => {
+            const remainingMs = exp * 1000 - Date.now();
+            const jwtRemaining = Math.max(0, Math.floor(remainingMs / 1000));
+            if (jwtRemaining <= 0) {
+                setTimeLeft(0);
+                logout();
+                return;
+            }
+
+            const tokenChanged = lastTokenRef.current !== token;
+            lastTokenRef.current = token;
+
             setTimeLeft((prev) => {
-                if (prev !== null && prev > 1) return prev - 1;
-                if (prev === 1) {
-                    console.log("MFA Session Expired. Logging out...");
-                    logout();
-                }
-                return 0;
-            });
-        }, 1000);
+                const initial = Math.min(jwtRemaining, capSeconds);
+                if (tokenChanged || prev === null) return initial;
 
+                const next = Math.max(0, prev - 1);
+                return Math.min(next, jwtRemaining, capSeconds);
+            });
+        };
+
+        tick();
+        const timer = setInterval(tick, 1000);
         return () => clearInterval(timer);
-    }, [timeLeft]);
+    }, []);
 
     const handleExtend = async () => {
         if (isRefreshing) return;
         setIsRefreshing(true);
         try {
-            await http.post('/auth/mfa/session/extend');
-            toast.success('보안 세션이 15분 연장되었습니다.');
-            await fetchSessionStatus();
+            const rt = getRefreshToken();
+            if (!rt) {
+                logout();
+                return;
+            }
+
+            const { data } = await axios.post(`${http.defaults.baseURL}/auth/refresh`, { refreshToken: rt });
+            if (data && data.data) {
+                const { accessToken, refreshToken } = data.data;
+                if (accessToken) setToken(accessToken);
+                if (refreshToken) setRefreshToken(refreshToken);
+                toast.success('세션이 갱신되었습니다.');
+            } else {
+                logout();
+            }
         } catch (error: any) {
-            toast.error(error.response?.data?.message || '세션 연장에 실패했습니다.');
+            toast.error(error.response?.data?.message || '세션 갱신에 실패했습니다.');
+            logout();
         } finally {
             setIsRefreshing(false);
         }
     };
 
-    if (!isActive || timeLeft === null) return null;
+    if (timeLeft === null) return null;
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
@@ -90,7 +111,7 @@ export const MfaHeaderTimer: React.FC = () => {
             <button 
                 onClick={handleExtend}
                 disabled={isRefreshing}
-                title="시간 연장"
+                title="세션 갱신"
                 className={`p-1 rounded-lg transition-all active:scale-90 disabled:opacity-50 ${
                     isWarning 
                     ? 'text-red-500 hover:text-red-700 hover:bg-white' 

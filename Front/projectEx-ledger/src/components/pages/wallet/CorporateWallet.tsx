@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import http from "../../../config/http";
 
 import { useWallet, type Transaction } from "../../../context/WalletContext";
 import {
@@ -24,10 +25,35 @@ const CorporateWallet: React.FC = () => {
     corpAccount, 
     setCorpAccount, 
     setCorpBalances, 
-    setCorpTransactions 
+    setCorpTransactions,
+    getWalletDataById
   } = useWallet();
   const [searchTerm, setSearchTerm] = useState("");
   const [isActivating, setIsActivating] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await http.get("/auth/me");
+        setProfile(response.data.data);
+      } catch (err) {
+        console.error("Profile fetch error");
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  // 🌟 [동기화] 프로필 정보가 있고 corpAccount가 비어있을 때 WalletContext 데이터 확인
+  useEffect(() => {
+    if (profile?.businessNumber && !corpAccount) {
+      const walletData = getWalletDataById(profile.businessNumber);
+      if (walletData?.userAccount && walletData.userAccount !== "미발급") {
+        setCorpAccount(walletData.userAccount);
+        setCorpBalances(walletData.balances);
+      }
+    }
+  }, [profile, corpAccount, getWalletDataById, setCorpAccount, setCorpBalances]);
 
   // 🌟 [담당자님 구현 포인트] 기업 전용 계좌 발급 로직
   const handleActivateCorporateAccount = () => {
@@ -35,18 +61,18 @@ const CorporateWallet: React.FC = () => {
 
     // 실제로는 B담당이 만든 API를 호출하여 DB에 기업 계좌를 생성해야 함
     setTimeout(() => {
-      // 기업용 식별 번호 대역대 (2003) 할당 시뮬레이션
+      // 기업용 가상계좌 발급 규칙 (2003)
       const newCorpAccount = `EX-2003-${Math.floor(1000 + Math.random() * 9000)}`;
       setCorpAccount(newCorpAccount);
       setIsActivating(false);
-      showToast("기업 전용 마스터 계좌가 발급되었습니다.", "SUCCESS");
+      showToast("기업 전용 마스터 계좌(2003)가 발급되었습니다.", "SUCCESS");
     }, 2000);
   };
 
   const businessTxs = corpTransactions.filter((tx: Transaction) => tx.category === "BUSINESS");
 
-  // 1. 계좌가 없을 때 보여줄 "발급 신청" 화면
-  if (!corpAccount || !corpAccount.includes("2003")) {
+  // 1. 계좌가 없을 때 보여줄 "발급 신청" 화면 (규칙에 어긋나거나 비어있는 경우)
+  if (!corpAccount || (!corpAccount.startsWith("EX-2003") && !corpAccount.includes("2003"))) {
     return (
       <>
         <div className="max-w-4xl px-6 py-32 mx-auto space-y-12 text-center animate-in fade-in">
@@ -100,19 +126,19 @@ const CorporateWallet: React.FC = () => {
                 </span>
               </div>
               <h2 className="text-4xl italic font-black leading-none tracking-tighter uppercase text-slate-900">
-                (주) 글로벌 파트너스
+                {profile?.companyName || "(주) 글로벌 파트너스"}
               </h2>
-              <div className="flex items-center gap-4 text-[11px] font-bold text-slate-400">
+              <div className="flex items-center gap-4 text-[11px] font-black text-slate-400">
                 <p>
                   사업자 번호{" "}
                   <span className="ml-1 font-black text-slate-900">
-                    123-45-67890
+                    {profile?.businessNumber || "123-45-67890"}
                   </span>
                 </p>
                 <div className="w-1.5 h-1.5 bg-slate-200 rounded-full"></div>
                 <p>
                   대표자{" "}
-                  <span className="ml-1 font-black text-slate-900">홍길동</span>
+                  <span className="ml-1 font-black text-slate-900">{profile?.representative || profile?.name || "홍길동"}</span>
                 </p>
               </div>
             </div>

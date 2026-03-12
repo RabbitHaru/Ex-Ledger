@@ -17,6 +17,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     const isAuth = isAuthenticated();
 
     if (!isAuth) {
+        if (sessionStorage.getItem('logout_notice')) {
+            return <Navigate to="/" replace />;
+        }
         return <Navigate to="/login-required" state={{ from: location }} replace />;
     }
 

@@ -12,6 +12,7 @@ import me.projectexledger.domain.auth.dto.TokenResponse;
 import me.projectexledger.domain.auth.dto.UserProfileResponse;
 import me.projectexledger.domain.member.entity.Member;
 import me.projectexledger.domain.member.repository.MemberRepository;
+import me.projectexledger.security.CustomUserDetails;
 import me.projectexledger.security.JwtTokenProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
@@ -219,8 +220,12 @@ public class AuthService {
         Member member = memberRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        Authentication authentication = new UsernamePasswordAuthenticationToken(email, null,
-                List.of(new SimpleGrantedAuthority(member.getRole().name())));
+        List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(member.getRole().name()));
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                new CustomUserDetails(email, "", authorities, member.isApproved()),
+                null,
+                authorities
+        );
 
         String newAccessToken = jwtTokenProvider.createToken(authentication);
         String newRefreshToken = jwtTokenProvider.createRefreshToken(authentication);

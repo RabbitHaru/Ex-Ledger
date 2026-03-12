@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import me.projectexledger.domain.auth.dto.MfaLoginRequest;
 import me.projectexledger.domain.auth.dto.MfaSetupResponse;
 import me.projectexledger.common.annotation.RequireMfa;
+import me.projectexledger.common.annotation.RequireCompanyApproval;
 import java.security.Principal;
 import java.util.Map;
 import me.projectexledger.domain.auth.dto.TokenRefreshRequest;
@@ -118,6 +119,7 @@ public class AuthController {
     }
 
     @PostMapping("/update-account")
+    @RequireCompanyApproval
     public ApiResponse<Void> updateAccountInfo(Principal principal, @RequestBody Map<String, String> body) {
         if (principal == null)
             return ApiResponse.fail("로그인이 필요합니다.");

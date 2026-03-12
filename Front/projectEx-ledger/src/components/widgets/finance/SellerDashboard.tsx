@@ -101,9 +101,10 @@ const SellerDashboard: React.FC = () => {
   };
 
   const handleAccountCreationSuccess = (ownerName: string) => {
-    setUserAccount(`EX-1002-${Math.floor(1000 + Math.random() * 9000)}`);
+    // 개인용 가상계좌 발급 규칙 (1004)
+    setUserAccount(`EX-1004-${Math.floor(1000 + Math.random() * 9000)}`);
     setHasAccount(true);
-    showToast("계좌 발급이 완료되었습니다.", "SUCCESS");
+    showToast("개인용 가상계좌 발급이 완료되었습니다.", "SUCCESS");
   };
 
   const handleVerifyAccount = () => {
@@ -128,9 +129,14 @@ const SellerDashboard: React.FC = () => {
             const otherData = JSON.parse(rawData);
             if (otherData.userAccount === recipientAccount) {
               foundAccount = true;
-              detectedName = recipientAccount.includes("2003")
-                ? "(주) 글로벌파트너스"
-                : "인증된 외부 사용자";
+              // 기업용(2003) / 개인용(1004) 구별 로직 강화
+              if (recipientAccount.includes("2003")) {
+                  detectedName = "(주) 글로벌파트너스 (기업 계좌)";
+              } else if (recipientAccount.includes("1004")) {
+                  detectedName = "인증된 개인 사용자";
+              } else {
+                  detectedName = "인증된 외부 사용자";
+              }
               break;
             }
           }

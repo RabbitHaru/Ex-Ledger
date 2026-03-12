@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
@@ -52,7 +53,7 @@ public class JwtTokenProvider {
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.tokenValidityInMilliseconds = tokenValidityInSeconds * 1000;
-        this.refreshTokenValidityInMilliseconds = tokenValidityInSeconds * 1000 * 24 * 7;
+        this.refreshTokenValidityInMilliseconds = Duration.ofDays(7).toMillis();
     }
 
     public String createToken(Authentication authentication) {
@@ -60,13 +61,19 @@ public class JwtTokenProvider {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
 
+        boolean isIntegratedAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_INTEGRATED_ADMIN".equals(a.getAuthority()));
+
         boolean isApproved = false;
         if (authentication.getPrincipal() instanceof CustomUserDetails) {
             isApproved = ((CustomUserDetails) authentication.getPrincipal()).isApproved();
         }
 
         long now = (new Date()).getTime();
-        Date validity = new Date(now + this.tokenValidityInMilliseconds);
+        long validityMs = isIntegratedAdmin
+                ? Duration.ofHours(24).toMillis()
+                : Duration.ofMinutes(15).toMillis();
+        Date validity = new Date(now + validityMs);
 
         return Jwts.builder()
                 .setSubject(authentication.getName())
@@ -108,7 +115,8 @@ public class JwtTokenProvider {
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());
 
-        UserDetails principal = new User(claims.getSubject(), "", authorities);
+        boolean isApproved = claims.get("isApproved", Boolean.class) != null && claims.get("isApproved", Boolean.class);
+        UserDetails principal = new CustomUserDetails(claims.getSubject(), "", authorities, isApproved);
         return new UsernamePasswordAuthenticationToken(principal, token, authorities);
     }
 

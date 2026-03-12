@@ -26,7 +26,8 @@ export const logout = (showModal = true) => {
     if (showModal) {
         window.dispatchEvent(new CustomEvent('mfa-session-expired'));
     } else {
-        window.location.href = '/login-required';
+        sessionStorage.setItem('logout_notice', '1');
+        window.location.href = '/';
     }
 };
 

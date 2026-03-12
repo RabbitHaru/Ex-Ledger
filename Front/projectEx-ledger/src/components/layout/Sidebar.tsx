@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getToken, parseJwt } from "../../config/auth";
 import { useWallet } from "../../context/WalletContext";
+import http from "../../config/http";
 import {
   LayoutDashboard,
   X,
@@ -35,28 +36,61 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { showToast } = useToast();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState<boolean>(true);
+  const [businessNumber, setBusinessNumber] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
 
   // 🌟 WalletContext 데이터 구독
-  const { hasAccount, userAccount, balances, resetAccount } = useWallet();
+  const { hasAccount, userAccount, balances, resetAccount, getWalletDataById, setBusinessNumber: setWalletBNo } = useWallet();
 
   useEffect(() => {
-    const token = getToken();
-    if (token) {
-      const decoded = parseJwt(token);
-      if (decoded) {
-        if (decoded.auth) setUserRole(decoded.auth);
-        if (decoded.isApproved !== undefined) {
-          setIsApproved(decoded.isApproved);
+    const fetchProfile = async () => {
+      try {
+        const response = await http.get("/auth/me");
+        const data = response.data.data;
+        setUserRole(data.role);
+        setIsApproved(data.isApproved);
+        setBusinessNumber(data.businessNumber);
+        setWalletBNo(data.businessNumber); // WalletContext에 사업자 번호 동기화
+        setCompanyName(data.companyName);
+      } catch (err) {
+        // Fallback to JWT if API fails
+        const token = getToken();
+        if (token) {
+          const decoded = parseJwt(token);
+          if (decoded) {
+            if (decoded.auth) setUserRole(decoded.auth);
+            if (decoded.isApproved !== undefined) {
+              setIsApproved(decoded.isApproved);
+            }
+          }
         }
       }
-    }
+    };
+    fetchProfile();
   }, []);
 
   const hasRole = (role: string) => {
     if (!userRole) return false;
-    const cleanRole = role.replace("ROLE_", "");
-    return userRole.includes(role) || userRole.includes(cleanRole);
+    return userRole.includes(role);
   };
+
+  const isCorporate = hasRole("ROLE_COMPANY_USER") || hasRole("ROLE_COMPANY_ADMIN");
+
+  // 현재 활성 계좌 결정
+  const activeAccountId = isCorporate ? businessNumber : (parseJwt(getToken() || '')?.sub || '');
+  const walletData = getWalletDataById(activeAccountId || '');
+  const currentAccount = walletData?.userAccount || userAccount;
+  const currentBalances = walletData?.balances || balances;
+
+  const isActive = (path: string) => location.pathname === path;
+
+  const copyAccount = () => {
+    if (!currentAccount) return;
+    navigator.clipboard.writeText(currentAccount);
+    showToast("계좌번호가 복사되었습니다.", "SUCCESS");
+  };
+
+  const safeKrwBalance = typeof currentBalances.KRW === "number" ? currentBalances.KRW : 0;
 
   // 🏛️ 금융 서비스 이용 가능 대상 (어드민 제외 일반/기업 유저)
   const isFinanceTarget =
@@ -64,16 +98,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     (hasRole("ROLE_USER") ||
       hasRole("ROLE_COMPANY_USER") ||
       hasRole("ROLE_COMPANY_ADMIN"));
-
-  const isActive = (path: string) => location.pathname === path;
-
-  const copyAccount = () => {
-    if (!userAccount) return;
-    navigator.clipboard.writeText(userAccount);
-    showToast("계좌번호가 복사되었습니다.", "SUCCESS");
-  };
-
-  const safeKrwBalance = typeof balances.KRW === "number" ? balances.KRW : 0;
 
   return (
     <div
@@ -118,29 +142,43 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <BarChart2 size={18} /> 실시간 환율 정보
         </Link>
 
-        {/* 2 & 3. 금융 서비스 및 기업 관리 메뉴 병합 처리 */}
+        {/* 2 & 3. 금융 서비스 및 기업 관리 메뉴 분리 처리 */}
         {isFinanceTarget && (
           <>
             <div className="px-4 pt-10 pb-2 mt-6 border-t border-slate-50">
               <p className="text-[10px] font-black text-teal-600/50 uppercase tracking-widest italic">
-                Financial Services
+                {isCorporate ? "Corporate Management" : "Financial Services"}
               </p>
             </div>
 
-            <Link
-              to="/wallet/overview"
-              onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/wallet/overview") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-            >
-              <Wallet size={18} /> 자산 관리 (Wallet)
-            </Link>
+            {/* 🛡️ 개인 유저인 경우에만 '자산 관리' 표시 */}
+            {hasRole("ROLE_USER") && (
+              <Link
+                to="/wallet/overview"
+                onClick={onClose}
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/wallet/overview") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+              >
+                <Wallet size={18} /> 자산 관리 (Wallet)
+              </Link>
+            )}
+
+            {/* 🏢 기업 유저인 경우에만 '기업 계좌 관리' 표시 */}
+            {isCorporate && (
+              <Link
+                to="/corporate/wallet"
+                onClick={onClose}
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/corporate/wallet") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+              >
+                <Building2 size={18} /> 기업 계좌 관리
+              </Link>
+            )}
 
             <Link
               to="/seller/dashboard"
               onClick={onClose}
               className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/seller/dashboard") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
             >
-              <ArrowRightLeft size={18} /> 개인/기업 거래
+              <ArrowRightLeft size={18} /> {isCorporate ? "기업 거래소" : "개인/기업 거래"}
             </Link>
 
             <Link
@@ -225,6 +263,59 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </>
         )}
       </nav>
+
+      {/* 계좌 정보 카드 - 금융 서비스 대상자에게만 표시 */}
+      {isFinanceTarget && (
+        <div className="px-6 py-8 mt-auto border-t border-slate-50">
+          <div className="p-6 bg-slate-900 rounded-[32px] shadow-2xl shadow-slate-200 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 -mr-16 -mt-16 transition-all duration-700 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20" />
+
+            <div className="relative z-10 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md">
+                    <Wallet className="text-teal-400" size={16} />
+                  </div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {isCorporate ? (companyName || "Corporate Account") : "Personal Account"}
+                  </span>
+                </div>
+                <button
+                  onClick={copyAccount}
+                  className="p-2 transition-colors bg-white/5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">
+                  {isCorporate ? (companyName || "기업 공금 계좌") : "내 가상 계좌"}
+                </p>
+                <p className="font-mono text-lg font-black tracking-tight text-white">
+                  {currentAccount || "계좌 미발급"}
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-white/5">
+                <div className="flex items-end justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">
+                    Balance
+                  </span>
+                  <div className="text-right">
+                    <span className="text-2xl italic font-black text-white">
+                      ₩ {safeKrwBalance.toLocaleString()}
+                    </span>
+                    <span className="ml-1 text-[10px] font-bold text-teal-400 uppercase">
+                      KRW
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

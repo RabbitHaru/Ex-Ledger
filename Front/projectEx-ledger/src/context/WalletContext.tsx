@@ -42,6 +42,7 @@ interface WalletContextType {
   chargeKrw: (amount: number) => void;
   resetAccount: () => void;
   getWalletDataById: (id: string) => { balances: Record<string, number>; userAccount: string } | null;
+  setBusinessNumber: (bNo: string) => void;
   // 기업용
   corpAccount: string;
   setCorpAccount: (acc: string) => void;
@@ -120,6 +121,12 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       });
       setBalances(sanitizedBalances);
       setTransactions(parsed.transactions || []);
+    } else {
+      // 데이터가 없으면 초기화 (개인용)
+      setHasAccount(false);
+      setUserAccount("");
+      setBalances(initialBalances);
+      setTransactions([]);
     }
 
     // 2. 기업 공금 데이터 로드 (사업자 번호가 있는 경우)
@@ -134,6 +141,20 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         });
         setCorpBalances(sanitizedBalances);
         setCorpTransactions(parsed.transactions || []);
+      } else {
+        // 데이터가 없으면 규칙에 따라 생성 (더미 데이터 세션용)
+        const newCorpAcc = `EX-2003-${Math.floor(1000 + Math.random() * 9000)}`;
+        setCorpAccount(newCorpAcc);
+        setCorpBalances(initialBalances);
+        setCorpTransactions([]);
+        
+        // 로컬 스토리지에 초기 데이터 저장 (다음 로드 시를 위해)
+        localStorage.setItem(`wallet_data_${bNo}`, JSON.stringify({
+            hasAccount: true,
+            userAccount: newCorpAcc,
+            balances: initialBalances,
+            transactions: []
+        }));
       }
     }
   };
@@ -145,13 +166,11 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         try {
           const decoded = parseJwt(token);
           const currentId = decoded?.sub || decoded?.email || "guest";
-          // 토큰에서 businessNumber 추출 시도 (프로필 API 결과가 더 정확하겠지만 초기 로딩용)
-          const currentBNo = decoded?.businessNumber || ""; 
           
           if (userId !== currentId) {
             setUserId(currentId);
-            setBusinessNumber(currentBNo);
-            loadUserData(currentId, currentBNo);
+            // businessNumber는 외부에서 명시적으로 set할 때까지 기다림 (JWT에는 없을 가능성이 큼)
+            loadUserData(currentId, businessNumber);
           }
         } catch (e) {
           console.error("Auth sync error");
@@ -161,7 +180,14 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     syncAuth();
     const interval = setInterval(syncAuth, 2000);
     return () => clearInterval(interval);
-  }, [userId]);
+  }, [userId, businessNumber]);
+
+  // businessNumber가 변경될 때마다 데이터 로드
+  useEffect(() => {
+    if (userId && userId !== "guest") {
+      loadUserData(userId, businessNumber);
+    }
+  }, [businessNumber]);
 
   // 개인 데이터 저장
   useEffect(() => {
@@ -307,9 +333,17 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     if (!data) return null;
     try {
       const parsed = JSON.parse(data);
+      // 계좌 번호가 없으면 규칙에 따라 생성 (더미 데이터용)
+      let currentAcc = parsed.userAccount;
+      if (!currentAcc || currentAcc === "미발급") {
+          // id가 숫자로만 구성되어 있으면(사업자번호) 기업용(2003), 아니면 개인용(1004)
+          const isCorp = /^\d+$/.test(id.replace(/-/g, ''));
+          const prefix = isCorp ? "2003" : "1004";
+          currentAcc = `EX-${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+      }
       return {
         balances: parsed.balances || initialBalances,
-        userAccount: parsed.userAccount || "미발급",
+        userAccount: currentAcc,
       };
     } catch (e) {
       return null;
@@ -330,6 +364,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         chargeKrw,
         resetAccount,
         getWalletDataById,
+        setBusinessNumber,
         corpAccount,
         setCorpAccount,
         corpBalances,

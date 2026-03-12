@@ -22,6 +22,7 @@ public class UserProfileResponse {
     private boolean allowNotifications;
     private boolean mfaEnabled;
     private String adminApprovalStatus;
+    private String companyName;
     private java.time.LocalDateTime mfaResetAt;
     private java.time.LocalDateTime mfaCooldownEnd;
     private String realName;
@@ -38,8 +39,9 @@ public class UserProfileResponse {
                 .name(member.getName())
                 .role(member.getRole().name())
                 .isApproved(member.isApproved())
-                .adminApprovalStatus(member.getAdminApprovalStatus() != null ? member.getAdminApprovalStatus().name() : null)
-                .businessNumber(member.getBusinessNumber())
+                .adminApprovalStatus(member.getCompany() != null && member.getCompany().getAdminApprovalStatus() != null ? member.getCompany().getAdminApprovalStatus().name() : null)
+                .companyName(member.getCompany() != null ? member.getCompany().getCompanyName() : null)
+                .businessNumber(member.getCompany() != null ? member.getCompany().getBusinessNumber() : null)
                 .bankName(member.getBankName())
                 .accountNumber(member.getAccountNumber())
                 .accountHolder(member.getAccountHolder())

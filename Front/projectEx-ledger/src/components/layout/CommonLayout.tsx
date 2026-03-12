@@ -19,6 +19,7 @@ import { MfaHeaderTimer } from "./MfaHeaderTimer";
 import { Github, LogOut } from "lucide-react";
 import { MfaExpiryModal } from "./MfaExpiryModal";
 import { logout as authLogout, parseJwt } from "../../config/auth";
+import { useToast } from "../notification/ToastProvider";
 
 
 interface LayoutProps {
@@ -26,6 +27,7 @@ interface LayoutProps {
 }
 
 const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
+  const { showToast } = useToast();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showNotiPanel, setShowNotiPanel] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([
@@ -38,6 +40,13 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
 
   // 현재 경로에 따른 메뉴 활성화 체크
   const isActive = (path: string) => location.pathname === path;
+
+  useEffect(() => {
+    if (sessionStorage.getItem("logout_notice")) {
+      sessionStorage.removeItem("logout_notice");
+      showToast("로그아웃되었습니다. 메인페이지로 이동했습니다.", "INFO");
+    }
+  }, [showToast]);
 
   useEffect(() => {
     if (!token) return;
