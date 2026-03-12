@@ -136,7 +136,7 @@ const GradePolicyManagement: React.FC = () => {
             <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600" />
             <div className="mb-10">
               <span className="inline-block px-4 py-1.5 mb-3 text-xs font-black tracking-widest text-slate-900 uppercase bg-indigo-50 rounded-2xl">
-                Partner Grade
+                
               </span>
               <h3 className="text-2xl font-black text-slate-900">
                 파트너 정책
@@ -185,7 +185,7 @@ const GradePolicyManagement: React.FC = () => {
             <div className="absolute top-0 left-0 w-full h-2 bg-slate-400" />
             <div className="mb-10">
               <span className="inline-block px-4 py-1.5 mb-3 text-xs font-black tracking-widest text-slate-400 uppercase bg-slate-50 rounded-2xl">
-                General Grade
+               
               </span>
               <h3 className="text-2xl font-black text-slate-900">
                 일반 가맹점 정책

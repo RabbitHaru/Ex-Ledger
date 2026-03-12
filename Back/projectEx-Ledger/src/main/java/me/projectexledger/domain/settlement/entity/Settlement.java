@@ -97,7 +97,11 @@ public class Settlement extends BaseEntity implements ReconciliationUtil.Interna
     @Override public BigDecimal getAmount() { return this.amount; }
 
     public void markAsCompleted() { this.status = SettlementStatus.COMPLETED; }
-    public void markAsDiscrepancy() { this.status = SettlementStatus.DISCREPANCY; }
+
+    public void markAsRejected(String reason) {
+        this.status = SettlementStatus.REJECTED; // 🌟 FAILED에서 REJECTED로 변경
+        this.resolutionReason = reason;
+    }
     public void markAsResolved(String reason) {
         this.status = SettlementStatus.WAITING_USER_CONSENT;
         this.resolutionReason = reason;

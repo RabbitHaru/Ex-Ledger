@@ -32,7 +32,6 @@ public class AdminSettlementController {
     private final SettlementEngineService settlementEngineService;
     private final SettlementPolicyService policyService;
 
-    // 1. 실시간 동기화 (AdminDashboard.tsx - handleSync 연동)
     @RequireMfa
     @GetMapping("/sync")
     public ResponseEntity<ApiResponse<Void>> syncDailySettlement(@RequestParam(required = false) String date) {
@@ -42,7 +41,7 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("정산 동기화가 성공적으로 완료되었습니다.", null));
     }
 
-    // 2. 대시보드 요약 정보 조회 (AdminDashboard.tsx - fetchDashboardSummary 연동)
+
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<DashboardSummaryDTO>> getDashboardSummary() {
         log.info("[Admin] 대시보드 요약 데이터 요청");
@@ -59,7 +58,6 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("리스트 조회 성공", data));
     }
 
-    // 4. 오차 수정 API (상세 페이지의 수동 수정 기능)
     @RequireMfa
     @PatchMapping("/{settlementId}/resolve")
     public ResponseEntity<ApiResponse<Void>> resolveDiscrepancy(
@@ -74,7 +72,6 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("수동 오차 수정 처리가 완료되었습니다.", null));
     }
 
-    // 5. 송금 재시도 API
     @RequireMfa
     @PostMapping("/{id}/retry")
     public ResponseEntity<ApiResponse<Void>> retrySettlement(@PathVariable Long id) {
@@ -83,7 +80,6 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("재송금 요청이 접수되었습니다.", null));
     }
 
-    // 6. 가맹점별 정산 정책 업데이트
     @RequireMfa
     @PostMapping("/policy/{merchantId}")
     public ResponseEntity<ApiResponse<Void>> updateSettlementPolicy(
@@ -94,46 +90,62 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("수수료 정책이 성공적으로 반영되었습니다.", null));
     }
 
-    // 🌟 [수정] 7. 테스트 데이터 주입 (프론트에서 보낸 금액과 등급 수신)
     @PostMapping("/test-data")
     public ResponseEntity<ApiResponse<String>> createTestData(
             @RequestParam SettlementStatus status,
-            @RequestParam(required = false) BigDecimal amount, // 🌟 프론트에서 보낸 금액
-            @RequestParam(required = false) ClientGrade grade  // 🌟 프론트에서 보낸 등급
+            @RequestParam(required = false) BigDecimal amount,
+            @RequestParam(required = false) ClientGrade grade
     ) {
         BigDecimal finalAmount = (amount != null) ? amount : new BigDecimal("50000000");
         ClientGrade finalGrade = (grade != null) ? grade : ClientGrade.PARTNER;
 
         log.info("[Admin] 발표용 랜덤 테스트 데이터 생성 요청 (상태: {}, 금액: {}, 등급: {})", status, finalAmount, finalGrade);
 
-        // 🌟 수정된 서비스 메서드 호출
         settlementEngineService.createTestSettlement(
                 "T-ORDER-" + System.currentTimeMillis(),
                 "Ex-Ledge 핵심 파트너",
                 finalAmount,
                 "KRW",
                 status,
-                finalGrade // 🌟 등급 정보 전달
+                finalGrade
         );
 
         return ResponseEntity.ok(ApiResponse.success("랜덤 테스트 데이터가 생성되었습니다!", null));
     }
 
-    // 8. 수동 정산 승인 (ReconciliationList.tsx - handleApprove 연동)
+    // 수동 정산 승인
     @RequireMfa
     @PostMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<Void>> approveSettlement(@PathVariable Long id) {
-        log.info("[Admin] 정산 건 수동 승인 처리 요청. ID: {}", id);
+        log.info("[Admin] 정산 건 승인 요청. ID: {}", id);
         try {
             settlementEngineService.approveSettlement(id);
-            return ResponseEntity.ok(ApiResponse.success("승인이 완료되었습니다. 송금 대기 상태로 전환됩니다.", null));
+            return ResponseEntity.ok(ApiResponse.success("승인이 완료되었습니다. 금액 동의 대기 상태로 전환됩니다.", null));
         } catch (Exception e) {
             log.error("[Admin] 승인 중 에러 발생: {}", e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.fail(e.getMessage()));
         }
     }
 
-    // 9. 가맹점별 현재 정산 정책 조회
+    // 🌟 [추가됨] 수동 정산 반려
+    @RequireMfa
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<ApiResponse<Void>> rejectSettlement(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> request) {
+
+        String reason = request.get("reason");
+        log.info("[Admin] 정산 건 반려 요청. ID: {}, 사유: {}", id, reason);
+
+        try {
+            settlementEngineService.rejectSettlement(id, reason);
+            return ResponseEntity.ok(ApiResponse.success("반려 처리가 완료되었습니다.", null));
+        } catch (Exception e) {
+            log.error("[Admin] 반려 중 에러 발생: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.fail(e.getMessage()));
+        }
+    }
+
     @GetMapping("/policy/{merchantId}")
     public ResponseEntity<ApiResponse<SettlementPolicy>> getSettlementPolicy(@PathVariable String merchantId) {
         log.info("[Admin] {} 가맹점의 현재 수수료 정책 조회 요청", merchantId);
@@ -141,7 +153,6 @@ public class AdminSettlementController {
         return ResponseEntity.ok(ApiResponse.success("정책 조회 성공", policy));
     }
 
-    // 10. 영수증 상세 명세 조회 (SettlementDetailModal 연동)
     @GetMapping("/{id}/receipt")
     public ResponseEntity<ApiResponse<SettlementDetailDTO>> getReceiptDetail(@PathVariable Long id) {
         log.info("[Admin] 정산 건 영수증 상세 조회 요청. ID: {}", id);

@@ -45,6 +45,8 @@ import PendingApproval from "../pages/error/PendingApproval";
 import LoginRequired from "../pages/error/LoginRequired";
 import GradePolicyManagement from "../pages/integratedadmin/GradePolicyManagement";
 
+// 🌟 [추가] 관리자 정산 승인 페이지 Import
+import AdminSettlementApproval from "../pages/integratedadmin/AdminSettlementApproval";
 
 const AppRoutes = () => {
   return (
@@ -78,9 +80,6 @@ const AppRoutes = () => {
             <Route path="/list" element={<MySettlementList />} />
             <Route path="/settlement" element={<SettlementDashboard />} />
             <Route path="/mypage" element={<MyPage />} />
-              <Route path="/wallet/overview" element={<WalletOverview />} />
-              <Route path="/seller/history" element={<PersonalHistory />} />
-
             <Route path="/wallet/overview" element={<WalletOverview />} />
             <Route path="/seller/history" element={<PersonalHistory />} />
             <Route path="/corporate/wallet" element={<CorporateWallet />} />
@@ -89,7 +88,7 @@ const AppRoutes = () => {
           {/* ----- 기업 관리자(Company Admin) 전용 라우트 ----- */}
           <Route element={<ProtectedRoute allowedRoles={["ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]} />}>
             <Route path="/admin/company/pending" element={<CompanyMemberManagement />} />
-              <Route path="/corporate/wallet" element={<CorporateWallet />} />
+            <Route path="/corporate/wallet" element={<CorporateWallet />} />
           </Route>
 
           {/* ----- 최고 관리자(Integrated Admin) 전용 라우트 ----- */}
@@ -104,10 +103,12 @@ const AppRoutes = () => {
             <Route path="/admin/broadcast" element={<AdminBroadcast />} />
             <Route path="/admin/grade-policy" element={<GradePolicyManagement />} />
             
+            {/* 🌟 [추가] 관리자 정산 승인 페이지 라우트 등록 */}
+            <Route path="/admin/approvals" element={<AdminSettlementApproval />} />
             
+          </Route>
         </Route>
       </Route>
-    </Route>
 
       {/* 에러 및 특수 상태 페이지 */}
       <Route path="/unauthorized" element={<Unauthorized />} />
@@ -116,7 +117,7 @@ const AppRoutes = () => {
       <Route path="/login-required" element={<LoginRequired />} />
 
       <Route path="*" element={<NotFound />} />
-  </Routes>
+    </Routes>
   );
 };
 

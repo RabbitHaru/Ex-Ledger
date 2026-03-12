@@ -23,6 +23,7 @@ import {
   CheckCircle,
   Bell,
   ShieldCheck,
+  CheckSquare, // 🌟 [추가] 승인 메뉴용 아이콘
 } from "lucide-react";
 import { useToast } from "../notification/ToastProvider";
 
@@ -225,26 +226,29 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             >
               <LayoutDashboard size={18} /> 정산 요약 대시보드
             </Link>
-    <Link
-      to="/admin/grade-policy"
-      onClick={onClose}
-      className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/grade-policy") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
-    >
-      <ShieldCheck size={18} /> 등급별 수수료 정책 관리
-    </Link>
+
+            {/* 🌟 [추가] 관리자 정산 승인 메뉴 연결 */}
+            <Link
+              to="/admin/approvals"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/approvals") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+            >
+              <CheckSquare size={18} /> B2B 정산 승인 대기열
+            </Link>
+
+            <Link
+              to="/admin/grade-policy"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/grade-policy") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+            >
+              <ShieldCheck size={18} /> 등급별 수수료 정책 관리
+            </Link>
             <Link
               to="/admin/logs"
               onClick={onClose}
               className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/logs") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
             >
               <ShieldAlert size={18} /> 감사로그
-            </Link>
-            <Link
-              to="/admin/list"
-              onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/list") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
-            >
-              <History size={18} /> 전체 정산/환전 내역 관리
             </Link>
             <Link
               to="/admin/license-approval"

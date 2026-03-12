@@ -46,31 +46,6 @@ public class ReconciliationUtil {
 
         return matchedTxIds;
     }
-
-    public me.projectexledger.domain.settlement.entity.Settlement verifyAndProcess(
-            me.projectexledger.domain.settlement.entity.Settlement pendingSettlement,
-            Map<String, BigDecimal> portOneDataMap) {
-
-        BigDecimal externalAmount = portOneDataMap.get(pendingSettlement.getTransactionId());
-
-        if (externalAmount == null) {
-            log.error("누락 발생: 포트원 측에 거래 내역이 없습니다. TX_ID: {}", pendingSettlement.getTransactionId());
-            pendingSettlement.markAsDiscrepancy();
-            return pendingSettlement;
-        }
-
-        if (pendingSettlement.getAmount().compareTo(externalAmount) != 0) {
-            log.error("금액 불일치: 내부 금액 {}, 외부 금액 {}. TX_ID: {}",
-                    pendingSettlement.getAmount(), externalAmount, pendingSettlement.getTransactionId());
-            pendingSettlement.markAsDiscrepancy();
-        } else {
-            log.info("대조 일치: TX_ID: {}", pendingSettlement.getTransactionId());
-            pendingSettlement.markAsCompleted();
-        }
-
-        return pendingSettlement;
-    }
-
     public interface InternalTxDto {
         String getTransactionId();
 

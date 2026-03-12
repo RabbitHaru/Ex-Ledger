@@ -37,7 +37,6 @@ const ReconciliationList: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   const [testStatus, setTestStatus] = useState<string>("PENDING");
-  // 🌟 [삭제] testAmount 상태 제거 완료
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
@@ -56,10 +55,12 @@ const ReconciliationList: React.FC = () => {
   const testDropdownRef = useRef<HTMLDivElement>(null);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
 
+  // 🌟 [수정] 송금 실패와 반려 처리를 완벽하게 분리
   const statusKoreanMap: { [key: string]: string } = {
     PENDING: "정산 중",
     COMPLETED: "정산 완료",
     FAILED: "송금 실패",
+    REJECTED: "반려 처리",
   };
 
   const filterMap: { [key: string]: string } = {
@@ -79,7 +80,7 @@ const ReconciliationList: React.FC = () => {
     navigator.clipboard
       .writeText(text)
       .then(() => {
-        toast.info("결제 번호가 복사되었습니다! ✅");
+        toast.info("결제 번호가 복사되었습니다!");
       })
       .catch((err) => {
         console.error("복사 실패:", err);
@@ -109,7 +110,6 @@ const ReconciliationList: React.FC = () => {
     setIsProcessing(false);
   };
 
-  // 🌟 [수정] amount 파라미터를 API에서 날리고, 토스트 메시지도 깔끔하게 수정
   const handleCreateTestData = async () => {
     setIsProcessing(true);
     try {
@@ -118,7 +118,7 @@ const ReconciliationList: React.FC = () => {
       );
       if (response && response.data && response.data.status === "SUCCESS") {
         toast.success(
-          `테스트 데이터 10개(일반/파트너 혼합) 주입 완료! 💉`,
+          "테스트 데이터 10개(일반/파트너 혼합) 주입 완료!",
         );
         await fetchReconciliationData();
       }
@@ -182,6 +182,12 @@ const ReconciliationList: React.FC = () => {
             송금 실패
           </span>
         );
+      case "REJECTED": // 🌟 [수정] 반려 처리는 장미색으로 구분
+        return (
+          <span className="px-3 py-1 text-xs font-bold text-rose-700 bg-rose-100 rounded-full">
+            반려 처리
+          </span>
+        );
       default:
         return (
           <span className="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-200 rounded-full">
@@ -207,29 +213,24 @@ const ReconciliationList: React.FC = () => {
   };
 
   const handleDetailClick = async (row: ReconciliationData) => {
-    if (row.status === "FAILED") {
-      navigate("/remittance");
-    } else {
-      try {
-        const response: any = await http.get(
-          `/admin/settlements/${row.id}/receipt`,
-        );
-        if (response && response.data && response.data.status === "SUCCESS") {
-          setSelectedDetail(response.data.data);
-          setIsDetailModalOpen(true);
-        } else {
-          toast.error("영수증 데이터를 불러올 수 없습니다.");
-        }
-      } catch (error) {
-        console.error("영수증 조회 실패:", error);
-        toast.error("상세 내역을 불러오는 중 오류가 발생했습니다.");
+    try {
+      const response: any = await http.get(
+        `/admin/settlements/${row.id}/receipt`,
+      );
+      if (response && response.data && response.data.status === "SUCCESS") {
+        setSelectedDetail(response.data.data);
+        setIsDetailModalOpen(true);
+      } else {
+        toast.error("영수증 데이터를 불러올 수 없습니다.");
       }
+    } catch (error) {
+      console.error("영수증 조회 실패:", error);
+      toast.error("상세 내역을 불러오는 중 오류가 발생했습니다.");
     }
   };
 
   const filteredData = [...data]
     .sort((a, b) => b.id - a.id)
-    .filter((d) => !(d.clientName === "Member C" && d.originalAmount === 1000))
     .filter((d) => filterStatus === "ALL" || d.status === filterStatus)
     .filter((d) => {
       if (!searchQuery.trim()) return true;
@@ -404,7 +405,6 @@ const ReconciliationList: React.FC = () => {
                 )}
               </div>
 
-              {/* 🌟 [수정] 불필요한 금액 입력칸을 완전히 삭제했습니다. */}
               <div className="flex items-center gap-2 p-1.5 border bg-slate-50 rounded-xl border-slate-200">
                 <select
                   value={testStatus}
@@ -414,6 +414,8 @@ const ReconciliationList: React.FC = () => {
                   <option value="PENDING">정산 중</option>
                   <option value="COMPLETED">정산 완료</option>
                   <option value="FAILED">송금 실패</option>
+                  {/* 🌟 [수정] 테스트 주입 옵션에 반려 처리 추가 */}
+                  <option value="REJECTED">반려 처리</option>
                 </select>
                 <button
                   onClick={handleCreateTestData}
@@ -545,21 +547,12 @@ const ReconciliationList: React.FC = () => {
                         {getStatusBadge(row.status)}
                       </td>
                       <td className="px-2 py-5 text-center">
-                        {row.status === "FAILED" ? (
-                          <button
-                            onClick={() => handleDetailClick(row)}
-                            className="px-3 py-1.5 text-xs font-bold text-white bg-[#e02424] rounded shadow-sm hover:bg-red-700 transition whitespace-nowrap"
-                          >
-                            송금 관리 이동
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleDetailClick(row)}
-                            className="px-4 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded hover:bg-teal-100 transition whitespace-nowrap"
-                          >
-                            조회
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleDetailClick(row)}
+                          className="px-4 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded hover:bg-teal-100 transition whitespace-nowrap"
+                        >
+                          조회
+                        </button>
                       </td>
                     </tr>
                   ))
