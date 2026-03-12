@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import CommonLayout from "../../../components/layout/CommonLayout";
+
 import { useWallet } from "../../../context/WalletContext";
-import { hasRole, getAuthToken } from "../../../utils/auth";
+import { hasRole, getToken } from "../../../config/auth";
 import {
     Building2,
     Plus,
@@ -15,8 +15,18 @@ import {
     Search,
     Briefcase,
     Sparkles,
+    Filter,
 } from "lucide-react";
 import { useToast } from "../../../components/notification/ToastProvider";
+
+const CURRENCY_NAMES: Record<string, string> = {
+    KRW: "대한민국 원", AED: "아랍에미리트 디르함", AUD: "호주 달러", BHD: "바레인 디나르",
+    BND: "브루나이 달러", CAD: "캐나다 달러", CHF: "스위스 프랑", CNH: "위안화",
+    DKK: "덴마크 크로네", EUR: "유로", GBP: "영국 파운드", HKD: "홍콩 달러",
+    IDR: "인도네시아 루피아", JPY: "일본 엔", KWD: "쿠웨이트 디나르", MYR: "말레이시아 링깃",
+    NOK: "노르웨이 크로네", NZD: "뉴질랜드 달러", SAR: "사우디 리얄", SEK: "스웨덴 크로나",
+    SGD: "싱가포르 달러", THB: "태국 바트", USD: "미국 달러",
+};
 
 const CorporateWallet: React.FC = () => {
     const { showToast } = useToast();
@@ -37,12 +47,16 @@ const CorporateWallet: React.FC = () => {
 
     const isCorpAdmin = hasRole("ROLE_COMPANY_ADMIN");
 
+    const activePockets = (Object.entries(corporateBalances) as [string, number][]).filter(
+        ([cur, bal]) => bal > 0 && cur !== "KRW"
+    );
+
     // 🌟 [B담당 로직 결합] 기업 상세 정보(사업자 번호 등) 조회를 위한 프로필 호출
     useEffect(() => {
         const fetchProfile = async () => {
             try {
                 const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/auth/me`, {
-                    headers: { Authorization: `Bearer ${getAuthToken()}` },
+                    headers: { Authorization: `Bearer ${getToken()}` },
                 });
                 setProfile(response.data.data);
             } catch (err) {
@@ -60,7 +74,7 @@ const CorporateWallet: React.FC = () => {
             const apiRes = await axios.post(
                 `${import.meta.env.VITE_API_BASE_URL}/wallet/corporate/activate`,
                 {},
-                { headers: { Authorization: `Bearer ${getAuthToken()}` } },
+                { headers: { Authorization: `Bearer ${getToken()}` } },
             );
             const { accountNumber, companyName: name } = apiRes.data;
             setCorporateAccount(accountNumber, name);
@@ -100,14 +114,14 @@ const CorporateWallet: React.FC = () => {
     // 1. 계좌가 없을 때 (발급 신청 UI)
     if (!corporateAccount || !corporateAccount.includes("2003")) {
         return (
-            <CommonLayout>
+            <>
                 <div className="max-w-4xl px-6 py-32 mx-auto space-y-12 text-center animate-in fade-in">
                     <div className="space-y-6">
                         <div className="bg-indigo-50 w-24 h-24 rounded-[32px] flex items-center justify-center mx-auto text-indigo-600 shadow-xl shadow-indigo-100/50">
                             <Building2 size={48} />
                         </div>
                         <h1 className="text-4xl italic font-black tracking-tighter uppercase text-slate-900">
-                            Corporate Activation
+                            기업 계좌 활성화
                         </h1>
                         <p className="max-w-md mx-auto font-bold leading-relaxed text-slate-500">
                             기업 정보가 확인되었습니다. <br />
@@ -139,13 +153,13 @@ const CorporateWallet: React.FC = () => {
                         )}
                     </div>
                 </div>
-            </CommonLayout>
+            </>
         );
     }
 
     // 2. 계좌가 있을 때 (통합 대시보드 UI)
     return (
-        <CommonLayout>
+        <>
             <div className="p-8 mx-auto space-y-10 font-sans max-w-7xl animate-in fade-in bg-[#F8FAFC]">
                 <header className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     {/* 기업 상세 정보 카드 (B담당 정보 + C담당 스타일) */}
@@ -153,7 +167,7 @@ const CorporateWallet: React.FC = () => {
                         <div className="relative z-10 space-y-4">
                             <div className="flex items-center gap-2">
                 <span className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-lg uppercase tracking-widest">
-                  Corporate
+                  기업 계좌
                 </span>
                             </div>
                             <h2 className="text-4xl italic font-black uppercase text-slate-900 leading-none tracking-tighter">
@@ -172,7 +186,7 @@ const CorporateWallet: React.FC = () => {
                     <div className="bg-slate-900 rounded-[40px] p-10 text-white shadow-2xl flex flex-col justify-between relative overflow-hidden">
                         <div className="relative z-10">
                             <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-4">
-                                Master Account ID
+                                마스터 계좌 ID
                             </p>
                             <div className="flex items-center justify-between">
                                 <h3 className="font-mono text-3xl italic font-bold tracking-tighter">
@@ -185,7 +199,7 @@ const CorporateWallet: React.FC = () => {
                         </div>
                         <div className="relative z-10 flex items-end justify-between pt-6 border-t border-white/5">
                             <div className="space-y-1">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Available Balance</p>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">보유 잔액</p>
                                 <p className="text-3xl italic font-black tracking-tighter">
                                     ₩ {corporateBalances.KRW?.toLocaleString() || 0}
                                 </p>
@@ -202,13 +216,38 @@ const CorporateWallet: React.FC = () => {
                     </div>
                 </header>
 
+                {/* 외화 포켓 리스트 */}
+                <section className="bg-white border border-slate-100 rounded-[48px] p-10 shadow-sm">
+                    <h3 className="flex items-center gap-2 mb-8 text-[10px] font-black tracking-widest uppercase text-slate-400 italic">
+                        <Filter size={14} /> 외화 자산 포켓
+                    </h3>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {activePockets.length > 0 ? (
+                            activePockets.map(([cur, bal]) => (
+                                <div key={cur} className="flex items-center justify-between p-6 bg-slate-50 rounded-[28px] border border-slate-100 hover:border-indigo-200 transition-all shadow-sm">
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-2xl italic font-black text-indigo-900">{cur}</span>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{CURRENCY_NAMES[cur] || cur}</p>
+                                    </div>
+                                    <p className="text-xl italic font-black text-slate-900">{bal.toLocaleString()}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex flex-col items-center justify-center col-span-full py-12 space-y-4 opacity-30 italic font-black text-slate-400 bg-slate-50/50 rounded-[32px] border border-dashed border-slate-200">
+                                <Briefcase size={36} />
+                                <p className="text-xs uppercase tracking-widest">보유 중인 외화 자산이 없습니다</p>
+                            </div>
+                        )}
+                    </div>
+                </section>
+
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
                     {/* 거래 내역 섹션 */}
-                    <section className="space-y-6 lg:col-span-8">
+                    <section className="space-y-6 lg:col-span-12">
                         <div className="flex items-center justify-between px-2">
                             <div className="space-y-1">
                                 <h3 className="text-xl italic font-black tracking-tighter uppercase text-slate-900">
-                                    Business Ledger
+                                    거래 장부
                                 </h3>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">정산 소스 데이터 (Raw Data)</p>
                             </div>
@@ -228,9 +267,9 @@ const CorporateWallet: React.FC = () => {
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
                                 <tr>
-                                    <th className="px-10 py-6">Date</th>
-                                    <th className="px-10 py-6">Transaction Title</th>
-                                    <th className="px-10 py-6 text-right">Amount (KRW)</th>
+                                    <th className="px-10 py-6">일시</th>
+                                    <th className="px-10 py-6">거래 정보</th>
+                                    <th className="px-10 py-6 text-right">금액</th>
                                 </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
@@ -238,16 +277,19 @@ const CorporateWallet: React.FC = () => {
                                     businessTxs.map((tx) => (
                                         <tr key={tx.id} className="transition-colors hover:bg-slate-50/50 group">
                                             <td className="px-10 py-8 text-[11px] font-bold text-slate-400 font-mono italic">
-                                                {tx.date}
+                                                {tx.date.substring(0, 16).replace("T", " ")}
                                             </td>
                                             <td className="flex items-center gap-4 px-10 py-8">
                                                 <div className={`p-2 rounded-lg ${tx.amount > 0 ? "bg-teal-50 text-teal-600" : "bg-red-50 text-red-600"}`}>
                                                     {tx.amount > 0 ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                                                 </div>
-                                                <span className="text-sm italic font-black text-slate-800">{tx.title}</span>
+                                                <div>
+                                                    <span className="text-sm italic font-black text-slate-800 block">{tx.title}</span>
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{tx.type === "EXCHANGE" ? "환전" : tx.type === "CHARGE" ? "충전" : "송금"}</span>
+                                                </div>
                                             </td>
                                             <td className={`px-10 py-8 text-right font-black italic text-base ${tx.amount > 0 ? "text-teal-600" : "text-slate-900"}`}>
-                                                {tx.amount.toLocaleString()}
+                                                {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()} <span className="text-[10px] uppercase opacity-40 ml-1">{tx.currency}</span>
                                             </td>
                                         </tr>
                                     ))
@@ -263,23 +305,7 @@ const CorporateWallet: React.FC = () => {
                         </div>
                     </section>
 
-                    {/* 사이드바 (B담당 내보내기 도구 연동) */}
-                    <aside className="space-y-6 lg:col-span-4">
-                        <div className="bg-indigo-600 rounded-[40px] p-10 text-white shadow-xl relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-8 transition-transform opacity-10 group-hover:scale-110">
-                                <Download size={100} />
-                            </div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-6 text-indigo-200">
-                                Data Export Tool
-                            </p>
-                            <p className="mb-10 text-2xl italic font-black leading-tight tracking-tighter">
-                                정산 담당자를 위한 <br />Raw Data 추출
-                            </p>
-                            <button className="w-full py-5 text-xs font-black tracking-widest text-indigo-600 uppercase transition-all bg-white shadow-lg rounded-2xl hover:shadow-indigo-50 active:scale-95">
-                                CSV 데이터 내보내기
-                            </button>
-                        </div>
-                    </aside>
+
                 </div>
             </div>
 
@@ -287,7 +313,7 @@ const CorporateWallet: React.FC = () => {
             {isChargeModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-md animate-in fade-in">
                     <div className="bg-white w-full max-w-md rounded-[56px] p-12 space-y-10 shadow-2xl text-center">
-                        <h3 className="text-3xl italic font-black tracking-tighter uppercase text-slate-900">Corporate Deposit</h3>
+                        <h3 className="text-3xl italic font-black tracking-tighter uppercase text-slate-900">기업 자산 충전</h3>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{companyName} 자산 충전</p>
                         <input
                             type="number"
@@ -298,13 +324,13 @@ const CorporateWallet: React.FC = () => {
                             autoFocus
                         />
                         <div className="flex gap-4 pt-4">
-                            <button onClick={() => setIsChargeModalOpen(false)} className="flex-1 py-6 text-xs font-black uppercase text-slate-400">Cancel</button>
-                            <button onClick={handleCharge} className="flex-[2] bg-indigo-600 text-white py-6 rounded-3xl font-black uppercase text-xs shadow-xl active:scale-95">Charge Now</button>
+                            <button onClick={() => setIsChargeModalOpen(false)} className="flex-1 py-6 text-xs font-black uppercase text-slate-400">취소</button>
+                            <button onClick={handleCharge} className="flex-[2] bg-indigo-600 text-white py-6 rounded-3xl font-black uppercase text-xs shadow-xl active:scale-95">충전하기</button>
                         </div>
                     </div>
                 </div>
             )}
-        </CommonLayout>
+        </>
     );
 };
 

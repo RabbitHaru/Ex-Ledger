@@ -147,26 +147,9 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
               </Link>
             </div>
 
-            {/* 🌟 중앙 메뉴: 정산 요약 대신 실무 중심 명칭으로 변경 */}
+            {/* 중앙 메뉴 제거 (레이아웃 간소화 요청) */}
             <nav className="items-center hidden gap-8 text-[13px] font-black md:flex">
-              <Link
-                to="/"
-                className={`flex items-center gap-2 transition-colors ${isActive("/")
-                  ? "text-teal-600"
-                  : "text-slate-400 hover:text-slate-600"
-                  }`}
-              >
-                <BarChart2 size={16} /> 실시간 환율
-              </Link>
-              <Link
-                to="/seller/dashboard"
-                className={`flex items-center gap-2 transition-colors ${isActive("/seller/dashboard")
-                  ? "text-teal-600"
-                  : "text-slate-400 hover:text-slate-600"
-                  }`}
-              >
-                <LayoutDashboard size={16} /> 셀러 대시보드
-              </Link>
+                {/* 비워둠 */}
             </nav>
 
             <div className="relative flex items-center gap-4">

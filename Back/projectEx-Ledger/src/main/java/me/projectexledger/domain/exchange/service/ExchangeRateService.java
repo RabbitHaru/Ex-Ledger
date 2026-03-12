@@ -39,74 +39,42 @@ public class ExchangeRateService {
     private static final String REDIS_KEY = "LATEST_RATES";
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /**
-     * 실시간 환율 수집 및 캐싱 (SSE 알림 포함)
-     */
     @Transactional
     public List<ExchangeRateDTO> updateAndCacheRates() {
         LocalDate today = LocalDate.now();
 
-        // 1. 휴일 및 주말 차단 로직 (C담당 상세 로직)
-        if (isWeekend(today) || isPublicHoliday(today)) {
-            log.info("⏩ 휴일이므로 환율 수집을 건너뜁니다: {}", today);
+        if (today.getDayOfWeek() == DayOfWeek.SATURDAY || today.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            log.info("⏩ 주말이므로 환율 수집을 건너뜁니다: {}", today);
             return getLatestRatesFromCacheOrDb();
         }
 
-        // 2. 이미 양질의 데이터가 있는지 확인
         if (isEximDataExists(today)) {
+            log.info("✅ 오늘자 최신 수출입은행 데이터가 이미 존재합니다.");
             return getLatestRatesFromCacheOrDb();
         }
 
-        // 3. 데이터 수집 및 처리
         List<ExchangeRateDTO> dtos = fetchFromBestSource(today.toString());
         if (dtos != null && !dtos.isEmpty()) {
             processAndSaveRates(dtos);
-
-            // 🌟 [B담당] 실시간 SSE 브로드캐스트 전송
             sseEmitters.broadcastExchangeUpdate(dtos);
+        } else {
+            log.warn("⚠️ 모든 API 소스로부터 환율 데이터를 가져오지 못했습니다.");
         }
 
         return getLatestRatesFromCacheOrDb();
     }
 
-    /**
-     * 데이터 품질 관리 및 저장 (C담당 핵심 로직)
-     */
-    private void processAndSaveRates(List<ExchangeRateDTO> dtos) {
-        if (dtos == null || dtos.isEmpty()) return;
-
-        String updatedAtStr = dtos.get(0).getUpdatedAt();
-        LocalDate dataDate = parseLocalDate(updatedAtStr);
-        String provider = dtos.get(0).getProvider();
-
-        // 동일 공급자 중복 저장 방지
-        if (exchangeRateRepository.existsByCurUnitAndProviderAndUpdatedAtBetween(
-                "USD", provider, dataDate.atStartOfDay(), dataDate.atTime(LocalTime.MAX))) return;
-
-        // Frankfurter 수집 시 이미 다른 데이터가 있다면 건너뜀 (KOREAEXIM 우선순위)
-        if (provider.equals("FRANKFURTER") && isAnyDataExists(dataDate)) return;
-
-        // 기존 데이터 삭제 후 새 데이터로 업그레이드 저장
-        deleteRatesByDate(dataDate);
-        saveToDatabaseTransactional(dtos);
-        log.info("✅ [{}] 데이터 저장/업그레이드 완료 (Provider: {})", dataDate, provider);
-    }
-
-    /**
-     * 차트 시각화를 위한 환율 이력 조회 (B담당 최적화 로직)
-     */
     @Transactional(readOnly = true)
     public List<ExchangeRateResponseDTO> getExchangeRateHistory(String curUnit, int days) {
-        LocalDateTime start = LocalDateTime.now().minusDays(days + 7); // 여유 있게 조회
+        LocalDateTime start = LocalDateTime.now().minusDays(days + 7);
 
         List<ExchangeRate> rates = exchangeRateRepository.findByCurUnitAndUpdatedAtAfterOrderByUpdatedAtAsc(curUnit, start);
 
-        // 🌟 TreeMap을 이용해 날짜별 중복 제거 및 정렬된 차트 데이터 생성
         return rates.stream()
                 .collect(Collectors.toMap(
                         rate -> rate.getUpdatedAt().toLocalDate(),
                         rate -> rate,
-                        (existing, replacement) -> replacement, // 같은 날 데이터가 여러개면 마지막 것 사용
+                        (existing, replacement) -> replacement,
                         TreeMap::new
                 ))
                 .values().stream()
@@ -117,38 +85,45 @@ public class ExchangeRateService {
                 .collect(Collectors.toList());
     }
 
+    // 🌟 [추가] TransactionService에서 사용하는 최신 환율 1건 조회 메서드
+    public BigDecimal getLatestRate(String currency) {
+        return getLatestRatesFromCacheOrDb().stream()
+                .filter(dto -> dto.getCurUnit().equals(currency))
+                .map(ExchangeRateDTO::getRate)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 통화이거나 데이터를 찾을 수 없습니다: " + currency));
+    }
+
+    private void processAndSaveRates(List<ExchangeRateDTO> dtos) {
+        if (dtos == null || dtos.isEmpty()) return;
+
+        String updatedAtStr = dtos.get(0).getUpdatedAt();
+        LocalDate dataDate = parseLocalDate(updatedAtStr);
+        String provider = dtos.get(0).getProvider();
+
+        if (exchangeRateRepository.existsByCurUnitAndProviderAndUpdatedAtBetween(
+                "USD", provider, dataDate.atStartOfDay(), dataDate.atTime(LocalTime.MAX))) return;
+
+        if (provider.equals("FRANKFURTER") && isAnyDataExists(dataDate)) {
+            log.info("⏩ [{}] 이미 데이터가 존재하여 프랑크푸르터 데이터 저장을 생략합니다.", dataDate);
+            return;
+        }
+
+        deleteRatesByDate(dataDate);
+        saveToDatabaseTransactional(dtos);
+        log.info("✅ [{}] 환율 데이터 업데이트 성공 (제공처: {})", dataDate, provider);
+    }
+
     private List<ExchangeRateDTO> fetchFromBestSource(String dateStr) {
         try {
             List<ExchangeRateDTO> eximDtos = koreaEximClient.fetchHistoricalRates(dateStr);
             if (eximDtos != null && !eximDtos.isEmpty()) return eximDtos;
         } catch (Exception e) {
-            log.warn("⚠️ KOREAEXIM 호출 실패: {}", dateStr);
+            log.warn("⚠️ [수출입은행] 호출 실패: {}", dateStr);
         }
-        return frankfurterClient.fetchHistoricalRates(dateStr).stream()
-                .filter(dto -> CurrencyMapper.isSupported(dto.getCurUnit()))
-                .collect(Collectors.toList());
-    }
 
-    // 2026년 공휴일 체크 로직 (C담당)
-    private boolean isPublicHoliday(LocalDate date) {
-        if (date.getYear() != 2026) return false;
-        int m = date.getMonthValue();
-        int d = date.getDayOfMonth();
-
-        if (m == 1 && d == 1) return true; // 신정
-        if (m == 2 && (d == 16 || d == 17 || d == 18)) return true; // 설날
-        if (m == 3 && (d == 1 || d == 2)) return true; // 삼일절/대체
-        if (m == 5 && (d == 5 || d == d || d == 25)) return true; // 어린이날/석신
-        if (m == 6 && d == 6) return true; // 현충일
-        if (m == 8 && d == 15) return true; // 광복절
-        if (m == 9 && (d == 24 || d == 25 || d == 26)) return true; // 추석
-        if (m == 10 && (d == 3 || d == 9)) return true; // 개천절/한글날
-        if (m == 12 && d == 25) return true; // 성탄절
-        return false;
-    }
-
-    private boolean isWeekend(LocalDate date) {
-        return date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY;
+        log.info("🔄 [대체수집] 프랑크푸르터 API를 시도합니다.");
+        return frankfurterClient.fetchHistoricalRates(dateStr);
     }
 
     private boolean isEximDataExists(LocalDate date) {
@@ -177,9 +152,18 @@ public class ExchangeRateService {
         exchangeRateRepository.saveAll(entities);
     }
 
+    @Transactional
+    public void cleanupOldRates(LocalDateTime threshold) {
+        log.info("🧹 오래된 환율 데이터 삭제 중 (기준일: {})", threshold);
+        exchangeRateRepository.deleteOldRates(threshold);
+    }
+
     private LocalDateTime parseDateTime(String dtStr) {
-        try { return LocalDateTime.parse(dtStr, formatter); }
-        catch (Exception e) { return LocalDate.parse(dtStr.substring(0, 10)).atStartOfDay(); }
+        try {
+            return LocalDateTime.parse(dtStr, formatter);
+        } catch (Exception e) {
+            return LocalDate.parse(dtStr.substring(0, 10)).atStartOfDay();
+        }
     }
 
     private LocalDate parseLocalDate(String dtStr) {
@@ -191,7 +175,9 @@ public class ExchangeRateService {
             @SuppressWarnings("unchecked")
             List<ExchangeRateDTO> cachedRates = (List<ExchangeRateDTO>) redisTemplate.opsForValue().get(REDIS_KEY);
             if (cachedRates != null && !cachedRates.isEmpty()) return cachedRates;
-        } catch (Exception e) { log.warn("⚠️ Redis 연결 불가"); }
+        } catch (Exception e) {
+            log.warn("⚠️ 레디스 연결 불가, DB에서 직접 조회합니다.");
+        }
 
         List<ExchangeRate> entities = exchangeRateRepository.findAllLatestRates();
         List<ExchangeRateDTO> dtos = calculateChangeStats(entities);
@@ -221,30 +207,36 @@ public class ExchangeRateService {
     }
 
     private void saveToCache(List<ExchangeRateDTO> rates) {
-        try { redisTemplate.opsForValue().set(REDIS_KEY, rates, Duration.ofHours(1)); }
-        catch (Exception e) { log.error("⚠️ Redis 캐싱 실패"); }
-    }
-
-    @PostConstruct
-    public void init() { backfillHistoricalData(); }
-
-    public void backfillHistoricalData() {
-        log.info("=== 📂 지능형 데이터 점검 및 업그레이드 시작 (최근 20일) ===");
-        for (int i = 20; i >= 0; i--) {
-            LocalDate targetDate = LocalDate.now().minusDays(i);
-            if (isWeekend(targetDate) || isPublicHoliday(targetDate)) continue;
-            if (isEximDataExists(targetDate)) continue;
-
-            List<ExchangeRateDTO> dtos = fetchFromBestSource(targetDate.toString());
-            processAndSaveRates(dtos);
+        try {
+            redisTemplate.opsForValue().set(REDIS_KEY, rates, Duration.ofHours(1));
+        } catch (Exception e) {
+            log.error("❌ 레디스 캐싱 실패");
         }
     }
 
-    public BigDecimal getLatestRate(String currency) {
-        return getLatestRatesFromCacheOrDb().stream()
-                .filter(dto -> dto.getCurUnit().equals(currency))
-                .map(ExchangeRateDTO::getRate)
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 통화입니다: " + currency));
+    @PostConstruct
+    public void init() {
+        backfillHistoricalData();
+    }
+
+    public void backfillHistoricalData() {
+        log.info("=== 📂 지능형 데이터 점검 및 보완 시작 (최근 20일) ===");
+        int failureCount = 0;
+        for (int i = 20; i >= 0; i--) {
+            LocalDate targetDate = LocalDate.now().minusDays(i);
+            if (isEximDataExists(targetDate)) continue;
+
+            List<ExchangeRateDTO> dtos = fetchFromBestSource(targetDate.toString());
+            if (dtos == null || dtos.isEmpty()) {
+                failureCount++;
+                if (failureCount >= 3) {
+                    log.warn("⚠️ API 연속 실패로 과거 데이터 보완을 중단합니다.");
+                    break;
+                }
+            } else {
+                failureCount = 0; // reset on success
+                processAndSaveRates(dtos);
+            }
+        }
     }
 }

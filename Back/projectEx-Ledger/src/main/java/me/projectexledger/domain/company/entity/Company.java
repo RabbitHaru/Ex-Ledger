@@ -1,10 +1,10 @@
 package me.projectexledger.domain.company.entity;
 
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import me.projectexledger.domain.BaseEntity;
 import me.projectexledger.domain.member.entity.AdminApprovalStatus;
 import me.projectexledger.common.config.AesCryptoConverter;
@@ -42,7 +42,18 @@ public class Company extends BaseEntity {
 
     @Column(length = 50)
     private String corporateAccountNumber;
-    private Long balanceKrw;
+
+    @Column(name = "balance_krw")
+    private Long balanceKrw = 0L;
+
+    @Column(name = "balance_usd", precision = 15, scale = 2)
+    private BigDecimal balanceUsd = BigDecimal.ZERO;
+
+    @Column(name = "balance_eur", precision = 15, scale = 2)
+    private BigDecimal balanceEur = BigDecimal.ZERO;
+
+    @Column(name = "balance_jpy", precision = 15, scale = 2)
+    private BigDecimal balanceJpy = BigDecimal.ZERO;
 
     @Builder
     public Company(String businessNumber, String companyName, String representative,
@@ -52,12 +63,50 @@ public class Company extends BaseEntity {
         this.representative = representative;
         this.adminApprovalStatus = adminApprovalStatus != null ? adminApprovalStatus : AdminApprovalStatus.PENDING;
         this.licenseFileUuid = licenseFileUuid;
-        this.balanceKrw = 0L;
+        // balanceKrw is initialized by field declaration
     }
 
     public void activateAccount(String accountNumber) {
         this.corporateAccountNumber = accountNumber;
         this.adminApprovalStatus = AdminApprovalStatus.APPROVED;
+    }
+
+    public void addBalance(Long amount) {
+        this.balanceKrw += amount;
+    }
+
+    public void deductBalance(Long amount) {
+        if (this.balanceKrw < amount) {
+            throw new IllegalArgumentException("기업 잔액이 부족합니다.");
+        }
+        this.balanceKrw -= amount;
+    }
+
+    public void addForeignBalance(String currency, BigDecimal amount) {
+        if ("USD".equals(currency)) {
+            this.balanceUsd = (this.balanceUsd != null ? this.balanceUsd : BigDecimal.ZERO).add(amount);
+        } else if ("EUR".equals(currency)) {
+            this.balanceEur = (this.balanceEur != null ? this.balanceEur : BigDecimal.ZERO).add(amount);
+        } else if ("JPY".equals(currency)) {
+            this.balanceJpy = (this.balanceJpy != null ? this.balanceJpy : BigDecimal.ZERO).add(amount);
+        } else {
+            throw new IllegalArgumentException("지원하지 않는 외화입니다.");
+        }
+    }
+
+    public void deductForeignBalance(String currency, BigDecimal amount) {
+        if ("USD".equals(currency)) {
+            if (this.balanceUsd == null || this.balanceUsd.compareTo(amount) < 0) throw new IllegalArgumentException("기업 USD 잔액이 부족합니다.");
+            this.balanceUsd = this.balanceUsd.subtract(amount);
+        } else if ("EUR".equals(currency)) {
+            if (this.balanceEur == null || this.balanceEur.compareTo(amount) < 0) throw new IllegalArgumentException("기업 EUR 잔액이 부족합니다.");
+            this.balanceEur = this.balanceEur.subtract(amount);
+        } else if ("JPY".equals(currency)) {
+            if (this.balanceJpy == null || this.balanceJpy.compareTo(amount) < 0) throw new IllegalArgumentException("기업 JPY 잔액이 부족합니다.");
+            this.balanceJpy = this.balanceJpy.subtract(amount);
+        } else {
+            throw new IllegalArgumentException("지원하지 않는 외화입니다.");
+        }
     }
 
     public void approveByAdmin() {

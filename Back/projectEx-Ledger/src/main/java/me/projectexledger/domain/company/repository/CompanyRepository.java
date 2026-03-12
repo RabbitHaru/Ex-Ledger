@@ -11,4 +11,5 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
     Optional<Company> findByBusinessNumber(String businessNumber);
     boolean existsByBusinessNumber(String businessNumber);
     List<Company> findByAdminApprovalStatus(AdminApprovalStatus status);
+    Optional<Company> findByCorporateAccountNumber(String corporateAccountNumber);
 }

@@ -37,7 +37,6 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long
     @Query("SELECT er FROM ExchangeRate er WHERE er.curUnit = :curUnit ORDER BY er.updatedAt DESC")
     List<ExchangeRate> findRecentByCurUnit(@Param("curUnit") String curUnit, Pageable pageable);
 
-    // 🌟 공급자 상관없이 특정 범위 내 데이터 존재 확인
     boolean existsByCurUnitAndUpdatedAtBetween(String curUnit, LocalDateTime start, LocalDateTime end);
 
     boolean existsByCurUnitAndProviderAndUpdatedAtBetween(String curUnit, String provider, LocalDateTime start, LocalDateTime end);

@@ -121,6 +121,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 >
                     <BarChart2 size={18} /> 실시간 환율 정보
                 </Link>
+                <Link
+                    to="/exchange"
+                    onClick={onClose}
+                    className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/exchange") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+                >
+                    <ArrowRightLeft size={18} /> 실시간 환전
+                </Link>
 
                 {/* 1. 개인/금융 서비스 (일반 유저 및 기업 유저 공통) */}
                 {isFinanceUser && !isSiteAdmin && (
@@ -130,34 +137,59 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                                 Financial Services
                             </p>
                         </div>
-                        <Link
-                            to="/wallet/overview"
-                            onClick={onClose}
-                            className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/wallet/overview") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-                        >
-                            <Wallet size={18} /> 자산 관리 (Wallet)
-                        </Link>
-                        <Link
-                            to="/seller/dashboard"
-                            onClick={onClose}
-                            className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/seller/dashboard") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-                        >
-                            <ArrowRightLeft size={18} /> 개인/기업 송금
-                        </Link>
-                        <Link
-                            to="/settlement"
-                            onClick={onClose}
-                            className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/settlement") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-                        >
-                            <Coins size={18} /> 정산 관리 (Settlement)
-                        </Link>
-                        <Link
-                            to="/seller/history"
-                            onClick={onClose}
-                            className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/seller/history") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-                        >
-                            <History size={18} /> 거래 상세 장부
-                        </Link>
+                        {/* 개인 지갑 및 기록은 기업 회원이 아닌 경우에만 노출 */}
+                        {!isCorporateMember && (
+                            <>
+                                <Link
+                                    to="/wallet/overview"
+                                    onClick={onClose}
+                                    className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/wallet/overview") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+                                >
+                                    <Wallet size={18} /> 자산 관리 (Wallet)
+                                </Link>
+                                <Link
+                                    to="/seller/dashboard"
+                                    onClick={onClose}
+                                    className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/seller/dashboard") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+                                >
+                                    <ArrowRightLeft size={18} /> 개인/기업 송금
+                                </Link>
+                                <Link
+                                    to="/settlement"
+                                    onClick={onClose}
+                                    className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/settlement") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+                                >
+                                    <Coins size={18} /> 정산 관리 (Settlement)
+                                </Link>
+                                <Link
+                                    to="/seller/history"
+                                    onClick={onClose}
+                                    className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/seller/history") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+                                >
+                                    <History size={18} /> 거래 상세 장부
+                                </Link>
+                            </>
+                        )}
+                        
+                        {/* 기업 회원인 경우 송금/정산 메뉴를 위로 올림 (개인 장부 대체) */}
+                        {isCorporateMember && (
+                            <>
+                                <Link
+                                    to="/seller/dashboard"
+                                    onClick={onClose}
+                                    className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/seller/dashboard") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+                                >
+                                    <ArrowRightLeft size={18} /> 기업 송금
+                                </Link>
+                                <Link
+                                    to="/settlement"
+                                    onClick={onClose}
+                                    className={`flex items-center gap-3 px-4 py-3 text-sm font-black rounded-xl transition-all ${isActive("/settlement") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+                                >
+                                    <Coins size={18} /> 정산 관리 (Settlement)
+                                </Link>
+                            </>
+                        )}
 
                         {/* 2. 기업 전용 서비스 영역 */}
                         {isCorporateMember && (

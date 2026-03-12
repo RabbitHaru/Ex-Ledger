@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import CommonLayout from "../../../components/layout/CommonLayout";
+
 import { useWallet } from "../../../context/WalletContext";
 import {
     Wallet,
@@ -15,7 +15,7 @@ import {
     ArrowDownLeft,
 } from "lucide-react";
 import { useToast } from "../../../components/notification/ToastProvider";
-import { getAuthToken } from "../../../utils/auth";
+import { getToken } from "../../../config/auth";
 
 // --- Constants (B담당 통화 명칭 반영) ---
 const CURRENCY_NAMES: Record<string, string> = {
@@ -77,7 +77,7 @@ const WalletOverview: React.FC = () => {
             const apiRes = await axios.post(
                 `${import.meta.env.VITE_API_BASE_URL}/wallet/verify-identity`,
                 { impUid: response.identityVerificationId },
-                { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+                { headers: { Authorization: `Bearer ${getToken()}` } }
             );
 
             const { realName, accountNumber } = apiRes.data;
@@ -104,24 +104,24 @@ const WalletOverview: React.FC = () => {
 
     // 로딩 중일 때 (새로고침 이슈 방지)
     if (isLoading) return (
-        <CommonLayout>
+        <>
             <div className="flex items-center justify-center min-h-[60vh]">
                 <Loader2 className="animate-spin text-slate-200" size={48} />
             </div>
-        </CommonLayout>
+        </>
     );
 
     // 1. 계좌가 없을 때 (본인인증 UI - C담당)
     if (!personalAccount) {
         return (
-            <CommonLayout>
+            <>
                 <div className="max-w-4xl px-6 py-32 mx-auto space-y-12 text-center animate-in fade-in">
                     <div className="space-y-6">
                         <div className="bg-teal-50 w-24 h-24 rounded-[32px] flex items-center justify-center mx-auto text-teal-600 shadow-xl shadow-teal-100/50">
                             <ShieldCheck size={48} />
                         </div>
                         <h1 className="text-4xl italic font-black uppercase text-slate-900 tracking-tighter">
-                            Identity Verification
+                            본인 인증
                         </h1>
                         <p className="font-bold leading-relaxed text-slate-500 uppercase text-[11px] tracking-widest">
                             보안 강화를 위해 본인인증 후<br />개인 전용 지갑을 활성화할 수 있습니다.
@@ -135,13 +135,13 @@ const WalletOverview: React.FC = () => {
                         {isActivating ? <Loader2 className="animate-spin mx-auto" size={24} /> : "본인인증 후 지갑 활성화"}
                     </button>
                 </div>
-            </CommonLayout>
+            </>
         );
     }
 
     // 2. 계좌가 있을 때 (통합 대시보드 UI)
     return (
-        <CommonLayout>
+        <>
             <div className="p-10 mx-auto space-y-12 font-sans max-w-7xl animate-in fade-in">
                 <header className="grid grid-cols-1 gap-8 lg:grid-cols-3">
                     {/* 메인 KRW 카드 */}
@@ -151,7 +151,7 @@ const WalletOverview: React.FC = () => {
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2 mb-1">
                                     <UserCheck size={14} className="text-teal-400" />
-                                    <p className="text-[10px] font-black text-teal-400 uppercase tracking-[0.3em]">My Personal Asset</p>
+                                    <p className="text-[10px] font-black text-teal-400 uppercase tracking-[0.3em]">내 개인 자산</p>
                                 </div>
                                 <h2 className="text-5xl italic font-black tracking-tighter leading-none">
                                     ₩ {personalBalances.KRW?.toLocaleString() || 0} <span className="text-lg opacity-30">KRW</span>
@@ -159,7 +159,7 @@ const WalletOverview: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-6 pt-6 border-t border-white/5">
                                 <div>
-                                    <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Personal Account ID</p>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">개인 계좌 ID</p>
                                     <p className="font-mono text-sm font-bold text-slate-300">{personalAccount}</p>
                                 </div>
                                 <button
@@ -175,7 +175,7 @@ const WalletOverview: React.FC = () => {
                     {/* 외화 포켓 리스트 (B담당 UI 반영) */}
                     <div className="bg-white border border-slate-100 rounded-[48px] p-10 shadow-sm flex flex-col">
                         <h3 className="flex items-center gap-2 mb-8 text-[10px] font-black tracking-widest uppercase text-slate-400 italic">
-                            <Filter size={14} /> Global Asset Pockets
+                            <Filter size={14} /> 외화 자산 포켓
                         </h3>
                         <div className="flex-1 space-y-4 overflow-y-auto max-h-[220px] pr-2 custom-scrollbar">
                             {activePockets.length > 0 ? (
@@ -191,7 +191,7 @@ const WalletOverview: React.FC = () => {
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full space-y-2 opacity-20 italic font-black">
                                     <CreditCard size={32} />
-                                    <p className="text-[9px] uppercase tracking-tighter">No Foreign Assets</p>
+                                    <p className="text-[9px] uppercase tracking-tighter">보유 외화 없음</p>
                                 </div>
                             )}
                         </div>
@@ -201,39 +201,44 @@ const WalletOverview: React.FC = () => {
                 {/* 거래 내역 섹션 (B담당 상세 UI 반영) */}
                 <section className="space-y-6">
                     <div className="flex items-center justify-between px-2">
-                        <h3 className="text-2xl italic font-black tracking-tighter uppercase text-slate-900">Recent Ledger Activity</h3>
+                        <h3 className="text-2xl italic font-black tracking-tighter uppercase text-slate-900">최근 거래 내역</h3>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-[56px] p-8 shadow-sm">
                         <div className="space-y-2">
-                            {transactions.length > 0 ? (
-                                transactions.filter(tx => tx.category === "PERSONAL").map((tx) => (
-                                    <div key={tx.id} className="flex items-center justify-between p-6 rounded-[32px] hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100 group">
-                                        <div className="flex items-center gap-6">
-                                            <div className={`p-4 rounded-2xl ${tx.amount > 0 ? "bg-teal-50 text-teal-600" : "bg-red-50 text-red-600"}`}>
-                                                {tx.amount > 0 ? <ArrowDownLeft size={22} /> : <ArrowUpRight size={22} />}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-3">
-                                                    <p className="text-lg italic font-black text-slate-800">{tx.title}</p>
-                                                    <span className="text-[8px] px-2 py-0.5 rounded-full font-black uppercase bg-slate-100 text-slate-400">Personal</span>
+                            {(() => {
+                                const personalTxs = transactions.filter(tx => tx.category === "PERSONAL");
+                                return personalTxs.length > 0 ? (
+                                    personalTxs.map((tx) => (
+                                        <div key={tx.id} className="flex items-center justify-between p-6 rounded-[32px] hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100 group">
+                                            <div className="flex items-center gap-6">
+                                                <div className={`p-4 rounded-2xl ${tx.amount > 0 ? "bg-teal-50 text-teal-600" : "bg-red-50 text-red-600"}`}>
+                                                    {tx.amount > 0 ? <ArrowDownLeft size={22} /> : <ArrowUpRight size={22} />}
                                                 </div>
-                                                <p className="mt-1 text-[10px] font-bold tracking-widest uppercase text-slate-300">{tx.date} • {tx.type}</p>
+                                                <div>
+                                                    <div className="flex items-center gap-3">
+                                                        <p className="text-lg italic font-black text-slate-800">{tx.title}</p>
+                                                        <span className="text-[8px] px-2 py-0.5 rounded-full font-black uppercase bg-slate-100 text-slate-400">개인</span>
+                                                    </div>
+                                                    <p className="mt-1 text-[10px] font-bold tracking-widest uppercase text-slate-300">
+                                                        {tx.date.substring(0, 16).replace("T", " ")} • {tx.type === "EXCHANGE" ? "환전" : tx.type === "CHARGE" ? "충전" : "송금"}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className={`text-xl font-black italic ${tx.amount > 0 ? "text-teal-600" : "text-slate-900"}`}>
+                                                    {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()} <span className="text-[10px] uppercase opacity-30">{tx.currency}</span>
+                                                </p>
+                                                <p className="text-[9px] font-black text-slate-300 uppercase mt-1 tracking-widest">{tx.status}</p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className={`text-xl font-black italic ${tx.amount > 0 ? "text-teal-600" : "text-slate-900"}`}>
-                                                {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()} <span className="text-[10px] uppercase opacity-30">{tx.currency}</span>
-                                            </p>
-                                            <p className="text-[9px] font-black text-slate-300 uppercase mt-1 tracking-widest">{tx.status}</p>
-                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="py-24 italic font-black text-center text-slate-200">
+                                        <History size={48} className="mx-auto mb-4 opacity-20" />
+                                        <p className="text-xs uppercase tracking-[0.2em]">거래 내역이 없습니다</p>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="py-24 italic font-black text-center text-slate-200">
-                                    <History size={48} className="mx-auto mb-4 opacity-20" />
-                                    <p className="text-xs uppercase tracking-[0.2em]">No Transaction Records</p>
-                                </div>
-                            )}
+                                );
+                            })()}
                         </div>
                     </div>
                 </section>
@@ -245,7 +250,7 @@ const WalletOverview: React.FC = () => {
                     <div className="bg-white w-full max-w-md rounded-[56px] p-12 space-y-10 shadow-2xl text-center animate-in zoom-in-95">
                         <div className="mx-auto w-20 h-20 bg-teal-50 text-teal-600 rounded-[30px] flex items-center justify-center shadow-lg"><CreditCard size={40} /></div>
                         <div className="space-y-2">
-                            <h3 className="text-3xl italic font-black uppercase text-slate-900">Charge Wallet</h3>
+                            <h3 className="text-3xl italic font-black uppercase text-slate-900">지갑 충전</h3>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Toss Payments 연동</p>
                         </div>
                         <div className="relative">
@@ -260,13 +265,13 @@ const WalletOverview: React.FC = () => {
                             <span className="absolute right-0 text-xl italic font-black bottom-8 text-slate-300">KRW</span>
                         </div>
                         <div className="flex gap-4 pt-4">
-                            <button onClick={() => setIsChargeModalOpen(false)} className="flex-1 py-6 text-[10px] font-black uppercase text-slate-400">Cancel</button>
-                            <button onClick={handleCharge} className="flex-[2] bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-[10px] shadow-xl active:scale-95 transition-all">Charge Now</button>
+                            <button onClick={() => setIsChargeModalOpen(false)} className="flex-1 py-6 text-[10px] font-black uppercase text-slate-400">취소</button>
+                            <button onClick={handleCharge} className="flex-[2] bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-[10px] shadow-xl active:scale-95 transition-all">충전하기</button>
                         </div>
                     </div>
                 </div>
             )}
-        </CommonLayout>
+        </>
     );
 };
 
