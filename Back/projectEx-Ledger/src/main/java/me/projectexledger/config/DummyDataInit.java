@@ -70,6 +70,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .bankName("신한은행")
                 .accountNumber("110-123-456789")
                 .merchantId("MCT-TEST-002")
+                .grade(ClientGrade.PARTNER)
                 .build();
 
         Client client3 = Client.builder()

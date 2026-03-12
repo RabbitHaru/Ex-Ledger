@@ -74,7 +74,7 @@ public class RemittanceService {
                 requestDTO.getCurrency(), requestDTO.getAmount(), requestDTO.getRecipientName(), requestDTO.getRecipientBank());
         sseEmitters.sendRemittanceNotification(requesterId, notiMsg);
 
-        memberRepository.findByAccountNumber(requestDTO.getRecipientAccount())
+        memberRepository.findByWalletAccountNumber(requestDTO.getRecipientAccount())
                 .filter(Member::isApproved)
                 .ifPresent(receiver -> {
                     NumberFormat nf = NumberFormat.getNumberInstance(Locale.KOREA);
