@@ -9,6 +9,7 @@ export interface DashboardSummary {
   completedRemittanceCount: number;
   pendingRemittanceCount: number;
   failedRemittanceCount: number;
+  rejectedRemittanceCount: number;
   discrepancyCount: number;
   waitingRemittanceCount: number;
 }
@@ -46,7 +47,8 @@ const AdminDashboard: React.FC = () => {
   }, []);
 
   const normalProcessCount = summary ? (summary.completedRemittanceCount + summary.pendingRemittanceCount) : 0;
-  const actionRequiredCount = summary ? summary.failedRemittanceCount : 0;
+  // 조치 필요 항목 = 송금 실패 + 반려 처리
+  const actionRequiredCount = summary ? (summary.failedRemittanceCount + (summary.rejectedRemittanceCount || 0)) : 0;
 
   return (
     <>
@@ -70,14 +72,12 @@ const AdminDashboard: React.FC = () => {
             <div className="p-8 bg-white border border-gray-100 shadow-sm rounded-xl">
               <h3 className="text-sm font-semibold text-gray-500">전체 처리 건수</h3>
               <div className="flex items-baseline gap-2 mt-4">
-                {/* 🌟 건수에는 콤마를 넣지 않습니다. */}
                 <p className="text-4xl font-extrabold text-gray-900 tabular-nums">{summary.totalRemittanceCount}</p>
                 <p className="text-sm font-medium text-gray-400">건</p>
               </div>
               <div className="pt-6 mt-6 border-t border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-500">누적 정산 금액</h3>
                 <p className="mt-2 text-3xl font-extrabold leading-tight text-gray-900">
-                  {/* 🌟 누적 정산 금액에 천 단위 콤마를 추가했습니다. */}
                   {summary.totalPaymentAmount?.toLocaleString()}원
                 </p>
               </div>
@@ -93,13 +93,12 @@ const AdminDashboard: React.FC = () => {
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-gray-600">정산 완료</span>
                   <div className="flex items-center">
-                    {/* 🌟 정산 완료 건수는 검은색(text-gray-900)이며 콤마가 없습니다. */}
                     <span className="w-12 font-bold text-right text-gray-900 tabular-nums">{summary.completedRemittanceCount}</span>
                     <span className="ml-1 font-bold text-gray-900">건</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-gray-600">송금 대기</span>
+                  <span className="font-medium text-gray-600">정산 중</span>
                   <div className="flex items-center">
                     <span className="w-12 font-bold text-right text-gray-800 tabular-nums">{summary.pendingRemittanceCount}</span>
                     <span className="ml-1 font-bold text-gray-800">건</span>
@@ -115,11 +114,19 @@ const AdminDashboard: React.FC = () => {
                 <p className="text-sm font-medium text-red-400">건 (확인 요망)</p>
               </div>
               <div className="pt-6 mt-6 space-y-4 border-t border-red-100">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-orange-600">송금 실패</span>
+              <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-red-600">송금 실패</span>
                   <div className="flex items-center">
                     <span className="w-12 font-bold text-right text-orange-700 tabular-nums">{summary.failedRemittanceCount}</span>
                     <span className="ml-1 font-bold text-orange-700">건</span>
+                  </div>
+                </div>
+                {/* 🌟 명칭 변경: 반려 처리 */}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-rose-600">반려 처리</span>
+                  <div className="flex items-center">
+                    <span className="w-12 font-bold text-right text-rose-700 tabular-nums">{summary.rejectedRemittanceCount || 0}</span>
+                    <span className="ml-1 font-bold text-rose-700">건</span>
                   </div>
                 </div>
               </div>

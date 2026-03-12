@@ -10,13 +10,15 @@ import {
   Percent,
 } from "lucide-react";
 
+// 🌟 [수정] REJECTED 상태 추가
 type RemittanceStatus =
   | "WAITING"
   | "DISCREPANCY"
   | "WAITING_USER_CONSENT"
   | "PENDING"
   | "COMPLETED"
-  | "FAILED";
+  | "FAILED"
+  | "REJECTED";
 
 interface DetailModalProps {
   isOpen: boolean;
@@ -25,7 +27,7 @@ interface DetailModalProps {
     id: string;
     createdAt: string;
     amountUsd: number;
-    currency: string; // 🌟 [추가] 통화 정보 필드
+    currency: string;
     exchangeRate: number;
     feeBreakdown: {
       platform: number;
@@ -34,6 +36,7 @@ interface DetailModalProps {
     };
     finalAmountKrw: number;
     status: RemittanceStatus;
+    resolutionReason?: string;
   } | null;
 }
 
@@ -72,12 +75,14 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
           bg: "bg-blue-50",
           icon: <Clock size={20} />,
         };
-      case "FAILED":
+   case "FAILED": // 🌟 [수정] 송금 실패 빨간색 테마 적용
+        return { label: "송금 실패", color: "text-red-600", bg: "bg-red-50", icon: <AlertCircle size={20} /> };
+      case "REJECTED": // 🌟 [추가] 반려 처리는 장미색(Rose) 테마 사용
         return {
-          label: "처리 실패",
-          color: "text-red-600",
-          bg: "bg-red-50",
-          icon: <AlertCircle size={20} />,
+          label: "반려 처리",
+          color: "text-rose-600",
+          bg: "bg-rose-50",
+          icon: <X size={20} />,
         };
       default:
         return {
@@ -126,25 +131,23 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
             </span>
           </div>
 
-       <div className="space-y-4">
+          <div className="space-y-4">
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2 font-bold text-slate-400">
                 <DollarSign size={16} /> 송금 신청 금액
               </span>
               <span className="text-lg font-black text-slate-900">
-                {/* 🌟 [수정] $ 기호를 제거하고 뒤에 통화 단위를 붙입니다. */}
-                {data.amountUsd.toLocaleString()} {data.currency}
+                {data.amountUsd.toLocaleString()} {data.currency === 'KRW' ? '원' : data.currency}
               </span>
             </div>
             
-            {/* 🌟 [추가] KRW 거래일 경우 적용 환율 영역을 숨기거나 대시(-) 처리하면 더 깔끔합니다. */}
             {data.currency !== 'KRW' && (
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2 font-bold text-slate-400">
                   <ArrowRight size={16} /> 적용 환율
                 </span>
                 <span className="font-black text-slate-900">
-                  1 {data.currency} = {data.exchangeRate.toLocaleString()} KRW
+                  1 {data.currency} = {data.exchangeRate.toLocaleString()} 원
                 </span>
               </div>
             )}
@@ -155,21 +158,21 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
                   <Percent size={14} /> 총 차감 수수료
                 </span>
                 <span className="text-sm font-black text-red-500">
-                  - {totalFee.toLocaleString()} KRW
+                  - {totalFee.toLocaleString()} 원
                 </span>
               </div>
               <div className="pt-1 space-y-2">
                 <div className="flex justify-between text-[11px] font-bold text-slate-400">
                   <span>플랫폼 서비스 이용료</span>
-                  <span>{data.feeBreakdown.platform.toLocaleString()} KRW</span>
+                  <span>{data.feeBreakdown.platform.toLocaleString()} 원</span>
                 </div>
                 <div className="flex justify-between text-[11px] font-bold text-slate-400">
                   <span>해외 송금 망 사용료</span>
-                  <span>{data.feeBreakdown.network.toLocaleString()} KRW</span>
+                  <span>{data.feeBreakdown.network.toLocaleString()} 원</span>
                 </div>
                 <div className="flex justify-between text-[11px] font-bold text-slate-400">
                   <span>부가세 (VAT)</span>
-                  <span>{data.feeBreakdown.vat.toLocaleString()} KRW</span>
+                  <span>{data.feeBreakdown.vat.toLocaleString()} 원</span>
                 </div>
               </div>
             </div>
@@ -181,17 +184,32 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
                 최종 정산 금액
               </span>
               <div className="text-right">
-                {/* 🌟 [수정] PENDING 상태일 경우 텍스트 투명도를 40%로 낮춰 '미확정' 느낌을 줍니다. */}
-                <span className={`text-3xl font-black ${data.status === 'PENDING' ? 'text-teal-600/40' : 'text-teal-600'}`}>
+                <span className="text-3xl font-black text-teal-600">
                   {data.finalAmountKrw.toLocaleString()}
                 </span>
-                <span className={`ml-1 text-sm font-black ${data.status === 'PENDING' ? 'text-teal-600/40' : 'text-teal-600'}`}>
-                  KRW
-                  {/* 🌟 [수정] 상태가 PENDING일 때만 '(예정)' 텍스트가 표시됩니다. */}
-                  {data.status === 'PENDING' && <span className="ml-1 text-xs font-bold text-slate-400">(예정)</span>}
+                <span className="ml-1 text-sm font-black text-teal-600">
+                  원
+                  {data.status === 'PENDING' && <span className="ml-2 text-2xl font-black text-indigo-600">(예정)</span>}
                 </span>
               </div>
             </div>
+
+            {/* 🌟 [수정] REJECTED(반려 처리) 상태일 때만 사유 UI 블록 표시 */}
+            {data.status === "REJECTED" && data.resolutionReason && (
+              <div className="mt-6 p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-rose-600">⚠️</span>
+                  <h4 className="text-sm font-black text-rose-900">반려 처리 사유</h4>
+                </div>
+                <p className="text-sm font-bold text-rose-700 leading-relaxed">
+                  {data.resolutionReason}
+                </p>
+                <p className="mt-2 text-[11px] text-rose-400">
+                  * 사유 확인 후 가맹점 정보 수정 또는 재정산 요청이 필요합니다.
+                </p>
+              </div>
+            )}
+
           </div>
         </div>
 

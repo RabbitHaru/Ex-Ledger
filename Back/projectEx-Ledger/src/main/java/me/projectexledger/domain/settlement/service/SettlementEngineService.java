@@ -35,6 +35,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,7 +45,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class SettlementEngineService {
 
-    private final PaymentLogRepository paymentLogRepository;
+
     private final SettlementRepository settlementRepository;
     private final ExchangeRateCalculator exchangeRateCalculator;
     private final PortOneClient portOneClient;
@@ -66,16 +67,26 @@ public class SettlementEngineService {
     public DashboardSummaryDTO getDashboardSummary(Integer months) {
         LocalDateTime targetDate = LocalDateTime.now().minusMonths(months != null ? months : 3);
 
-        BigDecimal totalAmount = settlementRepository.sumTotalSettlementAmountByStatusAndCreatedAtAfter(SettlementStatus.COMPLETED, targetDate);
+        // 🌟 [요청사항] 4줄짜리 필터링 리스트 고정
+        List<String> excludedNames = Arrays.asList(
+                "Member C",
+                "홍길동",
+                "sQYmV8wFZCmWTOSwuV2PmA==",
+                "sQYmV8wfZCmWTOSwuV2PmA:"
+        );
+
+        BigDecimal totalAmount = settlementRepository.sumTotalSettlementAmountByStatusAndClientNameNotInAndCreatedAtAfter(
+                SettlementStatus.COMPLETED, excludedNames, targetDate);
 
         return DashboardSummaryDTO.builder()
                 .totalPaymentAmount(totalAmount != null ? totalAmount : BigDecimal.ZERO)
-                .totalRemittanceCount(settlementRepository.countByCreatedAtAfter(targetDate))
-                .completedRemittanceCount(settlementRepository.countByStatusAndCreatedAtAfter(SettlementStatus.COMPLETED, targetDate))
-                .pendingRemittanceCount(settlementRepository.countByStatusAndCreatedAtAfter(SettlementStatus.PENDING, targetDate))
-                .failedRemittanceCount(settlementRepository.countByStatusAndCreatedAtAfter(SettlementStatus.FAILED, targetDate))
-                .discrepancyCount(settlementRepository.countByStatusAndCreatedAtAfter(SettlementStatus.DISCREPANCY, targetDate))
-                .waitingRemittanceCount(settlementRepository.countByStatusAndCreatedAtAfter(SettlementStatus.WAITING, targetDate))
+                .totalRemittanceCount(settlementRepository.countByClientNameNotInAndCreatedAtAfter(excludedNames, targetDate))
+                .completedRemittanceCount(settlementRepository.countByStatusAndClientNameNotInAndCreatedAtAfter(SettlementStatus.COMPLETED, excludedNames, targetDate))
+                .pendingRemittanceCount(settlementRepository.countByStatusAndClientNameNotInAndCreatedAtAfter(SettlementStatus.PENDING, excludedNames, targetDate))
+                .failedRemittanceCount(settlementRepository.countByStatusAndClientNameNotInAndCreatedAtAfter(SettlementStatus.FAILED, excludedNames, targetDate))
+                .waitingRemittanceCount(settlementRepository.countByStatusAndClientNameNotInAndCreatedAtAfter(SettlementStatus.WAITING, excludedNames, targetDate))
+                .failedRemittanceCount(settlementRepository.countByStatusAndClientNameNotInAndCreatedAtAfter(SettlementStatus.FAILED, excludedNames, targetDate))
+                .rejectedRemittanceCount(settlementRepository.countByStatusAndClientNameNotInAndCreatedAtAfter(SettlementStatus.REJECTED, excludedNames, targetDate)) // 🌟 [추가]
                 .build();
     }
 
@@ -92,8 +103,8 @@ public class SettlementEngineService {
 
             if (!"PAID".equals(item.getStatus())) return;
 
-            boolean isTestPayment2 = item.getAmount().getTotal().intValue() == 1000 && "Member C".equals(clientName);
-            if (isTestPayment2) return;
+            boolean isExcludedClient = "Member C".equals(clientName) || "홍길동".equals(clientName);
+            if (isExcludedClient) return;
 
             if (settlementRepository.existsByOrderId(item.getId())) return;
 
@@ -125,6 +136,8 @@ public class SettlementEngineService {
 
             BigDecimal totalAmount = item.getAmount().getTotal();
             String currency = item.getCurrency() != null ? item.getCurrency().toUpperCase() : "USD";
+
+            // 🌟 [요청사항] 오리지널 환율 API 로직 유지 (서버 꺼지면 API 이슈 확인 필요)
             BigDecimal tempRate = exchangeRateCalculator.getExchangeRate(currency);
             if (tempRate == null) tempRate = new BigDecimal("1400.00");
             BigDecimal finalLiveRate = normalizeRate(tempRate, currency);
@@ -166,7 +179,16 @@ public class SettlementEngineService {
 
     public Page<ReconciliationListDTO> getReconciliationList(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Settlement> settlements = settlementRepository.findAll(pageable);
+
+        // 🌟 [요청사항] 대시보드와 똑같은 4줄 필터 리스트 적용
+        List<String> excludedNames = Arrays.asList(
+                "Member C",
+                "홍길동",
+                "sQYmV8wFZCmWTOSwuV2PmA==",
+                "TqL4CtvtXX5jTHseBTWPmA==",
+                "이사장"
+        );
+        Page<Settlement> settlements = settlementRepository.findAllByClientNameNotIn(excludedNames, pageable);
 
         return settlements.map(s -> {
             Client client = clientRepository.findByName(s.getClientName()).orElse(null);
@@ -210,83 +232,58 @@ public class SettlementEngineService {
     }
 
     @Transactional
-    public void createTestSettlement(String orderId, String clientName, BigDecimal amount, String currency, SettlementStatus status, ClientGrade grade) {
-        for (int i = 0; i < 10; i++) {
-            final int loopIndex = i;
+    public void createRandomTestSettlements(int count) {
+        String[] clientList = {"(주)무신사", "우아한형제들", "당근마켓", "쿠팡페이", "오늘의집", "(주)로켓상사", "네이버페이", "야놀자", "토스", "직방"};
+        SettlementStatus[] statuses = {SettlementStatus.COMPLETED, SettlementStatus.FAILED, SettlementStatus.REJECTED};
+        String[] bankList = {"국민은행", "신한은행", "우리은행", "하나은행", "카카오뱅크", "기업은행", "농협은행"};
 
-            String uniqueOrderId = (orderId != null ? orderId : "T-ORDER") + "-TEST-" + loopIndex + "-" + System.nanoTime();
+        java.util.Random random = new java.util.Random();
 
-            String[] clientList = {"(주)무신사", "우아한형제들", "당근마켓", "쿠팡페이", "오늘의집", "(주)로켓상사", "네이버페이", "야놀자", "토스", "직방"};
-            String finalClientName = clientList[(int)(Math.random() * clientList.length)];
+        for (int i = 0; i < count; i++) {
+            String randomClient = clientList[random.nextInt(clientList.length)];
+            SettlementStatus randomStatus = statuses[random.nextInt(statuses.length)];
+            String randomBank = bankList[random.nextInt(bankList.length)];
 
-            ClientGrade mixedGrade = (loopIndex % 2 == 0) ? ClientGrade.PARTNER : ClientGrade.GENERAL;
-
-            String[] bankList = {"국민은행", "신한은행", "우리은행", "하나은행", "카카오뱅크", "기업은행", "농협은행"};
-
-            Client client = clientRepository.findByName(finalClientName).orElseGet(() -> {
-                String randomBank = bankList[(int)(Math.random() * bankList.length)];
-                String randomAccount = (int)(Math.random() * 900 + 100) + "-" + (int)(Math.random() * 900000 + 100000) + "-" + (int)(Math.random() * 90 + 10);
-
-                return clientRepository.save(Client.builder()
-                        .merchantId(generateProMerchantId())
-                        .name(finalClientName)
-                        .businessNumber("000-00-" + (int)(Math.random() * 90000 + (loopIndex * 100)))
-                        .status(ClientStatus.APPROVED)
-                        .grade(mixedGrade)
-                        .bankName(randomBank)
-                        .accountNumber(randomAccount)
-                        .build());
-            });
-
-            client.setGrade(mixedGrade);
-
-            // 🌟 [핵심 수정] 파라미터(amount)로 넘어온 값을 완전히 무시하고 무조건 배열에서 뽑아 쓰도록 강제합니다!
-            long[] cleanAmounts = {10000000L, 20000000L, 30000000L, 50000000L, 80000000L, 100000000L, 150000000L, 200000000L};
-            long randomCleanAmount = cleanAmounts[(int)(Math.random() * cleanAmounts.length)];
-
-            // 아예 amount 변수를 보지 않고 바로 randomCleanAmount를 사용합니다.
-            BigDecimal originalAmount = new BigDecimal(randomCleanAmount);
-
-            BigDecimal realUsdRate = exchangeRateCalculator.getExchangeRate("USD");
-            if (realUsdRate == null) realUsdRate = new BigDecimal("1400.00");
-
-            SettlementPolicy policy = settlementPolicyService.getEffectivePolicy(client.getMerchantId(), client.getGrade());
-
-            BigDecimal feeRate = policy.getPlatformFeeRate();
-            BigDecimal networkFee = policy.getNetworkFee();
-            BigDecimal spread = policy.getExchangeSpread();
-            BigDecimal prefRate = policy.getPreferenceRate();
-
-            // 수수료를 뗀 최종 송금액 계산
-            BigDecimal finalSettlementAmount = originalAmount.subtract(originalAmount.multiply(feeRate)).subtract(networkFee)
-                    .setScale(0, RoundingMode.DOWN);
+            // 100만 ~ 2억 사이의 랜덤 금액 생성
+            long[] cleanAmounts = {10000000L, 20000000L, 50000000L, 80000000L, 120000000L, 200000000L};
+            BigDecimal amount = new BigDecimal(cleanAmounts[random.nextInt(cleanAmounts.length)]);
+            BigDecimal settlementAmount = amount.multiply(new BigDecimal("0.98")).setScale(0, RoundingMode.DOWN);
 
             settlementRepository.save(Settlement.builder()
-                    .orderId(uniqueOrderId)
-                    .transactionId("TX-" + System.nanoTime() + "-" + loopIndex)
-                    .clientName(client.getName())
-                    .bankName(client.getBankName())
-                    .accountNumber(client.getAccountNumber())
-                    .amount(originalAmount) // 🌟 무조건 예쁜 숫자(예: 10,000,000, 80,000,000 등)가 들어갑니다.
-                    .currency(currency != null ? currency : "KRW")
-                    .settlementAmount(finalSettlementAmount)
-                    .baseRate(realUsdRate)
-                    .finalAppliedRate(realUsdRate.subtract(spread))
-                    .preferredRate(prefRate)
-                    .spreadFee(spread)
-                    .status(status)
+                    .orderId("T-ORDER-" + System.currentTimeMillis() + "-" + i)
+                    .transactionId("TX-" + System.nanoTime())
+                    .clientName(randomClient)
+                    .bankName(randomBank)
+                    .accountNumber((random.nextInt(900) + 100) + "-" + (random.nextInt(900000) + 100000) + "-12")
+                    .amount(amount)
+                    .currency("KRW")
+                    .settlementAmount(settlementAmount)
+                    .status(randomStatus)
+                    .resolutionReason(randomStatus == SettlementStatus.REJECTED ? "계좌 정보 불일치로 인한 관리자 반려" : null)
                     .build());
         }
     }
+    @Transactional
+    public void rejectSettlement(Long settlementId, String reason) {
+        Settlement settlement = settlementRepository.findById(settlementId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 정산 건을 찾을 수 없습니다."));
 
+        // 엔티티의 비즈니스 로직 호출 (상태 변경 + 사유 저장)
+        settlement.markAsRejected(reason);
+
+        log.info("[Settlement] 정산 반려 완료 - ID: {}, 사유: {}", settlementId, reason);
+    }
     @Transactional
     public void approveSettlement(Long settlementId) {
         Settlement settlement = settlementRepository.findById(settlementId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 정산 건을 찾을 수 없습니다. ID: " + settlementId));
-        if (settlement.getStatus() != SettlementStatus.WAITING) {
-            throw new IllegalStateException("승인 대기(WAITING) 상태의 건만 승인할 수 있습니다.");
+                .orElseThrow(() -> new IllegalArgumentException("해당 정산 건을 찾을 수 없습니다."));
+
+        if (settlement.getStatus() != SettlementStatus.WAITING && settlement.getStatus() != SettlementStatus.PENDING) {
+            throw new IllegalStateException("승인 가능한 상태가 아닙니다.");
         }
-        settlement.updateStatus(SettlementStatus.WAITING_USER_CONSENT);
+
+        // 🌟 [정정 반영] 승인 버튼 누르면 바로 결제 대사 리스트에서 "정산 완료"가 되도록 상태를 COMPLETED로 변경!
+        settlement.updateStatus(SettlementStatus.COMPLETED);
     }
 
     public List<ReconciliationListDTO> getMySettlementHistory(String clientName, int page, int size) {
@@ -318,13 +315,11 @@ public class SettlementEngineService {
         ClientGrade grade = (client != null) ? client.getGrade() : ClientGrade.GENERAL;
         SettlementPolicy policy = settlementPolicyService.getEffectivePolicy(s.getMerchantId(), grade);
 
-        // 🌟 [수정] 통화가 KRW가 아닐 때만 환율을 곱해서 수수료 기준가를 잡습니다.
         BigDecimal amountInKrw = s.getAmount();
         if (!"KRW".equalsIgnoreCase(s.getCurrency())) {
             amountInKrw = s.getAmount().multiply(s.getBaseRate());
         }
 
-        // 수수료 계산 (기준가 * 수수료율)
         BigDecimal platformFee = amountInKrw
                 .multiply(policy.getPlatformFeeRate())
                 .setScale(0, RoundingMode.DOWN);
@@ -336,8 +331,8 @@ public class SettlementEngineService {
                 .id(s.getOrderId())
                 .createdAt(s.getUpdatedAt() != null ?
                         s.getUpdatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "-")
-                .amountUsd(s.getAmount()) // 필드명은 유지하되 실제 원천 금액 전달
-                .currency(s.getCurrency()) // 🌟 [추가] 실제 통화 정보 전달 (DTO에 필드 추가 필요)
+                .amountUsd(s.getAmount())
+                .currency(s.getCurrency())
                 .exchangeRate(s.getFinalAppliedRate())
                 .feeBreakdown(SettlementDetailDTO.FeeBreakdown.builder()
                         .platform(platformFee)
@@ -346,12 +341,10 @@ public class SettlementEngineService {
                         .build())
                 .finalAmountKrw(s.getSettlementAmount())
                 .status(s.getStatus().name())
+                .resolutionReason(s.getResolutionReason())
                 .build();
     }
 
-    // =========================================================================
-    // 🌟 3개월 지난 데이터를 매일 자동 삭제하는 데이터 보관 정책 스케줄러
-    // =========================================================================
     @Transactional
     @Scheduled(cron = "0 0 3 * * ?")
     public void cleanupOldSettlementData() {
@@ -364,5 +357,6 @@ public class SettlementEngineService {
         } catch (Exception e) {
             log.error("[Retention Policy] 데이터 삭제 중 오류 발생: {}", e.getMessage());
         }
+
     }
 }

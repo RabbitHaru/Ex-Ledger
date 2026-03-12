@@ -70,6 +70,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .bankName("신한은행")
                 .accountNumber("110-123-456789")
                 .merchantId("MCT-TEST-002")
+                .grade(ClientGrade.PARTNER)
                 .build();
 
         Client client3 = Client.builder()
@@ -83,11 +84,11 @@ public class DummyDataInit implements CommandLineRunner {
                 .build();
 
         clientRepository.saveAll(List.of(client1, client2, client3));
-        log.info("더미 Client(가맹점) 생성 완료");
+        log.info("더미 가맹점(Client) 데이터 생성 완료");
     }
 
     private void initCompaniesAndMembers() {
-        // ========== 1. Company 생성 ==========
+        // ========== 1. Company 생성 (정상/대기/반려) ==========
 
         // [정상] 승인된 우량 기업
         Company companyApproved = companyRepository.findByBusinessNumber("9876543210")
@@ -116,40 +117,29 @@ public class DummyDataInit implements CommandLineRunner {
                         .adminApprovalStatus(AdminApprovalStatus.REJECTED)
                         .build()));
 
-        // ========== 2. 사이트 관리자 (Integrated Admin) ==========
         List<Member> membersToSave = new ArrayList<>();
+
+        // ========== 2. 사이트 관리자 (Integrated Admin) ==========
         if (!memberRepository.existsByEmail("admin@exledger.com")) {
-            Member admin = Member.builder()
+            membersToSave.add(Member.builder()
                     .email("admin@exledger.com")
                     .password(passwordEncoder.encode("admin123!"))
                     .name("최고관리자")
                     .role(Member.Role.ROLE_INTEGRATED_ADMIN)
-                    .build();
-            membersToSave.add(admin);
+                    .build());
         }
 
         // ========== 3. 개인 유저 (Personal User) ==========
         if (!memberRepository.existsByEmail("user@example.com")) {
-            Member user1 = Member.builder()
+            membersToSave.add(Member.builder()
                     .email("user@example.com")
                     .password(passwordEncoder.encode("user1234!"))
                     .name("홍길동")
                     .role(Member.Role.ROLE_USER)
-                    .build();
-            membersToSave.add(user1);
+                    .build());
         }
 
-        if (!memberRepository.existsByEmail("member@test.com")) {
-            Member user2 = Member.builder()
-                    .email("member@test.com")
-                    .password(passwordEncoder.encode("test1234!"))
-                    .name("김철수")
-                    .role(Member.Role.ROLE_USER)
-                    .build();
-            membersToSave.add(user2);
-        }
-
-        // ========== 4. [정상 기업] 관리자 + 승인 직원 + 대기 직원 ==========
+        // ========== 4. [정상 기업] 관리자 및 직원 ==========
         if (!memberRepository.existsByEmail("boss@exglobal.com")) {
             Member corpAdmin = Member.builder()
                     .email("boss@exglobal.com")
@@ -158,50 +148,23 @@ public class DummyDataInit implements CommandLineRunner {
                     .role(Member.Role.ROLE_COMPANY_ADMIN)
                     .company(companyApproved)
                     .build();
-            corpAdmin.approveCompany();
+            corpAdmin.approveCompany(); // 기업 연동 승인 상태로 생성
             membersToSave.add(corpAdmin);
-        } else {
-            memberRepository.findByEmail("boss@exglobal.com").ifPresent(existing -> {
-                existing.setCompany(companyApproved);
-                existing.approveCompany();
-            });
         }
 
         if (!memberRepository.existsByEmail("staff1@exglobal.com")) {
-            Member corpStaffApproved = Member.builder()
+            Member corpStaff = Member.builder()
                     .email("staff1@exglobal.com")
                     .password(passwordEncoder.encode("test1234!"))
                     .name("김직원")
                     .role(Member.Role.ROLE_COMPANY_USER)
                     .company(companyApproved)
                     .build();
-            corpStaffApproved.approveCompany();
-            membersToSave.add(corpStaffApproved);
-        } else {
-            memberRepository.findByEmail("staff1@exglobal.com").ifPresent(existing -> {
-                existing.setCompany(companyApproved);
-                existing.approveCompany();
-            });
+            corpStaff.approveCompany();
+            membersToSave.add(corpStaff);
         }
 
-        if (!memberRepository.existsByEmail("staff2@exglobal.com")) {
-            Member corpStaffPending = Member.builder()
-                    .email("staff2@exglobal.com")
-                    .password(passwordEncoder.encode("test1234!"))
-                    .name("박대기")
-                    .role(Member.Role.ROLE_COMPANY_USER)
-                    .company(companyApproved)
-                    .build();
-            corpStaffPending.updateAccountInfo(null, null, null);
-            membersToSave.add(corpStaffPending);
-        } else {
-            memberRepository.findByEmail("staff2@exglobal.com").ifPresent(existing -> {
-                existing.setCompany(companyApproved);
-                existing.updateAccountInfo(null, null, null);
-            });
-        }
-
-        // ========== 5. [심사 대기 기업] 관리자 ==========
+        // ========== 5. [심사 대기/반려 기업] 관리자 ==========
         if (!memberRepository.existsByEmail("ceo@startup.com")) {
             Member pendingAdmin = Member.builder()
                     .email("ceo@startup.com")
@@ -210,16 +173,9 @@ public class DummyDataInit implements CommandLineRunner {
                     .role(Member.Role.ROLE_COMPANY_ADMIN)
                     .company(companyPending)
                     .build();
-            pendingAdmin.updateAccountInfo(null, null, null);
             membersToSave.add(pendingAdmin);
-        } else {
-            memberRepository.findByEmail("ceo@startup.com").ifPresent(existing -> {
-                existing.setCompany(companyPending);
-                existing.updateAccountInfo(null, null, null);
-            });
         }
 
-        // ========== 6. [반려된 기업] 관리자 ==========
         if (!memberRepository.existsByEmail("fail@trade.com")) {
             Member rejectedAdmin = Member.builder()
                     .email("fail@trade.com")
@@ -228,26 +184,17 @@ public class DummyDataInit implements CommandLineRunner {
                     .role(Member.Role.ROLE_COMPANY_ADMIN)
                     .company(companyRejected)
                     .build();
-            rejectedAdmin.updateAccountInfo(null, null, null);
             membersToSave.add(rejectedAdmin);
-        } else {
-            memberRepository.findByEmail("fail@trade.com").ifPresent(existing -> {
-                existing.setCompany(companyRejected);
-                existing.updateAccountInfo(null, null, null);
-            });
         }
 
         if (!membersToSave.isEmpty()) {
             memberRepository.saveAll(membersToSave);
         }
-        log.info("더미 Company 및 Member 데이터 재구성 완료 (추가 생성: {})", membersToSave.size());
+        log.info("더미 기업 및 멤버 데이터 생성 완료 (신규 생성: {}건)", membersToSave.size());
     }
 
     private void initAuditLogs() {
-        if (auditLogRepository.count() > 0) {
-            log.info("AuditLog 데이터가 이미 존재합니다. 스킵.");
-            return;
-        }
+        if (auditLogRepository.count() > 0) return;
 
         SystemAuditLog log1 = SystemAuditLog.builder()
                 .userEmail("admin@exledger.com")
@@ -273,15 +220,7 @@ public class DummyDataInit implements CommandLineRunner {
                 .durationMs(350L)
                 .build();
 
-        SystemAuditLog log4 = SystemAuditLog.builder()
-                .userEmail("admin@exledger.com")
-                .action("GET /api/admin/companies/pending")
-                .clientIp("127.0.0.1")
-                .requestUri("/api/admin/companies/pending")
-                .durationMs(22L)
-                .build();
-
-        auditLogRepository.saveAll(List.of(log1, log2, log3, log4));
+        auditLogRepository.saveAll(List.of(log1, log2, log3));
         log.info("더미 AuditLog(감사로그) 생성 완료");
     }
 }

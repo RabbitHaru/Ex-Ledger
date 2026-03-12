@@ -43,6 +43,14 @@ public class Transaction extends BaseEntity {
 
     private String description;
 
+    private String title;
+
+    @Column(length = 50)
+    private String type; // "TRANSFER", "CHARGE", "EXCHANGE"
+
+    @Column(length = 20)
+    private String category; // "PERSONAL", "BUSINESS"
+
     public void calculateSettlement(BigDecimal rate) {
         this.appliedRate = rate;
         this.convertedAmount = amount.multiply(rate).setScale(0, RoundingMode.HALF_UP);

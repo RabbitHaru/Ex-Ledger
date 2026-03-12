@@ -23,6 +23,7 @@ public class SettlementDetailDTO {
     private BigDecimal finalAmountKrw; // 최종 정산 금액
     private String status;       // 정산 상태
     private String currency;
+    private String resolutionReason;
 
     @Getter
     @Builder

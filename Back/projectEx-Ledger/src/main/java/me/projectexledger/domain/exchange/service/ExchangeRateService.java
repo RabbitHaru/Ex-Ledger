@@ -10,19 +10,15 @@ import me.projectexledger.domain.exchange.dto.ExchangeRateResponseDTO;
 import me.projectexledger.domain.exchange.entity.ExchangeRate;
 import me.projectexledger.domain.exchange.repository.ExchangeRateRepository;
 import me.projectexledger.domain.exchange.utils.CurrencyMapper;
+import me.projectexledger.domain.notification.service.SseEmitters;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import me.projectexledger.domain.notification.service.SseEmitters;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.DayOfWeek;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,59 +43,34 @@ public class ExchangeRateService {
     public List<ExchangeRateDTO> updateAndCacheRates() {
         LocalDate today = LocalDate.now();
 
-        if (isWeekend(today)) {
-            log.info("⏩ 주말(토/일)이므로 오늘의 환율 수집을 건너뜁니다.");
+        if (today.getDayOfWeek() == DayOfWeek.SATURDAY || today.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            log.info("⏩ 주말이므로 환율 수집을 건너뜁니다: {}", today);
             return getLatestRatesFromCacheOrDb();
         }
 
-        if (isEximDataAlreadyExists(today)) {
-            log.info("⏩ 오늘자 KOREAEXIM 데이터가 이미 존재합니다.");
+        if (isEximDataExists(today)) {
+            log.info("✅ 오늘자 최신 수출입은행 데이터가 이미 존재합니다.");
             return getLatestRatesFromCacheOrDb();
         }
 
         List<ExchangeRateDTO> dtos = fetchFromBestSource(today.toString());
-
         if (dtos != null && !dtos.isEmpty()) {
-            deleteRatesByDate(today);
-            saveToDatabaseTransactional(dtos);
-            log.info("✅ 환율 데이터 업데이트 성공 (수집된 통화 수: {})", dtos.size());
-            
-            // 🌟 실시간 SSE 브로드캐스트 전송
+            processAndSaveRates(dtos);
             sseEmitters.broadcastExchangeUpdate(dtos);
-            
-            return getLatestRatesFromCacheOrDb();
+        } else {
+            log.warn("⚠️ 모든 API 소스로부터 환율 데이터를 가져오지 못했습니다.");
         }
 
-        return new ArrayList<>();
-    }
-
-    @Transactional
-    public void cleanupOldRates(LocalDateTime threshold) {
-        exchangeRateRepository.deleteOldRates(threshold);
-    }
-
-    public List<ExchangeRateDTO> getLatestRatesFromCacheOrDb() {
-        try {
-            @SuppressWarnings("unchecked")
-            List<ExchangeRateDTO> cachedRates = (List<ExchangeRateDTO>) redisTemplate.opsForValue().get(REDIS_KEY);
-            if (cachedRates != null && !cachedRates.isEmpty()) return cachedRates;
-        } catch (Exception e) {
-            log.warn("⚠️ Redis 연결 불가: {}", e.getMessage());
-        }
-
-        List<ExchangeRate> entities = exchangeRateRepository.findAllLatestRates();
-        List<ExchangeRateDTO> dtos = calculateChangeStats(entities);
-
-        if (!dtos.isEmpty()) saveToCache(dtos);
-        return dtos;
+        return getLatestRatesFromCacheOrDb();
     }
 
     @Transactional(readOnly = true)
     public List<ExchangeRateResponseDTO> getExchangeRateHistory(String curUnit, int days) {
-        LocalDateTime startDate = LocalDateTime.now().minusDays(days + 15);
-        List<ExchangeRate> rates = exchangeRateRepository.findByCurUnitAndUpdatedAtAfterOrderByUpdatedAtAsc(curUnit, startDate);
+        LocalDateTime start = LocalDateTime.now().minusDays(days + 7);
 
-         return rates.stream()
+        List<ExchangeRate> rates = exchangeRateRepository.findByCurUnitAndUpdatedAtAfterOrderByUpdatedAtAsc(curUnit, start);
+
+        return rates.stream()
                 .collect(Collectors.toMap(
                         rate -> rate.getUpdatedAt().toLocalDate(),
                         rate -> rate,
@@ -107,95 +78,67 @@ public class ExchangeRateService {
                         TreeMap::new
                 ))
                 .values().stream()
-                .map(ExchangeRateResponseDTO::from)
+                .map(entity -> ExchangeRateResponseDTO.builder()
+                        .date(entity.getUpdatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")))
+                        .rate(entity.getRate())
+                        .build())
                 .collect(Collectors.toList());
     }
 
-    public void backfillHistoricalData() {
-        log.info("=== 📂 지능형 데이터 점검 및 업그레이드 시작 (최근 20일) ===");
+    // 🌟 [추가] TransactionService에서 사용하는 최신 환율 1건 조회 메서드
+    public BigDecimal getLatestRate(String currency) {
+        return getLatestRatesFromCacheOrDb().stream()
+                .filter(dto -> dto.getCurUnit().equals(currency))
+                .map(ExchangeRateDTO::getRate)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 통화이거나 데이터를 찾을 수 없습니다: " + currency));
+    }
 
-        for (int i = 20; i >= 0; i--) {
-            LocalDate targetDate = LocalDate.now().minusDays(i);
+    private void processAndSaveRates(List<ExchangeRateDTO> dtos) {
+        if (dtos == null || dtos.isEmpty()) return;
 
-            if (isWeekend(targetDate)) continue;
+        String updatedAtStr = dtos.get(0).getUpdatedAt();
+        LocalDate dataDate = parseLocalDate(updatedAtStr);
+        String provider = dtos.get(0).getProvider();
 
-            // 🌟 [수정] 해당 날짜에 KOREAEXIM 데이터가 이미 있는지 핀포인트로 확인합니다.
-            // 데이터가 있다면 API를 호출하지 않고 건너뛰어 호출 횟수를 아끼고 ID 증가를 방지합니다.
-            if (isEximDataAlreadyExists(targetDate)) {
-                continue;
-            }
+        if (exchangeRateRepository.existsByCurUnitAndProviderAndUpdatedAtBetween(
+                "USD", provider, dataDate.atStartOfDay(), dataDate.atTime(LocalTime.MAX))) return;
 
-            // 데이터가 없거나, Frankfurter 데이터만 있는 경우에만 API를 호출합니다.
-            List<ExchangeRateDTO> eximDtos = koreaEximClient.fetchHistoricalRates(targetDate.toString());
-
-            if (eximDtos != null && !eximDtos.isEmpty()) {
-                deleteRatesByDate(targetDate); // 기존 데이터(Frankfurter 등) 삭제
-                saveToDatabaseTransactional(eximDtos);
-                log.info("🚀 [{}] 데이터 수집/업그레이드 완료", targetDate);
-            }
+        if (provider.equals("FRANKFURTER") && isAnyDataExists(dataDate)) {
+            log.info("⏩ [{}] 이미 데이터가 존재하여 프랑크푸르터 데이터 저장을 생략합니다.", dataDate);
+            return;
         }
-    }
 
-    // 🌟 [수정] 인자로 받은 '특정 날짜'의 데이터 존재 여부를 정확히 확인합니다.
-    private boolean isEximDataAlreadyExists(LocalDate date) {
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.atTime(LocalTime.MAX);
-        return exchangeRateRepository.existsByCurUnitAndProviderAndUpdatedAtBetween(
-                "USD", "KOREAEXIM", start, end);
-    }
-
-    private boolean isWeekend(LocalDate date) {
-        DayOfWeek day = date.getDayOfWeek();
-        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
-    }
-
-    @Transactional
-    public void deleteRatesByDate(LocalDate date) {
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.atTime(LocalTime.MAX);
-        exchangeRateRepository.deleteByUpdatedAtBetween(start, end);
+        deleteRatesByDate(dataDate);
+        saveToDatabaseTransactional(dtos);
+        log.info("✅ [{}] 환율 데이터 업데이트 성공 (제공처: {})", dataDate, provider);
     }
 
     private List<ExchangeRateDTO> fetchFromBestSource(String dateStr) {
         try {
             List<ExchangeRateDTO> eximDtos = koreaEximClient.fetchHistoricalRates(dateStr);
-            if (eximDtos != null && !eximDtos.isEmpty()) {
-                return eximDtos;
-            }
+            if (eximDtos != null && !eximDtos.isEmpty()) return eximDtos;
         } catch (Exception e) {
-            log.warn("⚠️ KOREAEXIM 호출 실패: {}", e.getMessage());
+            log.warn("⚠️ [수출입은행] 호출 실패: {}", dateStr);
         }
 
-        return frankfurterClient.fetchHistoricalRates(dateStr).stream()
-                .filter(dto -> CurrencyMapper.isSupported(dto.getCurUnit()))
-                .collect(Collectors.toList());
+        log.info("🔄 [대체수집] 프랑크푸르터 API를 시도합니다.");
+        return frankfurterClient.fetchHistoricalRates(dateStr);
     }
 
-    private List<ExchangeRateDTO> calculateChangeStats(List<ExchangeRate> entities) {
-        List<ExchangeRateDTO> dtos = new ArrayList<>();
-        for (ExchangeRate today : entities) {
-            List<ExchangeRate> history = exchangeRateRepository.findRecentByCurUnit(
-                    today.getCurUnit(), PageRequest.of(0, 2));
+    private boolean isEximDataExists(LocalDate date) {
+        return exchangeRateRepository.existsByCurUnitAndProviderAndUpdatedAtBetween(
+                "USD", "KOREAEXIM", date.atStartOfDay(), date.atTime(LocalTime.MAX));
+    }
 
-            BigDecimal changeAmount = BigDecimal.ZERO;
-            BigDecimal changeRate = BigDecimal.ZERO;
+    private boolean isAnyDataExists(LocalDate date) {
+        return exchangeRateRepository.existsByCurUnitAndUpdatedAtBetween(
+                "USD", date.atStartOfDay(), date.atTime(LocalTime.MAX));
+    }
 
-            if (history.size() >= 2) {
-                ExchangeRate yesterday = history.get(1);
-                changeAmount = today.getRate().subtract(yesterday.getRate());
-                if (yesterday.getRate().compareTo(BigDecimal.ZERO) != 0) {
-                    changeRate = changeAmount.divide(yesterday.getRate(), 4, RoundingMode.HALF_UP)
-                            .multiply(new BigDecimal("100"));
-                }
-            }
-
-            dtos.add(ExchangeRateDTO.builder()
-                    .curUnit(today.getCurUnit()).curNm(today.getCurNm())
-                    .rate(today.getRate()).provider(today.getProvider())
-                    .updatedAt(today.getUpdatedAt().format(formatter))
-                    .changeAmount(changeAmount).changeRate(changeRate).build());
-        }
-        return dtos;
+    @Transactional
+    public void deleteRatesByDate(LocalDate date) {
+        exchangeRateRepository.deleteByUpdatedAtBetween(date.atStartOfDay(), date.atTime(LocalTime.MAX));
     }
 
     @Transactional
@@ -209,24 +152,65 @@ public class ExchangeRateService {
         exchangeRateRepository.saveAll(entities);
     }
 
-    private LocalDateTime parseDateTime(String dateTimeStr) {
+    @Transactional
+    public void cleanupOldRates(LocalDateTime threshold) {
+        log.info("🧹 오래된 환율 데이터 삭제 중 (기준일: {})", threshold);
+        exchangeRateRepository.deleteOldRates(threshold);
+    }
+
+    private LocalDateTime parseDateTime(String dtStr) {
         try {
-            return LocalDateTime.parse(dateTimeStr, formatter);
+            return LocalDateTime.parse(dtStr, formatter);
         } catch (Exception e) {
-            try {
-                return LocalDate.parse(dateTimeStr).atStartOfDay();
-            } catch (Exception e2) {
-                return LocalDateTime.now();
-            }
+            return LocalDate.parse(dtStr.substring(0, 10)).atStartOfDay();
         }
+    }
+
+    private LocalDate parseLocalDate(String dtStr) {
+        return LocalDate.parse(dtStr.substring(0, 10));
+    }
+
+    public List<ExchangeRateDTO> getLatestRatesFromCacheOrDb() {
+        try {
+            @SuppressWarnings("unchecked")
+            List<ExchangeRateDTO> cachedRates = (List<ExchangeRateDTO>) redisTemplate.opsForValue().get(REDIS_KEY);
+            if (cachedRates != null && !cachedRates.isEmpty()) return cachedRates;
+        } catch (Exception e) {
+            log.warn("⚠️ 레디스 연결 불가, DB에서 직접 조회합니다.");
+        }
+
+        List<ExchangeRate> entities = exchangeRateRepository.findAllLatestRates();
+        List<ExchangeRateDTO> dtos = calculateChangeStats(entities);
+        if (!dtos.isEmpty()) saveToCache(dtos);
+        return dtos;
+    }
+
+    private List<ExchangeRateDTO> calculateChangeStats(List<ExchangeRate> entities) {
+        List<ExchangeRateDTO> dtos = new ArrayList<>();
+        for (ExchangeRate today : entities) {
+            List<ExchangeRate> history = exchangeRateRepository.findRecentByCurUnit(today.getCurUnit(), PageRequest.of(0, 2));
+            BigDecimal changeAmount = BigDecimal.ZERO;
+            BigDecimal changeRate = BigDecimal.ZERO;
+
+            if (history.size() >= 2) {
+                ExchangeRate yesterday = history.get(1);
+                changeAmount = today.getRate().subtract(yesterday.getRate());
+                if (yesterday.getRate().compareTo(BigDecimal.ZERO) != 0) {
+                    changeRate = changeAmount.divide(yesterday.getRate(), 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100"));
+                }
+            }
+            dtos.add(ExchangeRateDTO.builder()
+                    .curUnit(today.getCurUnit()).curNm(today.getCurNm()).rate(today.getRate()).provider(today.getProvider())
+                    .updatedAt(today.getUpdatedAt().format(formatter)).changeAmount(changeAmount).changeRate(changeRate).build());
+        }
+        return dtos;
     }
 
     private void saveToCache(List<ExchangeRateDTO> rates) {
         try {
             redisTemplate.opsForValue().set(REDIS_KEY, rates, Duration.ofHours(1));
-            log.info("💾 [Redis] 환율 데이터 캐싱 완료 (유효시간: 1시간)");
         } catch (Exception e) {
-            log.error("⚠️ [Redis] 캐싱 실패: {}", e.getMessage());
+            log.error("❌ 레디스 캐싱 실패");
         }
     }
 
@@ -235,11 +219,24 @@ public class ExchangeRateService {
         backfillHistoricalData();
     }
 
-    public BigDecimal getLatestRate(String currency) {
-        return getLatestRatesFromCacheOrDb().stream()
-                .filter(dto -> dto.getCurUnit().equals(currency))
-                .map(ExchangeRateDTO::getRate)
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 통화입니다: " + currency + ""));
+    public void backfillHistoricalData() {
+        log.info("=== 📂 지능형 데이터 점검 및 보완 시작 (최근 20일) ===");
+        int failureCount = 0;
+        for (int i = 20; i >= 0; i--) {
+            LocalDate targetDate = LocalDate.now().minusDays(i);
+            if (isEximDataExists(targetDate)) continue;
+
+            List<ExchangeRateDTO> dtos = fetchFromBestSource(targetDate.toString());
+            if (dtos == null || dtos.isEmpty()) {
+                failureCount++;
+                if (failureCount >= 3) {
+                    log.warn("⚠️ API 연속 실패로 과거 데이터 보완을 중단합니다.");
+                    break;
+                }
+            } else {
+                failureCount = 0; // reset on success
+                processAndSaveRates(dtos);
+            }
+        }
     }
 }
