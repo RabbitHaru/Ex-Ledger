@@ -22,6 +22,7 @@ import {
   Users,
   CheckCircle,
   Bell,
+  ShieldCheck,
 } from "lucide-react";
 import { useToast } from "../notification/ToastProvider";
 
@@ -219,12 +220,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </p>
             </div>
             <Link
-              to="/client"
+              to="/dashboard"
               onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/client") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/dashboard") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
             >
-              <Building2 size={18} /> 가맹점 및 수수료 관리
+              <LayoutDashboard size={18} /> 정산 요약 대시보드
             </Link>
+    <Link
+      to="/admin/grade-policy"
+      onClick={onClose}
+      className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/grade-policy") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+    >
+      <ShieldCheck size={18} /> 등급별 수수료 정책 관리
+    </Link>
             <Link
               to="/admin/logs"
               onClick={onClose}
@@ -245,13 +253,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/license-approval") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
             >
               <CheckCircle size={18} /> 사업자등록증 승인 관리
-            </Link>
-            <Link
-              to="/remittance"
-              onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/remittance") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
-            >
-              <SendHorizontal size={18} /> 자금 이체 프로세싱
             </Link>
             <Link
               to="/admin/broadcast"

@@ -4,13 +4,10 @@ import lombok.RequiredArgsConstructor;
 import me.projectexledger.domain.client.dto.repository.ClientRepository;
 import me.projectexledger.domain.client.entity.Client;
 import me.projectexledger.domain.client.entity.ClientStatus;
-import me.projectexledger.domain.client.entity.ClientGrade; // 🌟 새로 추가됨
-import me.projectexledger.domain.company.service.SettlementPolicyService;
-import me.projectexledger.domain.settlement.dto.SettlementPolicyUpdateRequest;
+import me.projectexledger.domain.client.entity.ClientGrade;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -19,48 +16,34 @@ import java.util.List;
 public class ClientService {
 
     private final ClientRepository clientRepository;
-    private final SettlementPolicyService policyService;
 
     @Transactional(readOnly = true)
     public List<Client> getPendingClients() {
         return clientRepository.findByStatus(ClientStatus.PENDING);
     }
 
-    public void approveClient(Long clientId, BigDecimal feeRate) {
+    // 🌟 [수정] feeRate 파라미터 삭제. 승인 시 기본 등급(GENERAL)만 부여합니다.
+    public void approveClient(Long clientId) {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 기업을 찾을 수 없습니다."));
 
         client.approve();
-        client.updateFeeRate(feeRate);
-
-        policyService.updatePolicy(client.getMerchantId(), new SettlementPolicyUpdateRequest(
-                feeRate,
-                new BigDecimal("2000"),
-                new BigDecimal("10.0"),
-                new BigDecimal("0.90")
-        ));
+        client.setGrade(ClientGrade.GENERAL);
+        // 💡 개별 정책을 억지로 만들지 않아도, 정산 시 시스템이 GENERAL 기본 정책을 자동으로 끌어다 씁니다.
     }
 
-    // =========================================================================
-    // 🚀 [신규 추가 1] 전체 가맹점 목록 조회 (getAllClients 빨간 줄 해결!)
-    // =========================================================================
     @Transactional(readOnly = true)
     public List<Client> getAllClients() {
         return clientRepository.findAll();
     }
 
-    // =========================================================================
-    // 🚀 [신규 추가 2] 가맹점 등급 및 수수료 정책 DB 업데이트 (updateClientPolicy 빨간 줄 해결!)
-    // =========================================================================
-    public void updateClientPolicy(String merchantId, ClientGrade grade, BigDecimal platformFeeRate, BigDecimal preferenceRate, BigDecimal networkFee, BigDecimal exchangeSpread) {
-
+    // 🌟 [수정] 복잡했던 수수료 개별 업데이트 메서드 폐기 -> '등급 수동 변경' 기능으로 단순화
+    public void updateClientGrade(String merchantId, ClientGrade grade) {
         Client client = clientRepository.findAll().stream()
                 .filter(c -> merchantId.equals(c.getMerchantId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("해당 가맹점을 찾을 수 없습니다."));
 
-        // ❌ 기존: client.updatePolicy(grade, platformFeeRate, preferenceRate, exchangeSpread, platformFeeRate);
-        // ✅ 수정: 엔티티에 정의된 순서(grade, feeRate, preferenceRate, networkFee, exchangeSpread)대로 정확히 전달
-        client.updatePolicy(grade, platformFeeRate, preferenceRate, networkFee, exchangeSpread);
+        client.updateGradeStatus(grade); // 엔티티의 등급만 변경
     }
 }

@@ -2,10 +2,9 @@ package me.projectexledger.domain.client.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-// 프로젝트 구조에 맞게 아래 import 경로들은 IDE(IntelliJ 등)의 자동 완성(Alt+Enter)으로 맞춰주세요.
 import me.projectexledger.domain.client.dto.repository.ClientRepository;
 import me.projectexledger.domain.client.entity.Client;
-import me.projectexledger.domain.client.entity.ClientGrade; // VIP, GENERAL 상태값
+import me.projectexledger.domain.client.entity.ClientGrade;
 import me.projectexledger.domain.settlement.repository.SettlementRepository;
 import me.projectexledger.domain.company.service.SettlementPolicyService;
 import me.projectexledger.domain.settlement.dto.SettlementPolicyUpdateRequest;
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Slf4j
@@ -27,34 +25,30 @@ public class ClientGradeService {
 
     @Transactional
     public void updateClientGrade(String clientName) {
-        // 1. 이번 달 1일 00:00:00 기준점 계산
-        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        // 1. 기준점 계산: 현재 시간으로부터 정확히 1개월(30일) 전
+        LocalDateTime oneMonthAgo = LocalDateTime.now().minusMonths(1);
 
-        // 2. 가맹점의 이번 달 누적 정산액 조회 (없으면 0원 처리)
-        BigDecimal monthlyTotal = settlementRepository.sumMonthlyAmount(clientName, startOfMonth);
+        // 2. 가맹점의 최근 1개월 누적 정산액 조회
+        BigDecimal monthlyTotal = settlementRepository.sumMonthlyAmount(clientName, oneMonthAgo);
         if (monthlyTotal == null) {
             monthlyTotal = BigDecimal.ZERO;
         }
 
-        // 3. VIP 기준 금액 설정 (2억 원)
-        BigDecimal threshold = new BigDecimal("200000000");
+        BigDecimal threshold = new BigDecimal("200000000"); // 2억 기준
 
-        Client client = clientRepository.findByName(clientName)
-                .orElseThrow(() -> new IllegalArgumentException("해당 가맹점을 찾을 수 없습니다: " + clientName));
+        Client client = clientRepository.findByName(clientName).orElseThrow();
 
-        // 4. 등급 판정 및 수수료 정책 자동 업데이트
         if (monthlyTotal.compareTo(threshold) >= 0) {
-            log.info("[Grade] 👑 {} 가맹점이 이번 달 2억 원을 달성하여 VIP로 승급됩니다!", clientName);
-            client.setGrade(ClientGrade.VIP);
+            log.info("[Grade] {} 가맹점 파트너 승격!", clientName);
+            client.setGrade(ClientGrade.PARTNER); // VIP -> PARTNER
 
-            // VIP 전용 정책: 수수료 0.5%, 전신료 0원, 환율 마진 5.0, 환율 우대 100%
+            // 승격 시 즉시 파트너 정책 적용
             policyService.updatePolicy(client.getMerchantId(), new SettlementPolicyUpdateRequest(
-                    new BigDecimal("0.005"), BigDecimal.ZERO, new BigDecimal("5.0"), new BigDecimal("1.00")
+                    new BigDecimal("0.005"), BigDecimal.ZERO, new BigDecimal("2.0"), new BigDecimal("1.0")
             ));
         } else {
             client.setGrade(ClientGrade.GENERAL);
-
-            // 일반 사용자 정책 복원: 수수료 1.5%, 전신료 2000원, 환율 마진 10.0, 환율 우대 90%
+            // 일반 정책 복구
             policyService.updatePolicy(client.getMerchantId(), new SettlementPolicyUpdateRequest(
                     new BigDecimal("0.015"), new BigDecimal("2000"), new BigDecimal("10.0"), new BigDecimal("0.90")
             ));
