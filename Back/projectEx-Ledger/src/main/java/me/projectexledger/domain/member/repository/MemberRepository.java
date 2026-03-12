@@ -12,6 +12,10 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     boolean existsByEmail(String email);
 
+    Optional<Member> findByAccountNumber(String accountNumber);
+
+    List<Member> findByRole(Member.Role role);
+
     // 기업 소속 + 승인 대기 중인 유저 조회
     List<Member> findByCompanyAndIsApprovedFalse(Company company);
 

@@ -73,6 +73,12 @@ const CommonLayout: React.FC<LayoutProps> = ({ children }) => {
             setNotifications((prev) => [`💸 ${event.data}`, ...prev].slice(0, 10));
           } else if (event.event === "login_alert") {
             setNotifications((prev) => [`🔐 ${event.data}`, ...prev].slice(0, 10));
+          } else if (event.event === "deposit_alert") {
+            showToast(`${event.data}`, "SUCCESS");
+            setNotifications((prev) => [`💰 ${event.data}`, ...prev].slice(0, 10));
+          } else if (event.event === "admin_alert") {
+            showToast(`${event.data}`, "ERROR");
+            setNotifications((prev) => [`🚨 ${event.data}`, ...prev].slice(0, 10));
           } else if (event.event === "announcement") {
             setNotifications((prev) => [`📢 ${event.data}`, ...prev].slice(0, 10));
           } else if (event.event === "connect") {

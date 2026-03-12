@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * 정산 대조 리스트 데이터 전송 객체
@@ -24,6 +23,11 @@ public class ReconciliationListDTO {
     // 🌟 [추가] 프론트엔드로 넘겨줄 은행/계좌 정보!
     private String bankName;
     private String accountNumber;
+
+    // 🌟 [수정] 타입을 ClientGrade에서 String으로 변경하여 빨간 줄을 해결합니다.
+    private String grade;
+
+    private String merchantId;
 
     private BigDecimal amount;       // 내부 DB 결제 원금 (정산 시스템 필수 타입)
     private BigDecimal originalAmount;

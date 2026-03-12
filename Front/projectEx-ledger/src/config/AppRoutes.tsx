@@ -18,8 +18,6 @@ import SystemHealth from "../components/pages/admin/system/SystemHealth";
 import AdminDashboard from "../pages/integratedadmin/AdminDashboard";
 import ReconciliationList from "../pages/integratedadmin/ReconciliationList";
 import ExchangeDashboard from "../components/pages/remittance/ExchangeDashboard";
-import ReconciliationDetail from "../pages/integratedadmin/ReconciliationDetail";
-import ClientManagement from "../pages/integratedadmin/ClientManagement";
 import MySettlementList from "../components/pages/settlement/MySettlementList";
 import RemittanceManagement from "../pages/integratedadmin/RemittanceManagement";
 import TransactionHistory from "../components/dashboard/TransactionHistory";
@@ -45,6 +43,8 @@ import AdminBroadcast from "../components/pages/admin/AdminBroadcast";
 import Unauthorized from "../pages/error/Unauthorized";
 import PendingApproval from "../pages/error/PendingApproval";
 import LoginRequired from "../pages/error/LoginRequired";
+import GradePolicyManagement from "../pages/integratedadmin/GradePolicyManagement";
+
 
 const AppRoutes = () => {
   return (
@@ -96,14 +96,15 @@ const AppRoutes = () => {
           <Route element={<ProtectedRoute allowedRoles={["ROLE_INTEGRATED_ADMIN", "INTEGRATED_ADMIN"]} />}>
             <Route path="/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/list" element={<ReconciliationList />} />
-            <Route path="/admin/settlement/:id" element={<ReconciliationDetail />} />
-            <Route path="/client" element={<ClientManagement />} />
             <Route path="/admin/logs" element={<AdminLogList />} />
             <Route path="/admin/health" element={<SystemHealth />} />
             <Route path="/admin/companies/review" element={<CompanyReview />} />
             <Route path="/admin/license-approval" element={<CompanyReview />} />
             <Route path="/remittance" element={<RemittanceManagement />} />
             <Route path="/admin/broadcast" element={<AdminBroadcast />} />
+            <Route path="/admin/grade-policy" element={<GradePolicyManagement />} />
+            
+            
         </Route>
       </Route>
     </Route>

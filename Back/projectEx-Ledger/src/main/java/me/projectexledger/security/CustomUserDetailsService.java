@@ -26,6 +26,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 member.getEmail(),
                 member.getPassword(),
                 Collections.singletonList(new SimpleGrantedAuthority(member.getRole().name())),
-                member.isApproved());
+                member.isApproved(),
+                false);
     }
 }

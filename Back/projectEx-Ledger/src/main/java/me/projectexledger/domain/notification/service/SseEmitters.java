@@ -104,6 +104,16 @@ public class SseEmitters {
         sendNotification(userId, "remittance_update", message);
     }
 
+    public void sendDepositNotification(String userId, String message) {
+        sendNotification(userId, "deposit_alert", message);
+    }
+
+    public void sendAdminAlert(String message) {
+        for (Member admin : memberRepository.findByRole(Member.Role.ROLE_INTEGRATED_ADMIN)) {
+            sendNotification(admin.getEmail(), "admin_alert", message);
+        }
+    }
+
     /**
      * 로그인 시도 경고 알림
      */

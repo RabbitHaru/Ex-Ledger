@@ -9,7 +9,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
@@ -65,8 +64,11 @@ public class JwtTokenProvider {
                 .anyMatch(a -> "ROLE_INTEGRATED_ADMIN".equals(a.getAuthority()));
 
         boolean isApproved = false;
+        boolean mfaVerified = false;
         if (authentication.getPrincipal() instanceof CustomUserDetails) {
-            isApproved = ((CustomUserDetails) authentication.getPrincipal()).isApproved();
+            CustomUserDetails details = (CustomUserDetails) authentication.getPrincipal();
+            isApproved = details.isApproved();
+            mfaVerified = details.isMfaVerified();
         }
 
         long now = (new Date()).getTime();
@@ -79,6 +81,7 @@ public class JwtTokenProvider {
                 .setSubject(authentication.getName())
                 .claim("auth", authorities)
                 .claim("isApproved", isApproved)
+                .claim("mfaVerified", mfaVerified)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .setExpiration(validity)
                 .compact();
@@ -116,7 +119,8 @@ public class JwtTokenProvider {
                 .collect(Collectors.toList());
 
         boolean isApproved = claims.get("isApproved", Boolean.class) != null && claims.get("isApproved", Boolean.class);
-        UserDetails principal = new CustomUserDetails(claims.getSubject(), "", authorities, isApproved);
+        boolean mfaVerified = claims.get("mfaVerified", Boolean.class) != null && claims.get("mfaVerified", Boolean.class);
+        UserDetails principal = new CustomUserDetails(claims.getSubject(), "", authorities, isApproved, mfaVerified);
         return new UsernamePasswordAuthenticationToken(principal, token, authorities);
     }
 

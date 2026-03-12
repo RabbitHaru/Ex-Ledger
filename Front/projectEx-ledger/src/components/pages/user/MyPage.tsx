@@ -33,6 +33,10 @@ const MyPage: React.FC = () => {
     // 탭 상태 관리
     const [activeTab, setActiveTab] = useState<'security' | 'corporate' | 'banking'>('security');
 
+    // 회원탈퇴 확인 모달 상태
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+    const [withdrawing, setWithdrawing] = useState(false);
+
     // 회원 프로필 정보 상태
     const [profile, setProfile] = useState<{
         name: string;
@@ -186,33 +190,39 @@ const MyPage: React.FC = () => {
 
     const handleWithdraw = async () => {
         toast("정말 회원 탈퇴를 진행하시겠습니까?", {
-            description: "7일간의 유예 기간이 주어지며, 이후 모든 정보가 삭제됩니다.",
-            action: {
-                label: "탈퇴하기",
-                onClick: async () => {
-                    try {
-                        await http.delete("/auth/withdraw");
-                        showToast("탈퇴 요청이 접수되었습니다. 7일 후 자동 탈퇴됩니다.", "SUCCESS");
-                        fetchProfile();
-                    } catch (err: any) {
-                        showToast(err.response?.data?.message || "탈퇴 요청 실패", "ERROR");
-                    }
-                },
-            },
-            cancel: {
-                label: "취소",
-                onClick: () => console.log("Withdrawal cancelled by user"),
-            },
+            description: "유예 기간이 지난 뒤 모든 정보가 삭제됩니다.",
         });
+        setShowWithdrawModal(true);
     };
 
     const handleCancelWithdraw = async () => {
         try {
-            await http.post("/auth/withdraw/cancel");
+            const res = await http.post("/auth/withdraw/cancel");
+            if (res?.data?.status !== "SUCCESS") {
+                throw new Error(res?.data?.message || "탈퇴 철회 실패");
+            }
             showToast("회원 탈퇴 요청이 철회되었습니다.", "SUCCESS");
             fetchProfile();
         } catch (err: any) {
-            showToast(err.response?.data?.message || "탈퇴 철회 실패", "ERROR");
+            showToast(err.response?.data?.message || err.message || "탈퇴 철회 실패", "ERROR");
+        }
+    };
+
+    const confirmWithdraw = async () => {
+        if (withdrawing) return;
+        setWithdrawing(true);
+        try {
+            const res = await http.delete("/auth/withdraw");
+            if (res?.data?.status !== "SUCCESS") {
+                throw new Error(res?.data?.message || "탈퇴 요청 실패");
+            }
+            setShowWithdrawModal(false);
+            showToast("탈퇴 요청이 접수되었습니다.", "SUCCESS");
+            fetchProfile();
+        } catch (err: any) {
+            showToast(err.response?.data?.message || err.message || "탈퇴 요청 실패", "ERROR");
+        } finally {
+            setWithdrawing(false);
         }
     };
 
@@ -233,7 +243,13 @@ const MyPage: React.FC = () => {
         { id: 'banking', label: '결제 및 계좌', icon: Key, show: !isCompanyPending },
     ].filter(tab => tab.show !== false);
 
+    // 개인 가상계좌 정보
+    const personalWallet = getWalletDataById(profile?.email || '');
+    const personalAccount = personalWallet?.userAccount || '';
+    const personalKrw = personalWallet?.balances?.KRW || 0;
+
     return (
+        <>
         <div className="p-12 mx-auto space-y-12 max-w-6xl duration-500 animate-in fade-in">
             <header className="flex gap-8 items-center mb-4">
                 <div className="w-20 h-20 bg-slate-900 rounded-[28px] flex items-center justify-center text-teal-400 shadow-2xl shadow-slate-200">
@@ -733,7 +749,7 @@ const MyPage: React.FC = () => {
 
                             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
                                 {/* 개인 계좌 카드 - 개인 유저인 경우에만 표시 */}
-                                {profile?.role === 'ROLE_USER' && (
+                                {profile?.role === 'ROLE_USER' && personalAccount && (
                                     <div className="p-10 bg-slate-50 rounded-[40px] space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-slate-200 hover:-translate-y-2 border border-transparent hover:border-slate-100">
                                         <div className="flex justify-between items-start">
                                             <div className="space-y-2">
@@ -749,13 +765,13 @@ const MyPage: React.FC = () => {
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">계좌 번호</label>
                                                 <p className="font-mono text-xl font-bold text-slate-900">
-                                                    {getWalletDataById(profile?.email || '')?.userAccount || '미발급'}
+                                                    {personalAccount}
                                                 </p>
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">보유 잔액</label>
                                                 <p className="text-3xl italic font-black text-slate-900">
-                                                    ₩ {(getWalletDataById(profile?.email || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
+                                                    ₩ {personalKrw.toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
                                                 </p>
                                             </div>
                                         </div>
@@ -769,9 +785,29 @@ const MyPage: React.FC = () => {
                                         </button>
                                     </div>
                                 )}
+                                
+                                {/* 개인: 계좌 미발급 상태 → 발급 페이지 이동 CTA */}
+                                {profile?.role === 'ROLE_USER' && !personalAccount && (
+                                    <div className="p-10 bg-slate-50 rounded-[40px] space-y-8 border border-slate-100 text-center flex flex-col items-center justify-center">
+                                        <div className="p-4 bg-white rounded-2xl shadow-sm text-slate-300">
+                                            <CreditCard size={28} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <h3 className="text-xl font-black text-slate-900">가상계좌 미발급</h3>
+                                            <p className="text-[12px] font-bold text-slate-400">발급을 진행해 주세요.</p>
+                                        </div>
+                                        <button
+                                            onClick={() => navigate('/seller/dashboard')}
+                                            className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[13px] hover:bg-black transition-all flex items-center gap-2"
+                                        >
+                                            계좌 발급 페이지로 이동
+                                            <ArrowRight size={16} />
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* 기업 공금 계좌 카드 (기업 사용자만) */}
-                                {(profile?.role === 'ROLE_COMPANY_ADMIN' || profile?.role === 'ROLE_COMPANY_USER') ? (
+                                {(profile?.role === 'ROLE_COMPANY_ADMIN' || profile?.role === 'ROLE_COMPANY_USER') && getWalletDataById(profile?.businessNumber || '')?.userAccount ? (
                                     <div className="p-10 bg-indigo-50/50 rounded-[40px] border border-indigo-100 space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-indigo-100 hover:-translate-y-2 hover:border-indigo-100 lg:col-span-2">
                                         <div className="flex justify-between items-start">
                                             <div className="space-y-2">
@@ -806,14 +842,37 @@ const MyPage: React.FC = () => {
                                             <ArrowRight size={16} className="transition-transform group-hover/btn:translate-x-1" />
                                         </button>
                                     </div>
-                                ) : (
-                                    <div className="p-10 bg-slate-50/50 border border-slate-100 rounded-[40px] flex flex-col items-center justify-center text-center space-y-4">
-                                        <div className="p-4 rounded-2xl bg-white/50 text-slate-300">
-                                            <CreditCard size={32} />
+                                ) : null}
+
+                                {/* 기업 계좌 미발급 시: 관리자만 CTA 노출 */}
+                                {(profile?.role === 'ROLE_COMPANY_ADMIN') && !getWalletDataById(profile?.businessNumber || '')?.userAccount && (
+                                    <div className="p-10 bg-indigo-50/30 border border-indigo-100 rounded-[40px] flex flex-col items-center justify-center text-center space-y-4 lg:col-span-2">
+                                        <div className="p-4 rounded-2xl bg-white text-indigo-400 shadow-sm">
+                                            <Building2 size={28} />
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-[14px] font-black text-slate-400 uppercase tracking-widest">No Corporate Account</p>
-                                            <p className="text-[12px] font-bold text-slate-300">기업 회원이 아닌 경우 공금 계좌가 표시되지 않습니다.</p>
+                                            <p className="text-[14px] font-black text-slate-900">기업 공금 계좌 미발급</p>
+                                            <p className="text-[12px] font-bold text-slate-500">기업 관리자만 개설할 수 있습니다.</p>
+                                        </div>
+                                        <button
+                                            onClick={() => navigate('/corporate/wallet')}
+                                            className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[13px] hover:bg-indigo-700 transition-all flex items-center gap-2"
+                                        >
+                                            기업 계좌 개설하기
+                                            <ArrowRight size={16} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* 기업 멤버(실무)에게는 미발급 안내만 */}
+                                {(profile?.role === 'ROLE_COMPANY_USER') && !getWalletDataById(profile?.businessNumber || '')?.userAccount && (
+                                    <div className="p-10 bg-slate-50/50 border border-slate-100 rounded-[40px] flex flex-col items-center justify-center text-center space-y-4 lg:col-span-2">
+                                        <div className="p-4 rounded-2xl bg-white text-slate-300 shadow-sm">
+                                            <CreditCard size={28} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[14px] font-black text-slate-900">기업 공금 계좌 미발급</p>
+                                            <p className="text-[12px] font-bold text-slate-400">기업 관리자에게 개설을 요청하세요.</p>
                                         </div>
                                     </div>
                                 )}
@@ -867,6 +926,41 @@ const MyPage: React.FC = () => {
                 </footer>
             )}
         </div>
+
+        {/* 회원탈퇴 확인 모달 (토스트 액션 클릭이 막히는 환경을 위한 확실한 대안) */}
+        {showWithdrawModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+                <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => !withdrawing && setShowWithdrawModal(false)} />
+                <div className="relative bg-white rounded-[32px] border border-slate-100 shadow-2xl max-w-md w-full p-8 space-y-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl">
+                            <AlertTriangle size={18} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900">회원 탈퇴 확인</h3>
+                    </div>
+                    <p className="text-sm font-bold text-slate-500 leading-relaxed">
+                        유예 기간 이후 계정과 데이터가 완전히 삭제됩니다. 계속하시겠습니까?
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setShowWithdrawModal(false)}
+                            disabled={withdrawing}
+                            className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-black hover:bg-slate-50 transition-all"
+                        >
+                            취소
+                        </button>
+                        <button
+                            onClick={confirmWithdraw}
+                            disabled={withdrawing}
+                            className="flex-1 py-3 rounded-2xl bg-rose-500 text-white font-black hover:bg-rose-600 transition-all disabled:opacity-50"
+                        >
+                            {withdrawing ? "처리 중..." : "탈퇴하기"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 

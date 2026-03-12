@@ -25,6 +25,7 @@ interface DetailModalProps {
     id: string;
     createdAt: string;
     amountUsd: number;
+    currency: string; // 🌟 [추가] 통화 정보 필드
     exchangeRate: number;
     feeBreakdown: {
       platform: number;
@@ -66,7 +67,7 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
         };
       case "PENDING":
         return {
-          label: "송금 진행 중",
+          label: "정산 중",
           color: "text-blue-600",
           bg: "bg-blue-50",
           icon: <Clock size={20} />,
@@ -91,7 +92,7 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
   const statusInfo = getStatusInfo(data.status);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-slate-900/60">
       <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
         <div className="flex items-center justify-between p-8 border-b border-slate-50 bg-slate-50/30">
           <div>
@@ -120,30 +121,34 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
                 {statusInfo.label}
               </span>
             </div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">
+            <span className="text-[10px] font-bold uppercase text-slate-400">
               {data.createdAt}
             </span>
           </div>
 
-          <div className="space-y-4">
+       <div className="space-y-4">
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2 font-bold text-slate-400">
                 <DollarSign size={16} /> 송금 신청 금액
               </span>
               <span className="text-lg font-black text-slate-900">
-                $ {data.amountUsd.toLocaleString()}
+                {/* 🌟 [수정] $ 기호를 제거하고 뒤에 통화 단위를 붙입니다. */}
+                {data.amountUsd.toLocaleString()} {data.currency}
               </span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2 font-bold text-slate-400">
-                <ArrowRight size={16} /> 적용 환율
-              </span>
-              <span className="font-black text-slate-900">
-                1 USD = {data.exchangeRate.toLocaleString()} KRW
-              </span>
-            </div>
+            
+            {/* 🌟 [추가] KRW 거래일 경우 적용 환율 영역을 숨기거나 대시(-) 처리하면 더 깔끔합니다. */}
+            {data.currency !== 'KRW' && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 font-bold text-slate-400">
+                  <ArrowRight size={16} /> 적용 환율
+                </span>
+                <span className="font-black text-slate-900">
+                  1 {data.currency} = {data.exchangeRate.toLocaleString()} KRW
+                </span>
+              </div>
+            )}
 
-            {/* 🌟 수수료 상세 명세 영역 */}
             <div className="p-6 bg-slate-50 rounded-[28px] space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/50">
                 <span className="flex items-center gap-2 text-xs font-black text-slate-500">
@@ -176,11 +181,14 @@ const SettlementDetailModal: React.FC<DetailModalProps> = ({
                 최종 정산 금액
               </span>
               <div className="text-right">
-                <span className="text-3xl font-black text-teal-600">
+                {/* 🌟 [수정] PENDING 상태일 경우 텍스트 투명도를 40%로 낮춰 '미확정' 느낌을 줍니다. */}
+                <span className={`text-3xl font-black ${data.status === 'PENDING' ? 'text-teal-600/40' : 'text-teal-600'}`}>
                   {data.finalAmountKrw.toLocaleString()}
                 </span>
-                <span className="ml-1 text-sm font-black text-teal-600">
+                <span className={`ml-1 text-sm font-black ${data.status === 'PENDING' ? 'text-teal-600/40' : 'text-teal-600'}`}>
                   KRW
+                  {/* 🌟 [수정] 상태가 PENDING일 때만 '(예정)' 텍스트가 표시됩니다. */}
+                  {data.status === 'PENDING' && <span className="ml-1 text-xs font-bold text-slate-400">(예정)</span>}
                 </span>
               </div>
             </div>

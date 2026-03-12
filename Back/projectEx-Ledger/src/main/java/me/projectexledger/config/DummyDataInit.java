@@ -57,10 +57,8 @@ public class DummyDataInit implements CommandLineRunner {
                 .name("(주)테스트기업A")
                 .businessNumber("123-45-67890")
                 .status(ClientStatus.PENDING)
-                .feeRate(new BigDecimal("0.0200"))
                 .bankName("국민은행")
                 .accountNumber("123456-01-123456")
-                .preferenceRate(new BigDecimal("0.8000"))
                 .merchantId("MCT-TEST-001")
                 .grade(ClientGrade.GENERAL)
                 .build();
@@ -69,24 +67,17 @@ public class DummyDataInit implements CommandLineRunner {
                 .name("(주)엑스레저글로벌")
                 .businessNumber("987-65-43210")
                 .status(ClientStatus.APPROVED)
-                .feeRate(new BigDecimal("0.0100"))
                 .bankName("신한은행")
                 .accountNumber("110-123-456789")
-                .preferenceRate(new BigDecimal("0.9000"))
                 .merchantId("MCT-TEST-002")
-                .networkFee(new BigDecimal("1500"))
-                .exchangeSpread(new BigDecimal("8.00"))
-                .grade(ClientGrade.VIP)
                 .build();
 
         Client client3 = Client.builder()
                 .name("(주)글로벌무역")
                 .businessNumber("111-22-33333")
                 .status(ClientStatus.PENDING)
-                .feeRate(new BigDecimal("0.0150"))
                 .bankName("하나은행")
                 .accountNumber("123-123456-12345")
-                .preferenceRate(new BigDecimal("0.8500"))
                 .merchantId("MCT-TEST-003")
                 .grade(ClientGrade.GENERAL)
                 .build();
@@ -174,23 +165,25 @@ public class DummyDataInit implements CommandLineRunner {
 
         // ========== 5. [심사 대기/반려 기업] 관리자 ==========
         if (!memberRepository.existsByEmail("ceo@startup.com")) {
-            membersToSave.add(Member.builder() // 심사 대기 상태
+            Member pendingAdmin = Member.builder()
                     .email("ceo@startup.com")
                     .password(passwordEncoder.encode("test1234!"))
                     .name("최스타")
                     .role(Member.Role.ROLE_COMPANY_ADMIN)
                     .company(companyPending)
-                    .build());
+                    .build();
+            membersToSave.add(pendingAdmin);
         }
 
         if (!memberRepository.existsByEmail("fail@trade.com")) {
-            membersToSave.add(Member.builder() // 반려 상태
+            Member rejectedAdmin = Member.builder()
                     .email("fail@trade.com")
                     .password(passwordEncoder.encode("test1234!"))
                     .name("강실패")
                     .role(Member.Role.ROLE_COMPANY_ADMIN)
                     .company(companyRejected)
-                    .build());
+                    .build();
+            membersToSave.add(rejectedAdmin);
         }
 
         if (!membersToSave.isEmpty()) {

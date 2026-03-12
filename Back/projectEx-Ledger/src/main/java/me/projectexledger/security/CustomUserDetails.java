@@ -9,9 +9,11 @@ import java.util.Collection;
 @Getter
 public class CustomUserDetails extends User {
     private final boolean isApproved;
+    private final boolean mfaVerified;
 
-    public CustomUserDetails(String username, String password, Collection<? extends GrantedAuthority> authorities, boolean isApproved) {
+    public CustomUserDetails(String username, String password, Collection<? extends GrantedAuthority> authorities, boolean isApproved, boolean mfaVerified) {
         super(username, password, authorities);
         this.isApproved = isApproved;
+        this.mfaVerified = mfaVerified;
     }
 }

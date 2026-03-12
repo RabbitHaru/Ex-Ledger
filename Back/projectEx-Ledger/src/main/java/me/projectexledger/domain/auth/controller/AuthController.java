@@ -7,6 +7,8 @@ import me.projectexledger.domain.auth.dto.LoginRequest;
 import me.projectexledger.domain.auth.dto.SignupRequest;
 import me.projectexledger.domain.auth.dto.TokenResponse;
 import me.projectexledger.domain.auth.service.AuthService;
+import me.projectexledger.domain.auth.service.BusinessVerificationService;
+import me.projectexledger.domain.auth.dto.BusinessVerificationResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,17 +32,38 @@ import me.projectexledger.domain.auth.dto.MfaVerifyRequest;
 public class AuthController {
 
     private final AuthService authService;
+    private final BusinessVerificationService businessVerificationService;
 
     @PostMapping("/signup")
-    public ApiResponse<Long> signup(@Valid @RequestBody SignupRequest request) {
-        Long memberId = authService.signup(request);
-        return ApiResponse.success("회원가입이 완료되었습니다.", memberId);
+    public ApiResponse<TokenResponse> signup(@Valid @RequestBody SignupRequest request) {
+        TokenResponse tokenResponse = authService.signup(request);
+        return ApiResponse.success("회원가입이 완료되었습니다.", tokenResponse);
     }
 
     @PostMapping("/login")
     public ApiResponse<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         TokenResponse tokenResponse = authService.login(request);
         return ApiResponse.success("로그인 성공", tokenResponse);
+    }
+
+    @PostMapping("/verify-business")
+    public ApiResponse<BusinessVerificationResponse> verifyBusiness(@RequestBody Map<String, String> request) {
+        String businessNumber = request.get("businessNumber");
+        if (businessNumber == null || businessNumber.isEmpty()) {
+            return ApiResponse.fail("사업자 등록번호를 입력해주세요.");
+        }
+        BusinessVerificationResponse response = businessVerificationService.verify(businessNumber);
+        if (response.isValid()) {
+            return ApiResponse.success(response.getMessage(), response);
+        } else {
+            return ApiResponse.fail(response.getMessage());
+        }
+    }
+
+    @GetMapping("/check-email")
+    public ApiResponse<Void> checkEmail(@jakarta.validation.constraints.Email String email) {
+        authService.checkEmailAvailability(email);
+        return ApiResponse.success("사용 가능한 이메일입니다.", null);
     }
 
     @PostMapping("/login/mfa")
@@ -58,7 +81,7 @@ public class AuthController {
     @PostMapping("/mfa/setup")
     public ApiResponse<MfaSetupResponse> setupMfa(Principal principal, @RequestBody(required = false) Map<String, Object> body) {
         if (principal == null) {
-            return ApiResponse.fail("로그인이 필요합니다.");
+            throw new IllegalArgumentException("MFA_SETUP_LOGIN_REQUIRED: 로그인이 필요합니다.");
         }
         Integer currentOtpCode = null;
         if (body != null && body.get("currentOtpCode") != null) {
@@ -70,6 +93,16 @@ public class AuthController {
         }
         MfaSetupResponse response = authService.setupMfa(principal.getName(), currentOtpCode);
         return ApiResponse.success("MFA 설정 준비 완료 (기존 설정은 초기화되었습니다)", response);
+    }
+
+    @PostMapping("/mfa/setup-registration")
+    public ApiResponse<MfaSetupResponse> setupRegistrationMfa(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("이메일 정보가 누락되었습니다.");
+        }
+        MfaSetupResponse response = authService.generateRegistrationMfa(email);
+        return ApiResponse.success("회원가입 MFA 설정 정보 생성", response);
     }
 
     /**

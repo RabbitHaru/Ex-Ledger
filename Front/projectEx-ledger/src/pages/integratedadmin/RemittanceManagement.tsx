@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import http from '../../config/http';
+import { RefreshCcw, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
 export interface RemittanceHistoryData {
   id: number;
   settlementId: number;
-  groupedIds?: number[]; // 🌟 [추가] 묶인 결제 건들의 ID를 담아 일괄 처리에 사용합니다.
+  groupedIds?: number[]; 
   clientName: string;
   bankName: string;
   accountNumber: string;
@@ -20,6 +21,11 @@ export interface RemittanceHistoryData {
 const RemittanceManagement: React.FC = () => {
   const [data, setData] = useState<RemittanceHistoryData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processingText, setProcessingText] = useState<string>("");
+  const [resultPopup, setResultPopup] = useState<{isOpen: boolean, type: 'success' | 'partial' | 'error', title: string, desc: string} | null>(null);
+
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
@@ -35,7 +41,7 @@ const RemittanceManagement: React.FC = () => {
         const mappedData: RemittanceHistoryData[] = failedSettlements.map((item: any) => ({
           id: item.id,
           settlementId: item.id,
-          groupedIds: [item.id], // 초기 배열에는 자기 자신의 ID만 들어갑니다.
+          groupedIds: [item.id], 
           clientName: item.clientName,
           bankName: item.bankName || '알 수 없음',
           accountNumber: item.accountNumber || '-',
@@ -47,7 +53,6 @@ const RemittanceManagement: React.FC = () => {
           updatedAt: item.updatedAt
         }));
 
-        // 🌟 [핵심] 연속된 동일 고객사 묶기 (Run-Length Encoding 알고리즘)
         const groupedData: RemittanceHistoryData[] = [];
         if (mappedData.length > 0) {
           let currentGroup = mappedData[0];
@@ -55,17 +60,14 @@ const RemittanceManagement: React.FC = () => {
           for (let i = 1; i < mappedData.length; i++) {
             const row = mappedData[i];
 
-            // 이전 행과 고객명이 같으면 그룹으로 묶어 횟수를 올립니다.
             if (currentGroup.clientName === row.clientName) {
               currentGroup.attemptCount += 1;
-              currentGroup.groupedIds!.push(row.settlementId); // 재전송용 ID 수집
+              currentGroup.groupedIds!.push(row.settlementId);
             } else {
-              // 다른 고객사면 지금까지 모은 그룹을 밀어넣고, 새 고객사로 시작합니다.
               groupedData.push(currentGroup);
               currentGroup = row;
             }
           }
-          // 마지막으로 남은 그룹도 밀어넣어 줍니다.
           groupedData.push(currentGroup);
         }
 
@@ -84,13 +86,22 @@ const RemittanceManagement: React.FC = () => {
     fetchRemittanceHistory();
   }, []);
 
-  // 🌟 [핵심] 여러 건이 묶여있다면 Promise.all을 통해 서버에 일괄 재전송을 때립니다.
+  const handleRefresh = async () => {
+    setProcessingText("최신 송금 이력 데이터를 불러오는 중입니다...");
+    setIsProcessing(true);
+    await fetchRemittanceHistory();
+    setIsProcessing(false);
+    toast.success("데이터 새로고침 완료!"); // 🌟 이모티콘 제거
+  };
+
   const handleRetryGroup = async (groupedIds: number[]) => {
     const count = groupedIds.length;
     if (!window.confirm(`선택된 ${count}건의 송금을 일괄 재전송하시겠습니까?`)) return;
 
+    setProcessingText(`총 ${count}건의 송금을 은행망으로 재전송 중입니다...`);
+    setIsProcessing(true);
+
     try {
-      // 배열 안의 모든 ID를 반복하여 백엔드로 비동기 API 요청을 날립니다.
       const promises = groupedIds.map(id =>
         http.post(`/admin/settlements/${id}/retry`)
       );
@@ -98,15 +109,40 @@ const RemittanceManagement: React.FC = () => {
       const results: any[] = await Promise.all(promises);
       const successCount = results.filter(r => r && r.data && r.data.status === 'SUCCESS').length;
 
+      setIsProcessing(false);
+
       if (successCount === count) {
-        toast.success(`✅ ${count}건 모두 재전송 요청이 완료되었습니다.`);
+        setResultPopup({
+          isOpen: true,
+          type: 'success',
+          title: '재전송 성공', // 🌟 이모티콘 제거
+          desc: `요청하신 ${count}건의 송금이 모두 은행망으로 정상 재전송되었습니다.`
+        });
+      } else if (successCount === 0) {
+        setResultPopup({
+          isOpen: true,
+          type: 'error',
+          title: '재전송 실패', // 🌟 이모티콘 제거
+          desc: `요청하신 ${count}건 모두 재전송에 실패했습니다. 관리자망 상태를 확인하세요.`
+        });
       } else {
-        toast.success(`⚠️ ${successCount}건 성공, ${count - successCount}건 실패했습니다.`);
+        setResultPopup({
+          isOpen: true,
+          type: 'partial',
+          title: '일부 재전송 실패', // 🌟 이모티콘 제거
+          desc: `총 ${count}건 중 ${successCount}건 성공, ${count - successCount}건 실패했습니다.`
+        });
       }
 
       fetchRemittanceHistory();
     } catch (error) {
-      toast.error("서버 통신 중 오류가 발생했습니다.");
+      setIsProcessing(false);
+      setResultPopup({
+        isOpen: true,
+        type: 'error',
+        title: '시스템 오류', // 🌟 이모티콘 제거
+        desc: '서버 통신 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
+      });
     }
   };
 
@@ -133,9 +169,10 @@ const RemittanceManagement: React.FC = () => {
 
             <div className="flex justify-end w-full lg:w-auto">
               <button
-                onClick={fetchRemittanceHistory}
-                className="px-4 py-2 text-sm font-medium text-white bg-[#007b70] rounded-md shadow-sm hover:bg-teal-800 transition whitespace-nowrap"
+                onClick={handleRefresh}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-[#007b70] rounded-lg shadow-sm hover:bg-teal-800 transition whitespace-nowrap active:scale-95"
               >
+                <RefreshCcw className="w-4 h-4" />
                 새로고침
               </button>
             </div>
@@ -158,7 +195,7 @@ const RemittanceManagement: React.FC = () => {
                 {isLoading ? (
                   <tr><td colSpan={7} className="p-12 font-medium text-center text-gray-400">송금 이력 데이터를 불러오는 중입니다...</td></tr>
                 ) : paginatedData.length === 0 ? (
-                  <tr><td colSpan={7} className="p-12 font-medium text-center text-gray-400">송금 실패 또는 이력 내역이 없습니다. 🎉</td></tr>
+                  <tr><td colSpan={7} className="p-12 font-medium text-center text-gray-400">송금 실패 또는 이력 내역이 없습니다.</td></tr> // 🌟 이모티콘 제거
                 ) : paginatedData.map((row) => (
                   <tr key={row.id} className="transition border-b border-gray-100 hover:bg-gray-50/50">
                     <td className="px-2 py-5 text-sm font-medium text-gray-500">#{row.id}</td>
@@ -191,9 +228,9 @@ const RemittanceManagement: React.FC = () => {
                       {row.status === 'FAILED' ? (
                         <button
                           onClick={() => handleRetryGroup(row.groupedIds || [row.settlementId])}
-                          className="px-3 py-1.5 text-xs font-bold text-white bg-[#007b70] rounded shadow-sm hover:bg-teal-800 transition whitespace-nowrap"
+                          className="px-4 py-2 text-xs font-black text-white transition bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 whitespace-nowrap active:scale-95"
                         >
-                          일괄 재전송 🚀
+                          일괄 재전송 {/* 🌟 이모티콘 제거 */}
                         </button>
                       ) : (
                         <button disabled className="px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-100 rounded cursor-not-allowed whitespace-nowrap">
@@ -220,6 +257,55 @@ const RemittanceManagement: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* 🌟 로딩/진행 중 팝업창 */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm bg-slate-900/60">
+          <div className="flex flex-col items-center w-full max-w-md p-10 text-center bg-white shadow-2xl rounded-[32px] animate-in fade-in zoom-in duration-300">
+            <div className="flex items-center justify-center w-20 h-20 mb-6 rounded-full bg-indigo-50">
+              <RefreshCcw className="w-10 h-10 text-indigo-600 animate-spin" />
+            </div>
+            <h3 className="mb-3 text-xl font-black tracking-tight text-slate-900">
+              처리 중...
+            </h3>
+            <p className="text-sm font-bold leading-relaxed text-slate-500">
+              {processingText}<br />
+              잠시만 기다려 주세요.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 일괄 재전송 결과(성공/실패) 팝업창 */}
+      {resultPopup?.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm bg-slate-900/60">
+          <div className="flex flex-col items-center w-full max-w-md p-10 text-center bg-white shadow-2xl rounded-[32px] animate-in fade-in zoom-in duration-300">
+            <div className={`flex items-center justify-center w-20 h-20 mb-6 rounded-full ${
+              resultPopup.type === 'success' ? 'bg-green-50 text-green-600' :
+              resultPopup.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'
+            }`}>
+              {resultPopup.type === 'success' && <CheckCircle className="w-10 h-10" />}
+              {resultPopup.type === 'error' && <XCircle className="w-10 h-10" />}
+              {resultPopup.type === 'partial' && <AlertCircle className="w-10 h-10" />}
+            </div>
+            <h3 className="mb-3 text-2xl font-black tracking-tight text-slate-900">
+              {resultPopup.title}
+            </h3>
+            <p className="mb-8 text-sm font-bold leading-relaxed text-slate-500">
+              {resultPopup.desc}
+            </p>
+            <button
+              onClick={() => setResultPopup(null)}
+              className={`px-6 py-3 text-base font-black text-white transition rounded-xl shadow-md w-full active:scale-95 ${
+                resultPopup.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                resultPopup.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
+              }`}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };

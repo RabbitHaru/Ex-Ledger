@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import http from '../../../config/http';
-import { getToken, parseJwt } from '../../../config/auth';
+import { getToken } from '../../../config/auth';
 import { Button } from '../common/Button';
 import { OtpInput } from '../common/OtpInput';
 import { ShieldCheck, ShieldAlert, KeyRound } from 'lucide-react';
@@ -9,7 +9,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 
 const MFASetup: React.FC = () => {
-    const location = useLocation();
     const navigate = useNavigate();
     const [qrCodeUrl, setQrCodeUrl] = useState('');
     const [secretKey, setSecretKey] = useState('');
@@ -18,21 +17,8 @@ const MFASetup: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const fetchedRef = React.useRef(false);
 
-    // Get email from state or JWT
-    const getTargetEmail = () => {
-        if (location.state?.email) return location.state.email;
-        const token = getToken();
-        if (token) {
-            const decoded = parseJwt(token);
-            return decoded?.sub || decoded?.email;
-        }
-        return null;
-    };
-
-    const email = getTargetEmail();
-
     useEffect(() => {
-        if (!email) {
+        if (!getToken()) {
             navigate('/login-required');
             return;
         }
@@ -42,10 +28,12 @@ const MFASetup: React.FC = () => {
 
         const fetchSetupData = async () => {
             try {
-                const response = await http.post('/auth/mfa/setup', { email });
-                if (response.data && response.data.data) {
+                const response = await http.post('/auth/mfa/setup', {});
+                if (response.data && response.data.status === 'SUCCESS' && response.data.data) {
                     setQrCodeUrl(response.data.data.qrCodeUrl);
                     setSecretKey(response.data.data.secretKey);
+                } else {
+                    setError(response.data?.message || 'MFA 설정 정보를 불러오는데 실패했습니다.');
                 }
             } catch (err: any) {
                 setError(err.response?.data?.message || 'MFA 설정 정보를 불러오는데 실패했습니다.');
@@ -55,7 +43,7 @@ const MFASetup: React.FC = () => {
         };
 
         fetchSetupData();
-    }, [email, navigate]);
+    }, [navigate]);
 
     const handleVerify = async (e: React.FormEvent, mfaCodeArg?: string) => {
         e.preventDefault();
@@ -63,7 +51,7 @@ const MFASetup: React.FC = () => {
 
         try {
             const codeStr = mfaCodeArg || otpCode;
-            await http.post('/auth/mfa/enable', { email, code: codeStr });
+            await http.post('/auth/mfa/enable', { code: codeStr });
             toast.success('구글 OTP 인증 설정이 완료되었습니다. 다시 로그인해 주세요.');
             navigate('/login-required');
         } catch (err: any) {

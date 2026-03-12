@@ -16,7 +16,9 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.text.NumberFormat;
 import java.util.stream.Collectors;
 
 import me.projectexledger.domain.notification.service.SseEmitters;
@@ -71,6 +73,16 @@ public class RemittanceService {
         String notiMsg = String.format("[송금 요청] %s %s %s → %s 접수 완료",
                 requestDTO.getCurrency(), requestDTO.getAmount(), requestDTO.getRecipientName(), requestDTO.getRecipientBank());
         sseEmitters.sendRemittanceNotification(requesterId, notiMsg);
+
+        memberRepository.findByAccountNumber(requestDTO.getRecipientAccount())
+                .filter(Member::isApproved)
+                .ifPresent(receiver -> {
+                    NumberFormat nf = NumberFormat.getNumberInstance(Locale.KOREA);
+                    String amountKrw = requestDTO.getTotalPayment() != null ? nf.format(requestDTO.getTotalPayment()) : "-";
+                    String senderName = member.getName() != null ? member.getName() : "사용자";
+                    String depositMsg = String.format("방금 %s님으로부터 ₩%s이 입금되었습니다", senderName, amountKrw);
+                    sseEmitters.sendDepositNotification(receiver.getEmail(), depositMsg);
+                });
 
         return RemittanceDTO.Response.builder()
                 .transactionId(transactionId)
