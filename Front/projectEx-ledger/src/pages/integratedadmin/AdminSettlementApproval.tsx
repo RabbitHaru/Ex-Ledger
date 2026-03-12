@@ -26,6 +26,10 @@ const AdminSettlementApproval: React.FC = () => {
   const [isSearchTypeDropdownOpen, setIsSearchTypeDropdownOpen] = useState<boolean>(false);
   const searchTypeDropdownRef = useRef<HTMLDivElement>(null);
 
+  // 🌟 [추가] 페이징 관련 상태
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 10;
+
   const searchTypeMap: { [key: string]: string } = {
     ALL: "전체 검색",
     CLIENT_NAME: "기업명",
@@ -38,7 +42,6 @@ const AdminSettlementApproval: React.FC = () => {
       const response: any = await http.get("/admin/settlements/reconciliations?page=0&size=1000");
       if (response?.data?.status === "SUCCESS") {
         const content = response.data.data.content || [];
-        // PENDING(정산 중) 상태만 가져옵니다.
         const pendingData = content.filter((item: any) => item.status === "PENDING"); 
         setData(pendingData);
       }
@@ -65,6 +68,7 @@ const AdminSettlementApproval: React.FC = () => {
 
   useEffect(() => {
     setSelectedIds([]);
+    setCurrentPage(1); // 🌟 [추가] 검색어나 타입이 바뀌면 1페이지로 리셋
   }, [searchQuery, searchType]);
 
   const filteredData = data.filter((d) => {
@@ -80,11 +84,21 @@ const AdminSettlementApproval: React.FC = () => {
     );
   });
 
+  // 🌟 [추가] 페이징 데이터 계산
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // 🌟 [수정] 전체 선택 시 '현재 페이지'에 보이는 항목들만 선택/해제되도록 수정
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const currentPageIds = paginatedData.map(item => item.id);
+    
     if (e.target.checked) {
-      setSelectedIds(filteredData.map((item) => item.id));
+      // 기존 선택된 항목에 현재 페이지 항목 추가 (중복 제거)
+      const newSelectedIds = Array.from(new Set([...selectedIds, ...currentPageIds]));
+      setSelectedIds(newSelectedIds);
     } else {
-      setSelectedIds([]);
+      // 기존 선택된 항목에서 현재 페이지 항목만 제거
+      setSelectedIds(selectedIds.filter(id => !currentPageIds.includes(id)));
     }
   };
 
@@ -96,7 +110,9 @@ const AdminSettlementApproval: React.FC = () => {
     }
   };
 
-  // 🌟 [수정] 승인 완료 시 흐려지지 않고 "즉시 목록에서 사라지도록" 필터링 처리
+  // 현재 페이지의 모든 항목이 선택되었는지 확인하는 로직 (헤더 체크박스 상태용)
+  const isAllCurrentPageSelected = paginatedData.length > 0 && paginatedData.every(item => selectedIds.includes(item.id));
+
   const handleBulkApprove = async () => {
     if (selectedIds.length === 0) {
       window.alert("승인할 항목을 선택해주세요.");
@@ -112,7 +128,6 @@ const AdminSettlementApproval: React.FC = () => {
       const promises = selectedIds.map((id) => http.post(`/admin/settlements/${id}/approve`));
       await Promise.all(promises);
 
-      // 데이터에서 선택된(승인된) 항목들을 아예 삭제해 버립니다!
       setData((prevData) => prevData.filter((item) => !selectedIds.includes(item.id)));
       
       setIsProcessing(false);
@@ -123,6 +138,11 @@ const AdminSettlementApproval: React.FC = () => {
         desc: `선택하신 ${selectedIds.length}건의 정산이 모두 정상적으로 승인 완료되었습니다.`
       });
       setSelectedIds([]);
+      
+      // 🌟 [추가] 승인 후 현재 페이지가 비어있게 되면 이전 페이지로 이동
+      if (paginatedData.length === selectedIds.length && currentPage > 1) {
+        setCurrentPage(prev => prev - 1);
+      }
     } catch (error) {
       setIsProcessing(false);
       setResultPopup({
@@ -137,20 +157,22 @@ const AdminSettlementApproval: React.FC = () => {
  const handleReject = async (id: number) => {
     const reason = window.prompt("반려 사유를 입력해주세요.");
     
-    if (reason === null) return; // 취소 버튼 클릭 시
+    if (reason === null) return;
     if (!reason.trim()) {
       window.alert("반려 사유를 입력해야 합니다.");
       return;
     }
 
     try {
-      // 백엔드로 반려 사유 전송 (POST 요청)
       await http.post(`/admin/settlements/${id}/reject`, { reason });
-      
       window.alert("반려 처리가 완료되었습니다.");
       
-      // 화면에서 즉시 제거
       setData(prevData => prevData.filter(item => item.id !== id));
+      
+      // 🌟 [추가] 반려 후 현재 페이지가 비어있게 되면 이전 페이지로 이동
+      if (paginatedData.length === 1 && currentPage > 1) {
+        setCurrentPage(prev => prev - 1);
+      }
     } catch (error) {
       window.alert("반려 처리 중 오류가 발생했습니다.");
     }
@@ -161,20 +183,18 @@ const AdminSettlementApproval: React.FC = () => {
       <main className="flex-grow w-full px-4 py-8 mx-auto max-w-[1400px]">
         <div className="flex flex-col justify-between gap-4 mb-8 xl:flex-row xl:items-end">
           <div>
-            <h2 className="text-3xl font-black tracking-tight text-slate-900">B2B 정산 승인 관리</h2>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900"> 정산 승인 관리</h2>
             <p className="mt-2 text-sm font-medium text-slate-500">
               기업 가맹점의 정산 요청 내역을 검토하고 송금을 승인합니다.
             </p>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
-            {/* 🌟 [수정] 검색창 전체 너비를 400px로 넉넉하게 확장! */}
             <div className="flex items-center w-full sm:w-[400px] bg-white border border-slate-300 rounded-xl shadow-sm transition focus-within:ring-2 focus-within:ring-indigo-100 focus-within:border-indigo-500 h-[42px]">
-              <div className="relative border-r border-slate-200 h-full" ref={searchTypeDropdownRef}>
-                {/* 🌟 [수정] 드롭다운 버튼 너비도 130px로 넓혀서 무조건 한 줄 유지 */}
+              <div className="relative h-full border-r border-slate-200" ref={searchTypeDropdownRef}>
                 <button
                   onClick={() => setIsSearchTypeDropdownOpen(!isSearchTypeDropdownOpen)}
-                  className="flex items-center justify-between w-[130px] h-full px-3 text-sm font-medium text-slate-600 bg-slate-50 rounded-l-xl hover:bg-slate-100 outline-none whitespace-nowrap"
+                  className="flex items-center justify-between w-[130px] h-full px-3 text-sm font-medium whitespace-nowrap outline-none text-slate-600 bg-slate-50 rounded-l-xl hover:bg-slate-100"
                 >
                   <span>{searchTypeMap[searchType]}</span>
                   <span className={`text-[10px] text-slate-400 transition-transform duration-200 ${isSearchTypeDropdownOpen ? "rotate-180" : ""}`}>
@@ -183,7 +203,7 @@ const AdminSettlementApproval: React.FC = () => {
                 </button>
 
                 {isSearchTypeDropdownOpen && (
-                  <div className="absolute left-0 z-20 w-32 py-1 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg top-full">
+                  <div className="absolute left-0 z-20 w-32 py-1 mt-1 bg-white border rounded-lg shadow-lg border-slate-200 top-full">
                     {Object.entries(searchTypeMap).map(([key, value]) => (
                       <button
                         key={key}
@@ -191,7 +211,7 @@ const AdminSettlementApproval: React.FC = () => {
                           setSearchType(key);
                           setIsSearchTypeDropdownOpen(false);
                         }}
-                        className="block w-full px-4 py-2 text-sm text-left text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap"
+                        className="block w-full px-4 py-2 text-sm text-left transition whitespace-nowrap text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"
                       >
                         {value}
                       </button>
@@ -206,17 +226,12 @@ const AdminSettlementApproval: React.FC = () => {
                   placeholder="검색어 입력"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-full py-2 px-4 text-sm bg-transparent border-none outline-none rounded-r-xl"
+                  className="w-full h-full px-4 py-2 text-sm bg-transparent border-none outline-none rounded-r-xl"
                 />
               </div>
             </div>
 
-            <button
-              onClick={fetchApprovalList}
-              className="px-4 h-[42px] text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition shadow-sm flex items-center"
-            >
-              새로고침
-            </button>
+           
             <button
               onClick={handleBulkApprove}
               disabled={isProcessing || selectedIds.length === 0}
@@ -227,43 +242,43 @@ const AdminSettlementApproval: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto min-h-[500px]">
+        <div className="overflow-hidden bg-white border shadow-sm border-slate-200 rounded-2xl">
+          <div className="overflow-x-auto min-h-[500px] flex flex-col justify-between">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="p-4 text-center w-16">
+                <tr className="border-b bg-slate-50 border-slate-200">
+                  <th className="w-16 p-4 text-center">
                     <input
                       type="checkbox"
                       className="w-4 h-4 text-indigo-600 border-gray-300 rounded cursor-pointer focus:ring-indigo-500"
-                      checked={selectedIds.length > 0 && selectedIds.length === filteredData.length}
+                      checked={isAllCurrentPageSelected}
                       onChange={handleSelectAll}
                     />
                   </th>
-                  <th className="px-4 py-4 text-xs font-black tracking-widest text-slate-500 uppercase">요청 일시</th>
-                  <th className="px-4 py-4 text-xs font-black tracking-widest text-slate-500 uppercase">기업명 (B2B)</th>
-                  <th className="px-4 py-4 text-xs font-black tracking-widest text-slate-500 uppercase text-right">신청 원금</th>
-                  <th className="px-4 py-4 text-xs font-black tracking-widest text-slate-500 uppercase text-right">최종 정산액(원)</th>
-                  <th className="px-4 py-4 text-xs font-black tracking-widest text-slate-500 uppercase text-center">상태</th>
-                  <th className="px-4 py-4 text-xs font-black tracking-widest text-slate-500 uppercase text-center">개별 액션</th>
+                  <th className="px-4 py-4 text-xs font-black tracking-widest uppercase text-slate-500">요청 일시</th>
+                  <th className="px-4 py-4 text-xs font-black tracking-widest uppercase text-slate-500">기업명</th>
+                  <th className="px-4 py-4 text-xs font-black tracking-widest text-right uppercase text-slate-500">신청 원금</th>
+                  <th className="px-4 py-4 text-xs font-black tracking-widest text-right uppercase text-slate-500">최종 정산액(원)</th>
+                  <th className="px-4 py-4 text-xs font-black tracking-widest text-center uppercase text-slate-500">상태</th>
+                  <th className="px-4 py-4 text-xs font-black tracking-widest text-center uppercase text-slate-500">개별 액션</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center text-slate-400 font-medium">
+                    <td colSpan={7} className="py-20 font-medium text-center text-slate-400">
                       데이터를 불러오는 중입니다...
                     </td>
                   </tr>
-                ) : filteredData.length === 0 ? (
+                ) : paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-24 text-center text-slate-500 font-medium whitespace-nowrap">
+                    <td colSpan={7} className="py-24 font-medium text-center whitespace-nowrap text-slate-500">
                       검색된 승인 대기 건이 없습니다.
                     </td>
                   </tr>
                 ) : (
-                  // 🌟 [수정] 불필요해진 완료(COMPLETED) 관련 렌더링 조건 싹 제거! (어차피 목록에서 바로 사라짐)
-                  filteredData.map((row) => (
+                  // 🌟 [수정] filteredData 대신 paginatedData를 매핑합니다.
+                  paginatedData.map((row) => (
                     <tr
                       key={row.id}
                       className={`border-b border-slate-100 transition hover:bg-slate-50/50 ${
@@ -273,17 +288,17 @@ const AdminSettlementApproval: React.FC = () => {
                       <td className="p-4 text-center">
                         <input
                           type="checkbox"
-                          className="w-4 h-4 rounded border-gray-300 focus:ring-indigo-500 text-indigo-600 cursor-pointer"
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded cursor-pointer focus:ring-indigo-500"
                           checked={selectedIds.includes(row.id)}
                           onChange={() => handleSelectOne(row.id)}
                         />
                       </td>
-                      <td className="px-4 py-4 text-sm font-medium text-slate-500 whitespace-nowrap">
+                      <td className="px-4 py-4 text-sm font-medium whitespace-nowrap text-slate-500">
                         {row.updatedAt || "-"}
                       </td>
                       <td className="px-4 py-4">
                         <div className="font-bold text-slate-900">{row.clientName}</div>
-                        <div className="text-xs font-mono text-slate-400 mt-0.5">{row.orderId}</div>
+                        <div className="text-xs font-mono mt-0.5 text-slate-400">{row.orderId}</div>
                       </td>
                       <td className="px-4 py-4 text-right">
                         <span className="font-semibold text-slate-600">
@@ -296,7 +311,7 @@ const AdminSettlementApproval: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className="px-3 py-1 text-xs font-black text-amber-700 bg-amber-100 rounded-full whitespace-nowrap">
+                        <span className="px-3 py-1 text-xs font-black rounded-full whitespace-nowrap text-amber-700 bg-amber-100">
                           정산 중
                         </span>
                       </td>
@@ -304,7 +319,7 @@ const AdminSettlementApproval: React.FC = () => {
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleReject(row.id)}
-                            className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
+                            className="px-3 py-1.5 text-xs font-bold text-red-600 transition rounded-lg bg-red-50 hover:bg-red-100"
                           >
                             반려
                           </button>
@@ -315,15 +330,51 @@ const AdminSettlementApproval: React.FC = () => {
                 )}
               </tbody>
             </table>
+
+            {/* 🌟 [추가] 하단 페이징 컨트롤 컴포넌트 */}
+            {!isLoading && filteredData.length > 0 && (
+              <div className="flex items-center justify-center gap-2 py-6 mt-auto border-t border-slate-100">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} 
+                  disabled={currentPage === 1} 
+                  className="px-4 py-1.5 border border-slate-300 rounded-md text-sm font-medium disabled:opacity-30 hover:bg-slate-50 transition shadow-sm"
+                >
+                  이전
+                </button>
+                <div className="flex gap-1.5 mx-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                    <button 
+                      key={n} 
+                      onClick={() => setCurrentPage(n)} 
+                      className={`w-9 h-9 rounded-md text-sm font-bold transition shadow-sm ${
+                        currentPage === n 
+                          ? 'bg-indigo-600 text-white' 
+                          : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-500'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} 
+                  disabled={currentPage === totalPages} 
+                  className="px-4 py-1.5 border border-slate-300 rounded-md text-sm font-medium disabled:opacity-30 hover:bg-slate-50 transition shadow-sm"
+                >
+                  다음
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </main>
 
+      {/* 팝업 UI는 기존과 동일하게 유지 */}
       {isProcessing && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm bg-slate-900/60">
           <div className="flex flex-col items-center w-full max-w-md p-10 text-center bg-white shadow-2xl rounded-[32px] animate-in fade-in zoom-in duration-300">
             <div className="flex items-center justify-center w-16 h-16 mb-6">
-              <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+              <div className="w-12 h-12 border-4 rounded-full border-indigo-100 border-t-indigo-600 animate-spin"></div>
             </div>
             <h3 className="mb-3 text-xl font-black tracking-tight text-slate-900">
               처리 중...

@@ -124,7 +124,7 @@ const GradePolicyManagement: React.FC = () => {
       <main className="flex-grow w-full px-4 py-12 mx-auto max-w-[1100px]">
         <div className="mb-12">
           <h2 className="text-4xl font-black tracking-tight text-slate-900">
-            전역 등급 정책 관리
+            등급 정책 관리
           </h2>
           <p className="mt-3 text-lg font-medium text-slate-500">
             가맹점 등급별 수수료 및 환전 마진 가이드라인을 일괄 제어합니다.

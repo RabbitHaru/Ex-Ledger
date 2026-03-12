@@ -234,7 +234,7 @@ public class SettlementEngineService {
     @Transactional
     public void createRandomTestSettlements(int count) {
         String[] clientList = {"(주)무신사", "우아한형제들", "당근마켓", "쿠팡페이", "오늘의집", "(주)로켓상사", "네이버페이", "야놀자", "토스", "직방"};
-        SettlementStatus[] statuses = {SettlementStatus.COMPLETED, SettlementStatus.FAILED, SettlementStatus.REJECTED};
+        SettlementStatus[] statuses = {SettlementStatus.COMPLETED, SettlementStatus.FAILED, SettlementStatus.REJECTED, SettlementStatus.PENDING};
         String[] bankList = {"국민은행", "신한은행", "우리은행", "하나은행", "카카오뱅크", "기업은행", "농협은행"};
 
         java.util.Random random = new java.util.Random();

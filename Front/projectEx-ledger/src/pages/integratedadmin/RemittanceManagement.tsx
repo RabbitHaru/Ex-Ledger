@@ -261,13 +261,7 @@ const RemittanceManagement: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                onClick={handleRefresh}
-                className="flex items-center gap-2 px-5 h-[42px] text-sm font-bold text-white bg-[#007b70] rounded-lg shadow-sm hover:bg-teal-800 transition whitespace-nowrap active:scale-95"
-              >
-                <RefreshCcw className="w-4 h-4" />
-                새로고침
-              </button>
+           
             </div>
           </div>
 

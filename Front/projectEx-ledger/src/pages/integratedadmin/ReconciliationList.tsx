@@ -225,7 +225,7 @@ const ReconciliationList: React.FC = () => {
         <div className="p-8 bg-white border border-gray-200 shadow-sm rounded-xl">
           <div className="flex flex-col justify-between gap-4 mb-8 xl:flex-row xl:items-center">
             <div className="flex-shrink-0">
-              <h2 className="text-2xl font-bold text-gray-900">포트원 결제 대사 리스트</h2>
+              <h2 className="text-2xl font-bold text-gray-900"> 결제 대사 리스트</h2>
               <p className="mt-1 text-sm text-gray-500">포트원(V2) 결제 내역과 내부 송금 DB를 대조합니다.</p>
             </div>
 
@@ -274,12 +274,6 @@ const ReconciliationList: React.FC = () => {
                 데이터 주입
               </button>
 
-              <button
-                onClick={handleManualReconciliation}
-                className="w-full px-4 py-2 text-sm font-medium text-white bg-[#007b70] rounded-md shadow-sm sm:w-auto hover:bg-teal-800 transition whitespace-nowrap"
-              >
-                대사 재실행
-              </button>
             </div>
           </div>
 
@@ -290,7 +284,7 @@ const ReconciliationList: React.FC = () => {
                   <th className="px-2 py-4 whitespace-nowrap">대사 ID</th>
                   <th className="px-2 py-4 whitespace-nowrap">처리 일시</th>
                   <th className="px-2 py-4">포트원 결제 번호</th>
-                  <th className="px-2 py-4">고객명 (입금 계좌)</th>
+                  <th className="px-2 py-4">기업명 (입금 계좌)</th>
                   <th className="px-2 py-4 text-center whitespace-nowrap">포트원 결제액(A)</th>
                   <th className="px-2 py-4 text-center whitespace-nowrap">내부 송금액(B)</th>
                   <th className="px-2 py-4 text-center whitespace-nowrap">대사 상태</th>
