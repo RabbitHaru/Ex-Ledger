@@ -24,4 +24,8 @@ public class SignupRequest {
     private String portoneImpUid; // 포트원 인증 고유 세션 ID
     private String licenseFileUuid; // 사업자등록증 파일 uuid (COMPANY_ADMIN 필수)
     private String turnstileToken;
+
+    // MFA 설정을 위한 필드 (회원가입 동시 처리용)
+    private String mfaSecret;
+    private String mfaCode;
 }

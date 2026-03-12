@@ -29,9 +29,11 @@ const MFASetup: React.FC = () => {
         const fetchSetupData = async () => {
             try {
                 const response = await http.post('/auth/mfa/setup', {});
-                if (response.data && response.data.data) {
+                if (response.data && response.data.status === 'SUCCESS' && response.data.data) {
                     setQrCodeUrl(response.data.data.qrCodeUrl);
                     setSecretKey(response.data.data.secretKey);
+                } else {
+                    setError(response.data?.message || 'MFA 설정 정보를 불러오는데 실패했습니다.');
                 }
             } catch (err: any) {
                 setError(err.response?.data?.message || 'MFA 설정 정보를 불러오는데 실패했습니다.');

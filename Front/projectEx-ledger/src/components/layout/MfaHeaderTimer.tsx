@@ -11,6 +11,14 @@ export const MfaHeaderTimer: React.FC = () => {
     const [tickEnabled, setTickEnabled] = useState(false);
 
     const fetchSessionStatus = useCallback(async () => {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            setIsActive(false);
+            setTimeLeft(null);
+            setTickEnabled(false);
+            return;
+        }
+
         try {
             const response = await http.get('/auth/mfa/session');
             if (response.data && response.data.data) {
@@ -33,8 +41,20 @@ export const MfaHeaderTimer: React.FC = () => {
 
     useEffect(() => {
         fetchSessionStatus();
+        
+        // 30초 간격 폴링
         const interval = setInterval(fetchSessionStatus, 30000);
-        return () => clearInterval(interval);
+        
+        // 다른 탭이나 현재 탭에서의 로그인/로그아웃 등 토큰 변경 감지
+        const handleTokenChange = () => fetchSessionStatus();
+        window.addEventListener('storage', handleTokenChange);
+        window.addEventListener('auth-change', handleTokenChange);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('storage', handleTokenChange);
+            window.removeEventListener('auth-change', handleTokenChange);
+        };
     }, [fetchSessionStatus]);
 
     useEffect(() => {

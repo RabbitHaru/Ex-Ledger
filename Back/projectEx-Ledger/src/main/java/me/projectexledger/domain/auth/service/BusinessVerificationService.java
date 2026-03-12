@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.List;
@@ -36,14 +37,22 @@ public class BusinessVerificationService {
         requestBody.put("b_no", List.of(cleanNumber));
 
         try {
-            log.info("Verifying business number: {}", cleanNumber);
+            log.info("Verifying business number: {} (URL length: {})", cleanNumber, url.length());
+            
+            // WebClient의 기본 인코딩이 serviceKey를 망가뜨릴 수 있으므로 URI.create 사용
             Map response = webClientBuilder.build()
                     .post()
-                    .uri(url)
+                    .uri(java.net.URI.create(url))
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
+                    .onStatus(org.springframework.http.HttpStatusCode::isError, clientResponse -> {
+                        return clientResponse.bodyToMono(String.class).flatMap(errorBody -> {
+                            log.error("NTS API Error Response: {}", errorBody);
+                            return Mono.error(new RuntimeException("NTS API Error: " + errorBody));
+                        });
+                    })
                     .bodyToMono(Map.class)
                     .block();
 

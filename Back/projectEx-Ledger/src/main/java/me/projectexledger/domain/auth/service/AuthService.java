@@ -22,8 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.time.Duration;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
@@ -48,6 +50,13 @@ public class AuthService {
     private final SseEmitters sseEmitters;
     private final CompanyRepository companyRepository;
 
+    @Transactional(readOnly = true)
+    public void checkEmailAvailability(String email) {
+        if (memberRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("이미 가입되어 있는 이메일입니다.");
+        }
+    }
+
     @Transactional
     public TokenResponse signup(SignupRequest request) {
         if (!turnstileService.verifyToken(request.getTurnstileToken())) {
@@ -68,10 +77,32 @@ public class AuthService {
             // throw new IllegalArgumentException("본인인증이 필요합니다.");
         }
 
+        // 2. 이메일 중복 확인 (이미 했더라도 보안상 한 번 더 수행)
         if (memberRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("이미 가입되어 있는 이메일입니다.");
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
 
+        // 3. MFA 검증 (회원가입 시 전달된 secret과 code 검증)
+        if (request.getMfaSecret() == null || request.getMfaCode() == null) {
+            throw new IllegalArgumentException("MFA 설정 정보가 누락되었습니다.");
+        }
+
+        int codeInt;
+        try {
+            codeInt = Integer.parseInt(request.getMfaCode());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("OTP 코드는 숫자여야 합니다.");
+        }
+
+        log.debug("[MFA Verification] Email: {}, Secret: {}, Code: {}, ServerTime: {}", 
+            request.getEmail(), request.getMfaSecret(), codeInt, java.time.LocalDateTime.now());
+
+        if (!googleAuthenticator.authorize(request.getMfaSecret(), codeInt)) {
+            log.warn("[MFA Verification Failure] OTP verification failed for email: {}", request.getEmail());
+            throw new IllegalArgumentException("잘못된 OTP 코드입니다. 다시 시도해 주세요.");
+        }
+
+        // 4. 회원 엔티티 생성 및 기본 정보 설정
         Member.Role role;
         if ("COMPANY_ADMIN".equals(request.getRoleType())) {
             role = Member.Role.ROLE_COMPANY_ADMIN;
@@ -96,7 +127,7 @@ public class AuthService {
                     .orElseThrow(() -> new IllegalArgumentException("해당 사업자번호로 등록된 기업이 없습니다."));
         }
 
-        Member member = Member.builder()
+        Member newMember = Member.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
@@ -110,19 +141,34 @@ public class AuthService {
             Map<String, Object> verification = portOneVerificationService.getIdentityVerification(request.getPortoneImpUid());
             String verifiedName = (String) verification.get("verifiedName");
             if (verifiedName != null) {
-                member.updateRealName(verifiedName);
+                newMember.updateRealName(verifiedName);
             }
         }
+        newMember.updateTotpSecret(request.getMfaSecret());
+        newMember.enableMfa();
+        // mfaResetAt은 신규 가입 시 null이어야 24시간 쿨다운에 걸리지 않음
 
-        memberRepository.save(member);
+        memberRepository.save(newMember);
 
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
-                request.getEmail(), request.getPassword());
-        Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+        // 4.5 MFA 인증 세션 기록 (관리자는 24시간, 일반 유저는 15분)
+        Duration sessionDuration = (role == Member.Role.ROLE_INTEGRATED_ADMIN)
+                ? Duration.ofHours(24)
+                : Duration.ofMinutes(15);
+        redisTemplate.opsForValue().set("MFA_VERIFIED:" + newMember.getEmail(), "true", sessionDuration);
+
+        // 5. 자동 로그인 처리 (DB 재조회 방지를 위해 수동으로 Authentication 생성)
+        List<SimpleGrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(role.name()));
+        // 회원가입 시에는 이미 OTP를 검증했으므로 mfaVerified = true
+        CustomUserDetails userDetails = new CustomUserDetails(newMember.getEmail(), newMember.getPassword(), authorities, newMember.isApproved(), true);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
 
         String jwt = jwtTokenProvider.createToken(authentication);
         String refreshToken = jwtTokenProvider.createRefreshToken(authentication);
-        redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+        try {
+            redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+        } catch (Exception e) {
+            log.error("⚠️ [Redis] 리프레시 토큰 저장 실패 (Redis 연결 확인 필요): {}", e.getMessage());
+        }
 
         sseEmitters.sendLoginAlert(request.getEmail(), "새로운 기기에서 로그인이 감지되었습니다.");
 
@@ -154,7 +200,11 @@ public class AuthService {
             String jwt = jwtTokenProvider.createToken(authentication);
             String refreshToken = jwtTokenProvider.createRefreshToken(authentication);
 
-            redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+            try {
+                redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+            } catch (Exception e) {
+                log.error("⚠️ [Redis] 리프레시 토큰 저장 실패 (Redis 연결 확인 필요): {}", e.getMessage());
+            }
 
             // 5. 로그인 알림 발송
             sseEmitters.sendLoginAlert(request.getEmail(), "새로운 기기에서 로그인이 감지되었습니다.");
@@ -208,10 +258,21 @@ public class AuthService {
                 : Duration.ofMinutes(15);
         redisTemplate.opsForValue().set("MFA_VERIFIED:" + member.getEmail(), "true", sessionDuration);
 
-        String jwt = jwtTokenProvider.createToken(authentication);
-        String refreshToken = jwtTokenProvider.createRefreshToken(authentication);
+        // JWT 발급 시 mfaVerified = true 정보 포함을 위해 Authentication 객체 수동 생성 (userDetails 기반)
+        List<SimpleGrantedAuthority> authorities = authentication.getAuthorities().stream()
+                .map(a -> new SimpleGrantedAuthority(a.getAuthority()))
+                .collect(Collectors.toList());
+        CustomUserDetails userDetails = new CustomUserDetails(member.getEmail(), "", authorities, member.isApproved(), true);
+        Authentication mfaAuthentication = new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
 
-        redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+        String jwt = jwtTokenProvider.createToken(mfaAuthentication);
+        String refreshToken = jwtTokenProvider.createRefreshToken(mfaAuthentication);
+
+        try {
+            redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+        } catch (Exception e) {
+            log.error("⚠️ [Redis] 리프레시 토큰 저장 실패 (Redis 연결 확인 필요): {}", e.getMessage());
+        }
 
         return new TokenResponse(jwt, refreshToken, "Bearer", false, false);
     }
@@ -234,7 +295,7 @@ public class AuthService {
 
         List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(member.getRole().name()));
         Authentication authentication = new UsernamePasswordAuthenticationToken(
-                new CustomUserDetails(email, "", authorities, member.isApproved()),
+                new CustomUserDetails(email, "", authorities, member.isApproved(), false),
                 null,
                 authorities
         );
@@ -267,6 +328,15 @@ public class AuthService {
         member.disableMfa();
         member.updateTotpSecret(key.getKey());
 
+        String qrCodeUrl = String.format("otpauth://totp/Ex-Ledger:%s?secret=%s&issuer=Ex-Ledger", email, key.getKey());
+        return new MfaSetupResponse(key.getKey(), qrCodeUrl);
+    }
+
+    /**
+     * 회원가입용 퍼블릭 MFA 설정 생성 (계정 생성 전)
+     */
+    public MfaSetupResponse generateRegistrationMfa(String email) {
+        GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
         String qrCodeUrl = String.format("otpauth://totp/Ex-Ledger:%s?secret=%s&issuer=Ex-Ledger", email, key.getKey());
         return new MfaSetupResponse(key.getKey(), qrCodeUrl);
     }

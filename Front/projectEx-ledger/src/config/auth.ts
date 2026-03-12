@@ -1,9 +1,13 @@
 // 인증 유틸리티
 export const getToken = () => localStorage.getItem('access_token');
-export const setToken = (token: string) => localStorage.setItem('access_token', token);
+export const setToken = (token: string) => {
+    localStorage.setItem('access_token', token);
+    window.dispatchEvent(new Event('auth-change'));
+};
 export const removeToken = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    window.dispatchEvent(new Event('auth-change'));
 };
 export const getRefreshToken = () => localStorage.getItem('refresh_token');
 export const setRefreshToken = (token: string) => localStorage.setItem('refresh_token', token);
@@ -27,6 +31,7 @@ export const logout = (showModal = true) => {
         window.dispatchEvent(new CustomEvent('mfa-session-expired'));
     } else {
         sessionStorage.setItem('logout_notice', '1');
+        // auth-change event is already dispatched by removeToken()
         window.location.href = '/';
     }
 };
