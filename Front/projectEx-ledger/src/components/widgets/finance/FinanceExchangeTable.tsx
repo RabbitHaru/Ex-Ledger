@@ -85,17 +85,17 @@ const ExchangeRateTable: React.FC<ExchangeRateTableProps> = ({
                     </span>
                   </td>
 
-                  {/* 🌟 수정 2: '정산' 버튼만 남기고 텍스트 간소화 */}
+                  {/* 🌟 수정 2: '환전' 버튼만 남기고 텍스트 간소화 */}
                   <td
                     className="px-6 py-6"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex justify-center">
                       <button
-                        onClick={() => navigate("/seller/dashboard")}
+                        onClick={() => navigate("/exchange")}
                         className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
                       >
-                        <Calculator size={14} /> 정산
+                        <Calculator size={14} /> 환전
                       </button>
                     </div>
                   </td>

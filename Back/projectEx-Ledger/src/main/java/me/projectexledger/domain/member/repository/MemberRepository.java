@@ -12,7 +12,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     boolean existsByEmail(String email);
 
-    Optional<Member> findByAccountNumber(String accountNumber);
+    Optional<Member> findByWalletAccountNumber(String accountNumber);
 
     List<Member> findByRole(Member.Role role);
 
@@ -24,4 +24,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     // 탈퇴 유예 기간이 만료된 유저 조회
     List<Member> findByWithdrawalRequestedAtBefore(java.time.LocalDateTime expiryDate);
+
+    // 기업 소속 유저 조회
+    List<Member> findByCompany(Company company);
 }

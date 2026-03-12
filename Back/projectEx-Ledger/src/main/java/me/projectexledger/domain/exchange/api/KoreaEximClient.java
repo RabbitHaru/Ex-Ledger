@@ -8,9 +8,12 @@ import me.projectexledger.domain.exchange.utils.CurrencyMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -19,11 +22,20 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class KoreaEximClient implements ExchangeRateProvider {
 
     private final KoreaEximProperties properties;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+    private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public KoreaEximClient(KoreaEximProperties properties) {
+        this.properties = properties;
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(2000);
+        this.restTemplate = new RestTemplate(factory);
+    }
 
     @Override
     public List<ExchangeRateDTO> fetchRates() {
@@ -43,11 +55,11 @@ public class KoreaEximClient implements ExchangeRateProvider {
             Map<String, Object>[] response = restTemplate.getForObject(url, Map[].class);
 
             if (response == null || response.length == 0) {
-                log.warn("⚠️ [{}] 데이터가 존재하지 않습니다.", dateStr);
+                log.warn("⚠️ [{}] 수출입은행 공시 데이터가 없습니다. (휴일 또는 공시 시간 전)", dateStr);
                 return Collections.emptyList();
             }
 
-            String timestamp = dateStr + " 11:00:00";
+            String timestamp = dateStr + " " + LocalDateTime.now().format(timeFormatter);
 
             return Arrays.stream(response)
                     .filter(map -> !map.get("cur_unit").toString().contains("KRW"))
@@ -56,7 +68,7 @@ public class KoreaEximClient implements ExchangeRateProvider {
                     .collect(Collectors.toList());
 
         } catch (Exception e) {
-            log.error("❌ KoreaExim API 호출 에러: {}", e.getMessage());
+            log.error("❌ [수출입은행] API 호출 오류 발생: {}", e.getMessage());
             return Collections.emptyList();
         }
     }

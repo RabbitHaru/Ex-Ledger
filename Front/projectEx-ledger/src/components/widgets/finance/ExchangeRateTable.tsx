@@ -81,7 +81,7 @@ const ExchangeRateTable: React.FC<ExchangeRateTableProps> = ({
               <th className="px-6 py-4 text-right">어제 환율</th>
               <th className="px-6 py-4 font-black text-right text-slate-900">오늘 환율</th>
               <th className="px-6 py-4 text-right">변동률</th>
-              <th className="px-6 py-4 text-center">정산</th>
+              <th className="px-6 py-4 text-center">환전</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -161,13 +161,13 @@ const ExchangeRateTable: React.FC<ExchangeRateTableProps> = ({
                     <div className="flex justify-center">
                       <button
                         onClick={() =>
-                          navigate("/seller/dashboard", {
+                          navigate("/exchange", {
                             state: { currencyCode: displayCode },
                           })
                         }
                         className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl text-[13px] font-black hover:bg-blue-700 transition-all shadow-lg active:scale-95"
                       >
-                        <Calculator size={14} /> 정산
+                        <Calculator size={14} /> 환전
                       </button>
                     </div>
                   </td>

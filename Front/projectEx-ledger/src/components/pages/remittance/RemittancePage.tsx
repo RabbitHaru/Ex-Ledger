@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { OtpInput } from "../common/OtpInput";
 import { Button } from "../common/Button";
 import http from "../../../config/http";
+import RemittanceTracking from "./Tracking/RemittanceTracking";
 
 const RemittancePage = () => {
   const [formData, setFormData] = useState({
@@ -20,6 +21,9 @@ const RemittancePage = () => {
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [trackingStatus, setTrackingStatus] = useState("READY");
+
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   useEffect(() => {
     http.get("/auth/me").then(res => setProfile(res.data.data));
@@ -54,12 +58,28 @@ const RemittancePage = () => {
         headers['X-MFA-Code'] = code;
       }
 
+      // 1단계: 검토 중 (4초)
+      setTrackingStatus("REVIEWING");
+      await delay(4000);
+
+      // 2단계: 승인 완료 (4초)
+      setTrackingStatus("APPROVED");
+      await delay(4000);
+
+      // 3단계: 이체 진행 (4초 - API 호출 포함)
+      setTrackingStatus("TRANSFERRING");
+
       const response = await http.post("/remittance/request", {
         ...formData,
         exchangeRate: currentRate,
         feeAmount: feeDetail.totalFeeAmount,
         totalPayment: feeDetail.totalPayment,
       }, { headers });
+
+      await delay(4000);
+
+      // 4단계: 완료
+      setTrackingStatus("COMPLETED");
 
       toast.success(`송금 신청 완료! 거래번호: ${response.data.data.transactionId}`);
       setShowOtp(false);
@@ -81,7 +101,8 @@ const RemittancePage = () => {
 
 
   return (
-    <div className="max-w-2xl p-8 mx-auto bg-white border border-gray-100 shadow-2xl rounded-3xl">
+    <div className="max-w-2xl p-8 mx-auto bg-white border border-gray-100 shadow-2xl rounded-3xl space-y-8">
+      <RemittanceTracking status={trackingStatus} />
       <h2 className="mb-8 text-2xl font-black text-gray-800">해외 송금 신청</h2>
 
       <div className="space-y-6">

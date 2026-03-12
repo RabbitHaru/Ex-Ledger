@@ -73,22 +73,25 @@ const AppRoutes = () => {
 
         {/* 3. 보안/인증 필요 라우트 영역 */}
         <Route element={<ProtectedRoute />}>
-          {/* ----- 일반 로그인 사용자 공통 (User, Company User, Company Admin) ----- */}
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_USER", "USER", "ROLE_COMPANY_USER", "COMPANY_USER", "ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]} />}>
-            <Route path="/seller/dashboard" element={<SellerDashboard />} />
-            <Route path="/company/join" element={<CompanyJoin />} />
-            <Route path="/list" element={<MySettlementList />} />
-            <Route path="/settlement" element={<SettlementDashboard />} />
-            <Route path="/mypage" element={<MyPage />} />
-            <Route path="/wallet/overview" element={<WalletOverview />} />
-            <Route path="/seller/history" element={<PersonalHistory />} />
-            <Route path="/corporate/wallet" element={<CorporateWallet />} />
-          </Route>
+            <Route element={<ProtectedRoute allowedRoles={["ROLE_USER", "USER", "ROLE_COMPANY_USER", "COMPANY_USER", "ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]} />}>
+              <Route path="/seller/dashboard" element={<SellerDashboard />} />
+              <Route path="/company/join" element={<CompanyJoin />} />
+              <Route path="/list" element={<MySettlementList />} />
+              <Route path="/settlement" element={<SettlementDashboard />} />
+              <Route path="/mypage" element={<MyPage />} />
+              <Route path="/corporate/wallet" element={<CorporateWallet />} />
+            </Route>
+
+            {/* ----- 일반 개인 사용자(User) 전용 라우트 ----- */}
+            <Route element={<ProtectedRoute allowedRoles={["ROLE_USER", "USER"]} />}>
+              <Route path="/wallet/overview" element={<WalletOverview />} />
+              <Route path="/seller/history" element={<PersonalHistory />} />
+            </Route>
 
           {/* ----- 기업 관리자(Company Admin) 전용 라우트 ----- */}
           <Route element={<ProtectedRoute allowedRoles={["ROLE_COMPANY_ADMIN", "COMPANY_ADMIN"]} />}>
             <Route path="/admin/company/pending" element={<CompanyMemberManagement />} />
-            <Route path="/corporate/wallet" element={<CorporateWallet />} />
+              <Route path="/corporate/wallet" element={<CorporateWallet />} />
           </Route>
 
           {/* ----- 최고 관리자(Integrated Admin) 전용 라우트 ----- */}
@@ -105,10 +108,10 @@ const AppRoutes = () => {
             
             {/* 🌟 [추가] 관리자 정산 승인 페이지 라우트 등록 */}
             <Route path="/admin/approvals" element={<AdminSettlementApproval />} />
-            
-          </Route>
+
         </Route>
       </Route>
+    </Route>
 
       {/* 에러 및 특수 상태 페이지 */}
       <Route path="/unauthorized" element={<Unauthorized />} />
@@ -117,7 +120,7 @@ const AppRoutes = () => {
       <Route path="/login-required" element={<LoginRequired />} />
 
       <Route path="*" element={<NotFound />} />
-    </Routes>
+  </Routes>
   );
 };
 

@@ -28,7 +28,7 @@ public class Client extends BaseEntity {
     private String businessNumber;    // 사업자번호
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50)
     private ClientStatus status;      // 가입 상태: PENDING, APPROVED, REJECTED
 
     // 🌟 [유지] 정산 엔진이 돈을 꽂아줄 '어디로' 정보는 클라이언트에 있어야 합니다.
@@ -44,7 +44,7 @@ public class Client extends BaseEntity {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20) // 👈 길이를 명시적으로 지정!
+    @Column(name = "client_grade", nullable = false, length = 50)
     private ClientGrade grade = ClientGrade.GENERAL;
 
     // 가입 승인 로직

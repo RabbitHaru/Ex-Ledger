@@ -75,7 +75,7 @@ const ExchangeRateChart: React.FC<Props> = ({
 
   return (
     <div className="flex flex-col w-full h-full">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.4)]" />
           <h3 className="text-lg font-black tracking-tighter text-slate-800">
@@ -101,7 +101,7 @@ const ExchangeRateChart: React.FC<Props> = ({
         )}
       </div>
 
-      <div className="relative flex-1 w-full p-4 bg-slate-50 rounded-2xl min-h-[300px]">
+      <div className="relative flex-1 w-full p-2 bg-slate-50 rounded-2xl min-h-[220px]">
         {loading ? (
           <div className="flex items-center justify-center w-full h-full font-bold text-slate-300 animate-pulse">
             데이터 수집 중...
@@ -114,7 +114,7 @@ const ExchangeRateChart: React.FC<Props> = ({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={data}
-              margin={{ top: 50, right: 20, left: 0, bottom: 10 }}
+              margin={{ top: 20, right: 20, left: 0, bottom: 5 }}
             >
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -145,10 +145,10 @@ const ExchangeRateChart: React.FC<Props> = ({
                 type="monotone"
                 dataKey="rate"
                 stroke="#2563eb"
-                strokeWidth={3}
+                strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorRate)"
-                dot={{ r: 3, fill: "#2563eb", strokeWidth: 2, stroke: "#fff" }}
+                dot={{ r: 2, fill: "#2563eb", strokeWidth: 2, stroke: "#fff" }}
               />
               <defs>
                 <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
@@ -163,14 +163,14 @@ const ExchangeRateChart: React.FC<Props> = ({
                   r={6}
                   fill="#ef4444"
                   stroke="#fff"
-                  strokeWidth={3}
+                  strokeWidth={2}
                   label={{
                     position: "top",
                     value: `최고 ${maxPoint.rate.toLocaleString()}`,
                     fill: "#ef4444",
-                    fontSize: 10,
+                    fontSize: 9,
                     fontWeight: 900,
-                    dy: -10,
+                    dy: -5,
                   }}
                 />
               )}
