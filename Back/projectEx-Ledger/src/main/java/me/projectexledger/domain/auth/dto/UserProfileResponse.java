@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import me.projectexledger.domain.member.entity.Member;
+import me.projectexledger.domain.wallet.entity.Wallet;
 
 @Getter
 @Builder
@@ -24,6 +25,7 @@ public class UserProfileResponse {
     private String adminApprovalStatus;
 
     public static UserProfileResponse from(Member member) {
+        Wallet wallet = member.getWallet();
         return UserProfileResponse.builder()
                 .email(member.getEmail())
                 .name(member.getName())
@@ -31,9 +33,9 @@ public class UserProfileResponse {
                 .isApproved(member.isApproved())
                 .adminApprovalStatus(member.getAdminApprovalStatus() != null ? member.getAdminApprovalStatus().name() : null)
                 .businessNumber(member.getBusinessNumber())
-                .bankName(member.getBankName())
-                .accountNumber(member.getAccountNumber())
-                .accountHolder(member.getAccountHolder())
+                .bankName(wallet != null ? wallet.getBankName() : null)
+                .accountNumber(wallet != null ? wallet.getAccountNumber() : null)
+                .accountHolder(wallet != null ? wallet.getAccountHolder() : null)
                 .allowNotifications(member.isAllowNotifications())
                 .mfaEnabled(member.isMfaEnabled())
                 .build();
