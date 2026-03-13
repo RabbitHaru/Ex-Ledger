@@ -1,6 +1,7 @@
 package me.projectexledger.domain.remittance.controller;
 
 import lombok.RequiredArgsConstructor;
+import me.projectexledger.common.annotation.AuditLog;
 import me.projectexledger.domain.remittance.dto.FeeDTO; // 👈 수수료 DTO 임포트 추가
 import me.projectexledger.domain.remittance.dto.RemittanceDTO;
 import me.projectexledger.domain.remittance.service.RemittanceService;
@@ -26,6 +27,7 @@ public class RemittanceController {
     @PreAuthorize("hasAnyRole('USER', 'COMPANY_USER', 'COMPANY_ADMIN')")
     @RequireMfa
     @RequireCompanyApproval
+    @AuditLog(action = "해외 송금 신청")
     @PostMapping("/request")
     public ResponseEntity<RemittanceDTO.Response> requestRemittance(
             @RequestBody RemittanceDTO.Request requestDTO,
@@ -56,6 +58,7 @@ public class RemittanceController {
 
     // 🚨 관리자 전용 API: 전체 해외 송금 신청 내역 조회
     @PreAuthorize("hasAnyRole('COMPANY_ADMIN', 'INTEGRATED_ADMIN')")
+    @AuditLog(action = "송금 내역 전체 조회")
     @GetMapping("/list")
     public ResponseEntity<List<RemittanceDTO.ListResponse>> getRemittanceList() {
 

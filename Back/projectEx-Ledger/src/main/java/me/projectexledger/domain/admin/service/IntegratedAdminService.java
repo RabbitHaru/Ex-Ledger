@@ -81,6 +81,35 @@ public class IntegratedAdminService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public List<me.projectexledger.domain.admin.dto.AdminMemberResponse> getAllMembers() {
+        return memberRepository.findAll()
+                .stream()
+                .map(me.projectexledger.domain.admin.dto.AdminMemberResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void updateMemberRole(Long userId, Member.Role newRole) {
+        Member member = memberRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        member.updateRole(newRole);
+    }
+
+    @Transactional
+    public void updateMemberApproval(Long userId, boolean isApproved) {
+        Member member = memberRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        member.setApproved(isApproved);
+    }
+
+    @Transactional
+    public void deleteMember(Long userId) {
+        Member member = memberRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        memberRepository.delete(member);
+    }
+
     public Resource loadLicenseFileAsResource(String fileName) {
         try {
             Path filePath = Paths.get(uploadDir).resolve(fileName).normalize();

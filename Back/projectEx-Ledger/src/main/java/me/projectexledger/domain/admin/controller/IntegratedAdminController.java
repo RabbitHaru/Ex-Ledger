@@ -1,6 +1,7 @@
 package me.projectexledger.domain.admin.controller;
 
 import lombok.RequiredArgsConstructor;
+import me.projectexledger.common.annotation.AuditLog;
 import me.projectexledger.common.dto.ApiResponse;
 import me.projectexledger.domain.admin.dto.PendingCompanyAdminResponse;
 import me.projectexledger.domain.admin.service.IntegratedAdminService;
@@ -31,6 +32,7 @@ public class IntegratedAdminController {
     }
 
     @PreAuthorize("hasRole('INTEGRATED_ADMIN')")
+    @AuditLog(action = "기업 관리자 승인")
     @PostMapping("/{userId}/approve")
     public ResponseEntity<ApiResponse<String>> approveCompanyAdmin(@PathVariable Long userId) {
         integratedAdminService.approveCompanyAdmin(userId);
@@ -38,6 +40,7 @@ public class IntegratedAdminController {
     }
 
     @PreAuthorize("hasRole('INTEGRATED_ADMIN')")
+    @AuditLog(action = "기업 관리자 반려")
     @PostMapping("/{userId}/reject")
     public ResponseEntity<ApiResponse<String>> rejectCompanyAdmin(@PathVariable Long userId) {
         integratedAdminService.rejectCompanyAdmin(userId);

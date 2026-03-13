@@ -138,6 +138,14 @@ public class Member extends BaseEntity {
 
     public void setCompany(Company company) { this.company = company; }
 
+    public void updateRole(Role role) {
+        this.role = role;
+    }
+
+    public void setApproved(boolean isApproved) {
+        this.isApproved = isApproved;
+    }
+
     // 헬퍼 메서드
     public AdminApprovalStatus getAdminApprovalStatus() {
         return (company != null) ? company.getAdminApprovalStatus() : null;

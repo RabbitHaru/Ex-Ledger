@@ -287,6 +287,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             >
               <Bell size={18} /> 전체 공지 발송
             </Link>
+            <Link
+              to="/admin/members"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/admin/members") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+            >
+              <Users size={18} /> 전체 사용자 관리
+            </Link>
           </>
         )}
       </nav>

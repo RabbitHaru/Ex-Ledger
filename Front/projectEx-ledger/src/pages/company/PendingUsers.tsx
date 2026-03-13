@@ -25,8 +25,8 @@ const CompanyMemberManagement: React.FC = () => {
                 http.get('/company/users/approved')
             ]);
             
-            if (pendingRes?.status === 'SUCCESS') setPendingUsers(pendingRes.data || []);
-            if (approvedRes?.status === 'SUCCESS') setApprovedUsers(approvedRes.data || []);
+            if (pendingRes.data?.status === 'SUCCESS') setPendingUsers(pendingRes.data.data || []);
+            if (approvedRes.data?.status === 'SUCCESS') setApprovedUsers(approvedRes.data.data || []);
         } catch (error) {
             console.error("데이터 로드 실패:", error);
             toast.error("멤버 목록을 불러오지 못했습니다.");
@@ -44,7 +44,7 @@ const CompanyMemberManagement: React.FC = () => {
 
         try {
             const res: any = await http.post(`/company/users/${userId}/approve`);
-            if (res?.status === 'SUCCESS') {
+            if (res.data?.status === 'SUCCESS') {
                 toast.success(`${userName} 님이 승인되었습니다.`);
                 fetchData();
             }
@@ -58,7 +58,7 @@ const CompanyMemberManagement: React.FC = () => {
 
         try {
             const res: any = await http.post(`/company/users/${userId}/revoke`);
-            if (res?.status === 'SUCCESS') {
+            if (res.data?.status === 'SUCCESS') {
                 toast.warning(`${userName} 님의 권한이 박탈되었습니다.`);
                 fetchData();
             }

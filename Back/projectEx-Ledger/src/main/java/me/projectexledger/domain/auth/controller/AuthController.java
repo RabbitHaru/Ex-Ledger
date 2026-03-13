@@ -1,7 +1,8 @@
 package me.projectexledger.domain.auth.controller;
-
+ 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import me.projectexledger.common.annotation.AuditLog;
 import me.projectexledger.common.dto.ApiResponse;
 import me.projectexledger.domain.auth.dto.LoginRequest;
 import me.projectexledger.domain.auth.dto.SignupRequest;
@@ -33,19 +34,22 @@ public class AuthController {
 
     private final AuthService authService;
     private final BusinessVerificationService businessVerificationService;
-
+ 
+    @AuditLog(action = "회원가입")
     @PostMapping("/signup")
     public ApiResponse<TokenResponse> signup(@Valid @RequestBody SignupRequest request) {
         TokenResponse tokenResponse = authService.signup(request);
         return ApiResponse.success("회원가입이 완료되었습니다.", tokenResponse);
     }
 
+    @AuditLog(action = "로그인")
     @PostMapping("/login")
     public ApiResponse<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         TokenResponse tokenResponse = authService.login(request);
         return ApiResponse.success("로그인 성공", tokenResponse);
     }
 
+    @AuditLog(action = "사업자 진위확인")
     @PostMapping("/verify-business")
     public ApiResponse<BusinessVerificationResponse> verifyBusiness(@RequestBody Map<String, String> request) {
         String businessNumber = request.get("businessNumber");
@@ -66,6 +70,7 @@ public class AuthController {
         return ApiResponse.success("사용 가능한 이메일입니다.", null);
     }
 
+    @AuditLog(action = "MFA 로그인")
     @PostMapping("/login/mfa")
     public ApiResponse<TokenResponse> loginWithMfa(@Valid @RequestBody MfaLoginRequest request) {
         TokenResponse tokenResponse = authService.loginWithMfa(request);
@@ -78,6 +83,7 @@ public class AuthController {
         return ApiResponse.success("토큰 재발급 성공", tokenResponse);
     }
 
+    @AuditLog(action = "MFA 설정")
     @PostMapping("/mfa/setup")
     public ApiResponse<MfaSetupResponse> setupMfa(Principal principal, @RequestBody(required = false) Map<String, Object> body) {
         if (principal == null) {
@@ -109,6 +115,7 @@ public class AuthController {
      * OTP 분실 시 본인인증을 통한 MFA 초기화
      * PortOne 본인인증 imp_uid를 받아 가입 시 저장된 값과 대조
      */
+    @AuditLog(action = "OTP 분실 초기화")
     @PostMapping("/mfa/reset-by-identity")
     public ApiResponse<MfaSetupResponse> resetMfaByIdentity(Principal principal, @RequestBody Map<String, String> body) {
         if (principal == null) {
@@ -122,6 +129,7 @@ public class AuthController {
         return ApiResponse.success("본인인증 확인 완료. OTP가 초기화되었습니다.", response);
     }
 
+    @AuditLog(action = "MFA 활성화")
     @PostMapping("/mfa/enable")
     public ApiResponse<Void> enableMfa(Principal principal, @RequestBody MfaVerifyRequest request) {
         String email = (principal != null) ? principal.getName() : request.getEmail();
@@ -132,6 +140,7 @@ public class AuthController {
         return ApiResponse.success("MFA가 성공적으로 활성화되었습니다.", null);
     }
 
+    @AuditLog(action = "비밀번호 변경")
     @PostMapping("/change-password")
     public ApiResponse<Void> changePassword(Principal principal, @RequestBody Map<String, String> body) {
         if (principal == null)
@@ -151,6 +160,7 @@ public class AuthController {
         }
     }
 
+    @AuditLog(action = "계좌 정보 업데이트")
     @PostMapping("/update-account")
     @RequireCompanyApproval
     public ApiResponse<Void> updateAccountInfo(Principal principal, @RequestBody Map<String, String> body) {
@@ -204,6 +214,7 @@ public class AuthController {
         return ApiResponse.success("내 프로필 정보 조회 성공", response);
     }
 
+    @AuditLog(action = "회원 탈퇴")
     @DeleteMapping("/withdraw")
     public ApiResponse<Void> withdraw(Principal principal) {
         if (principal == null) return ApiResponse.fail("로그인이 필요합니다.");
