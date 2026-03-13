@@ -252,6 +252,7 @@ public class SettlementEngineService {
             settlementRepository.save(Settlement.builder()
                     .orderId("T-ORDER-" + System.currentTimeMillis() + "-" + i)
                     .transactionId("TX-" + System.nanoTime())
+                    .merchantId(generateProMerchantId()) // 💡 엔티티에 추가된 필드 활용
                     .clientName(randomClient)
                     .bankName(randomBank)
                     .accountNumber((random.nextInt(900) + 100) + "-" + (random.nextInt(900000) + 100000) + "-12")
@@ -259,7 +260,12 @@ public class SettlementEngineService {
                     .currency("KRW")
                     .settlementAmount(settlementAmount)
                     .status(randomStatus)
-                    .resolutionReason(randomStatus == SettlementStatus.REJECTED ? "계좌 정보 불일치로 인한 관리자 반려" : null)
+                    // 💡 DB에서 NOT NULL로 설정된 환율 필드들을 채워줍니다.
+                    .baseRate(new BigDecimal("1350.00"))
+                    .finalAppliedRate(new BigDecimal("1350.00"))
+                    .preferredRate(BigDecimal.ZERO)
+                    .spreadFee(BigDecimal.ZERO)
+                    .resolutionReason(randomStatus == SettlementStatus.REJECTED ? "관리자 판단에 따른 정산 반려" : null)
                     .build());
         }
     }
