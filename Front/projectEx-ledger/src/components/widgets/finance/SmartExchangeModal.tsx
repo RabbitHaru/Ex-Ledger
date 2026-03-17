@@ -191,7 +191,7 @@ const SmartExchangeModal: React.FC<Props> = ({ isOpen, onClose, rates, initialCu
             <div className="flex justify-between text-base font-medium text-slate-500">
               <span>적용 환율</span>
               <span className="font-mono text-slate-800">
-                {appliedRate.toLocaleString(undefined, { maximumFractionDigits: 2 })} 원/{targetCurrency}
+                {appliedRate.toLocaleString(undefined, { maximumFractionDigits: 2 })} KRW / {targetCurrency}
               </span>
             </div>
             {/* 수수료 명시 영역 */}
@@ -201,7 +201,7 @@ const SmartExchangeModal: React.FC<Props> = ({ isOpen, onClose, rates, initialCu
                 <span className="text-xs font-medium text-slate-500 break-keep">환전 수수료가 포함된 환율입니다.</span>
               </div>
               <span className="font-mono text-sm sm:text-xs whitespace-nowrap text-slate-600 font-black self-end sm:self-auto">
-                {exchangeType === "BUY" ? "+" : "-"}{(currentRate * spread).toLocaleString(undefined, { maximumFractionDigits: 2 })} 원
+                {exchangeType === "BUY" ? "+" : "-"}{(currentRate * spread).toLocaleString(undefined, { maximumFractionDigits: 2 })} KRW
               </span>
             </div>
             <div className="flex justify-between text-xl font-black text-indigo-600">
