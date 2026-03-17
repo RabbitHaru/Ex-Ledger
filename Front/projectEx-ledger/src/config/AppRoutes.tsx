@@ -23,7 +23,7 @@ import RemittanceManagement from "../pages/integratedadmin/RemittanceManagement"
 import AdminMemberManagement from "../pages/integratedadmin/MemberManagement";
 import TransactionHistory from "../components/dashboard/TransactionHistory";
 import RemittanceTracking from "../components/pages/remittance/Tracking/RemittanceTracking";
-import ExchangePage from "../components/widgets/finance/ExchangePage";
+// import ExchangePage from "../components/widgets/finance/ExchangePage";
 import SettlementDashboard from "../components/pages/settlement/SettlementDashboard";
 import MyPage from "../components/pages/user/MyPage";
 
@@ -55,7 +55,7 @@ const AppRoutes = () => {
       <Route element={<CommonLayout />}>
         {/* 1. 누구나 접근 가능한 기본 라우트 (비로그인 허용) */}
         <Route path="/" element={<LandingPage />} />
-        <Route path="/exchange" element={<ExchangePage />} />
+        {/* <Route path="/exchange" element={<ExchangePage />} /> */}
         <Route path="/finance" element={<LandingPage />} />
         <Route path="/pages/remittance/Tracking" element={<RemittanceTracking />} />
 

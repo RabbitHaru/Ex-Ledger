@@ -43,7 +43,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
             '/wallet', 
             '/corporate', 
             '/remittance', 
-            '/exchange', 
             '/list',
             '/admin/company/pending'
         ];

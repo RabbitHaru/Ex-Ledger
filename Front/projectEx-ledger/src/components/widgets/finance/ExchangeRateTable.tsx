@@ -15,12 +15,14 @@ interface ExchangeRateTableProps {
   rates: ExchangeRate[];
   selectedCurrency: string;
   onRowClick: (curUnit: string) => void;
+  onExchangeClick?: (currency: string) => void;
 }
 
 const ExchangeRateTable: React.FC<ExchangeRateTableProps> = ({
   rates = [],
   selectedCurrency,
   onRowClick,
+  onExchangeClick,
 }) => {
   const navigate = useNavigate();
   const [historyTarget, setHistoryTarget] = useState<string | null>(null);
@@ -160,11 +162,16 @@ const ExchangeRateTable: React.FC<ExchangeRateTableProps> = ({
                   >
                     <div className="flex justify-center">
                       <button
-                        onClick={() =>
-                          navigate("/exchange", {
-                            state: { currencyCode: displayCode },
-                          })
-                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onExchangeClick) {
+                            onExchangeClick(displayCode);
+                          } else {
+                            navigate("/exchange", {
+                              state: { currencyCode: displayCode },
+                            });
+                          }
+                        }}
                         className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl text-[13px] font-black hover:bg-blue-700 transition-all shadow-lg active:scale-95"
                       >
                         <Calculator size={14} /> 환전

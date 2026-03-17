@@ -33,12 +33,18 @@ public class ExchangeScheduler {
     private void processExchangeTasks() {
         try {
             exchangeRateService.updateAndCacheRates();
-            LocalDateTime threshold = LocalDateTime.now().minusDays(14);
-            exchangeRateService.cleanupOldRates(threshold);
-            log.info("환율 최신화 및 14일 경과 데이터 청소 완료");
+            log.info("환율 최신화 완료");
         } catch (Exception e) {
-            log.error("환율 스케줄링 작업 중 오류 발생: {}", e.getMessage());
+            log.error("환율 스케줄링(수집) 작업 중 오류 발생: {}", e.getMessage());
             sseEmitters.sendAdminAlert("환율 스케줄러 실패: " + e.getMessage());
+        } finally {
+            try {
+                LocalDateTime threshold = LocalDateTime.now().minusDays(14);
+                exchangeRateService.cleanupOldRates(threshold);
+                log.info("14일 경과 데이터 청소 완료");
+            } catch (Exception ex) {
+                log.error("환율 과거 데이터 청소 중 오류 발생: {}", ex.getMessage());
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   XAxis,
   YAxis,
@@ -53,9 +54,13 @@ const ExchangeRateChart: React.FC<Props> = ({
 
     setLoading(true);
     try {
-      // 백엔드 API 경로 확인 필요 (v1 포함 여부)
+      // JPY, IDR 등 100단위 통화 예외 처리
+      let apiCurrency = chartCurrency;
+      if (apiCurrency === "JPY") apiCurrency = "JPY(100)";
+      if (apiCurrency === "IDR") apiCurrency = "IDR(100)";
+      
       const res = await axios.get(
-        `http://localhost:8080/api/v1/exchange/history/${chartCurrency}?days=14`,
+        `http://localhost:8080/api/v1/exchange/history/${encodeURIComponent(apiCurrency)}?days=14`,
       );
       if (res.data && Array.isArray(res.data)) {
         setData(res.data);
@@ -85,19 +90,22 @@ const ExchangeRateChart: React.FC<Props> = ({
 
         {/* 히스토리 데이터가 직접 들어올 때는 드롭다운 숨김 */}
         {!(rates.length > 0 && "date" in rates[0]) && (
-          <select
-            value={chartCurrency}
-            onChange={(e) => setChartCurrency(e.target.value)}
-            className="appearance-none pl-4 pr-10 py-2.5 bg-slate-50 border rounded-2xl text-xs font-black text-slate-700 outline-none"
-          >
-            {rates
-              .filter((r) => r.curUnit)
-              .map((r: any) => (
-                <option key={r.curUnit} value={r.curUnit}>
-                  {r.curUnit}
-                </option>
-              ))}
-          </select>
+          <div className="relative">
+            <select
+              value={chartCurrency}
+              onChange={(e) => setChartCurrency(e.target.value)}
+              className="appearance-none pl-4 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-sm font-black text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-50 transition-all cursor-pointer shadow-sm hover:bg-slate-50"
+            >
+              {rates
+                .filter((r) => r.curUnit)
+                .map((r: any) => (
+                  <option key={r.curUnit} value={r.curUnit}>
+                    {r.curUnit}
+                  </option>
+                ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+          </div>
         )}
       </div>
 

@@ -1,6 +1,5 @@
 import type { ExchangeRate } from "../../../types/exchange";
 import React, { useState, useEffect } from "react";
-import MiniConverter from "./MiniConverter";
 import FXTicker from "./FXTicker";
 
 const FinanceWidgets: React.FC = () => {
@@ -31,9 +30,7 @@ const FinanceWidgets: React.FC = () => {
       {/* 4. 데이터 로딩 전 예외 처리 (UI 방어 코드) */}
       {rates.length > 0 ? (
         <>
-          <div className="lg:w-1/3">
-            <MiniConverter rates={rates} />
-          </div>
+
           <div className="lg:w-2/3">
             <FXTicker rates={rates} />
           </div>

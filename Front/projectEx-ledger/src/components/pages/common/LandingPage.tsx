@@ -1,7 +1,7 @@
 import type { ExchangeRate } from "../../../types/exchange";
 import React, { Suspense, lazy, useState, useEffect } from "react";
-import MiniConverter from "../../widgets/finance/MiniConverter";
 import ExchangeRateTable from "../../widgets/finance/ExchangeRateTable";
+import SmartExchangeModal from "../../widgets/finance/SmartExchangeModal";
 import { BarChart3, ArrowUpRight, ArrowDownRight } from "lucide-react";
 
 const ExchangeRateChart = lazy(
@@ -20,6 +20,15 @@ const LandingPage: React.FC = () => {
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   // [수정] 테이블 클릭과 차트를 연동하기 위한 상태
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
+
+  // [추가] 모달 상태 관리
+  const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
+  const [exchangeModalCurrency, setExchangeModalCurrency] = useState("USD");
+
+  const openExchangeModal = (currencyCode: string) => {
+    setExchangeModalCurrency(currencyCode);
+    setIsExchangeModalOpen(true);
+  };
 
   useEffect(() => {
     // 초기 전체 환율 로드
@@ -104,11 +113,6 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. 미니 계산기 섹션 */}
-      <section className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px] max-w-4xl mx-auto w-full">
-        <MiniConverter rates={rates} />
-      </section>
-
       {/* 4. 상세 환율 테이블 섹션 */}
       <section className="p-8 bg-white border border-slate-100 shadow-sm rounded-[32px]">
         <div className="flex items-center justify-between mb-8">
@@ -124,13 +128,22 @@ const LandingPage: React.FC = () => {
             Live Updates
           </span>
         </div>
-        {/* [핵심 수정] onRowClick 시 selectedCurrency 상태 업데이트 */}
+        {/* [핵심 수정] onRowClick 시 selectedCurrency 상태 업데이트, onExchangeClick 라우팅 우회 */}
         <ExchangeRateTable
           rates={rates}
           selectedCurrency={selectedCurrency}
           onRowClick={(currency) => setSelectedCurrency(currency)}
+          onExchangeClick={openExchangeModal}
         />
       </section>
+
+      {/* [추가] 팝업 환전창 장착 */}
+      <SmartExchangeModal
+        isOpen={isExchangeModalOpen}
+        onClose={() => setIsExchangeModalOpen(false)}
+        rates={rates}
+        initialCurrency={exchangeModalCurrency}
+      />
     </main>
   );
 };

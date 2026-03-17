@@ -66,7 +66,7 @@ public class ExchangeRateService {
 
     @Transactional(readOnly = true)
     public List<ExchangeRateResponseDTO> getExchangeRateHistory(String curUnit, int days) {
-        LocalDateTime start = LocalDateTime.now().minusDays(days + 7);
+        LocalDateTime start = LocalDateTime.now().minusDays(days);
 
         List<ExchangeRate> rates = exchangeRateRepository.findByCurUnitAndUpdatedAtAfterOrderByUpdatedAtAsc(curUnit, start);
 
@@ -171,18 +171,9 @@ public class ExchangeRateService {
     }
 
     public List<ExchangeRateDTO> getLatestRatesFromCacheOrDb() {
-        try {
-            @SuppressWarnings("unchecked")
-            List<ExchangeRateDTO> cachedRates = (List<ExchangeRateDTO>) redisTemplate.opsForValue().get(REDIS_KEY);
-            if (cachedRates != null && !cachedRates.isEmpty()) return cachedRates;
-        } catch (Exception e) {
-            log.warn("⚠️ 레디스 연결 불가, DB에서 직접 조회합니다.");
-        }
-
+        // 요구사항에 맞춰 Redis 캐싱을 생략하고 오직 DB에서만 최신(오늘 기준) 데이터를 가져옵니다.
         List<ExchangeRate> entities = exchangeRateRepository.findAllLatestRates();
-        List<ExchangeRateDTO> dtos = calculateChangeStats(entities);
-        if (!dtos.isEmpty()) saveToCache(dtos);
-        return dtos;
+        return calculateChangeStats(entities);
     }
 
     private List<ExchangeRateDTO> calculateChangeStats(List<ExchangeRate> entities) {
@@ -220,9 +211,9 @@ public class ExchangeRateService {
     }
 
     public void backfillHistoricalData() {
-        log.info("=== 📂 지능형 데이터 점검 및 보완 시작 (최근 20일) ===");
+        log.info("=== 📂 지능형 데이터 점검 및 보완 시작 (최근 14일) ===");
         int failureCount = 0;
-        for (int i = 20; i >= 0; i--) {
+        for (int i = 14; i >= 0; i--) {
             LocalDate targetDate = LocalDate.now().minusDays(i);
             if (isEximDataExists(targetDate)) continue;
 

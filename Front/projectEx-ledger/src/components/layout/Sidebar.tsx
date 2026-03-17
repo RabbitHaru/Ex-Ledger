@@ -148,16 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <BarChart2 size={18} /> 실시간 환율 정보
         </Link>
 
-        {/* 🌟 실시간 환전 메뉴 (신규 추가) */}
-        {isFinanceTarget && (
-          <Link
-            to="/exchange"
-            onClick={onClose}
-            className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/exchange") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-          >
-            <ArrowRightLeft size={18} /> 실시간 환전
-          </Link>
-        )}
+
 
         {/* 2 & 3. 금융 서비스 및 기업 관리 메뉴 분리 처리 */}
         {isFinanceTarget && (
