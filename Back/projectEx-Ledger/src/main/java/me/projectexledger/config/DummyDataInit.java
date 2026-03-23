@@ -13,6 +13,9 @@ import me.projectexledger.domain.company.repository.CompanyRepository;
 import me.projectexledger.domain.member.entity.AdminApprovalStatus;
 import me.projectexledger.domain.member.entity.Member;
 import me.projectexledger.domain.member.repository.MemberRepository;
+import me.projectexledger.domain.transaction.entity.Transaction;
+import me.projectexledger.domain.transaction.entity.TransactionStatus;
+import me.projectexledger.domain.transaction.repository.TransactionRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,6 +37,7 @@ public class DummyDataInit implements CommandLineRunner {
     private final ClientRepository clientRepository;
     private final SystemAuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TransactionRepository transactionRepository;
 
     @Override
     @Transactional
@@ -42,6 +46,7 @@ public class DummyDataInit implements CommandLineRunner {
 
         initClients();
         initCompaniesAndMembers();
+        initTransactions();
         initAuditLogs();
 
         log.info("[DummyDataInit] 더미 데이터 초기화 완료!");
@@ -222,5 +227,58 @@ public class DummyDataInit implements CommandLineRunner {
 
         auditLogRepository.saveAll(List.of(log1, log2, log3));
         log.info("더미 AuditLog(감사로그) 생성 완료");
+    }
+
+    private void initTransactions() {
+        if (transactionRepository.count() > 0) return;
+
+        Member boss = memberRepository.findByEmail("boss@exglobal.com").orElse(null);
+        if (boss == null) return;
+
+        List<Transaction> transactions = new ArrayList<>();
+        transactions.add(Transaction.builder()
+                .member(boss)
+                .amount(new BigDecimal("50000000").negate())
+                .currency("USD")
+                .appliedRate(new BigDecimal("1320.50"))
+                .convertedAmount(new BigDecimal("37864.44"))
+                .status(TransactionStatus.EXCHANGE_COMPLETED)
+                .externalTransactionId("TX-DUMMY-1001")
+                .description("USD 환전 (매수)")
+                .title("USD 환전 (매수)")
+                .type("EXCHANGE")
+                .category("BUSINESS")
+                .build());
+
+        transactions.add(Transaction.builder()
+                .member(boss)
+                .amount(new BigDecimal("15000").negate())
+                .currency("EUR")
+                .appliedRate(new BigDecimal("1450.20"))
+                .convertedAmount(new BigDecimal("21753000"))
+                .status(TransactionStatus.EXCHANGE_COMPLETED)
+                .externalTransactionId("TX-DUMMY-1002")
+                .description("해외 파트너사 송금")
+                .title("해외 파트너사 송금")
+                .type("TRANSFER")
+                .category("BUSINESS")
+                .build());
+
+        transactions.add(Transaction.builder()
+                .member(boss)
+                .amount(new BigDecimal("100000000"))
+                .currency("KRW")
+                .appliedRate(BigDecimal.ONE)
+                .convertedAmount(new BigDecimal("100000000"))
+                .status(TransactionStatus.SETTLED)
+                .externalTransactionId("TX-DUMMY-1003")
+                .description("기업 운영 자금 충전")
+                .title("기업 운영 자금 충전")
+                .type("CHARGE")
+                .category("BUSINESS")
+                .build());
+
+        transactionRepository.saveAll(transactions);
+        log.info("정산(Settlement) 테스트용 더미 거래 내역 3건 생성 완료");
     }
 }

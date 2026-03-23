@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useWallet, type Transaction } from "../../../context/WalletContext";
+import { hasRole } from "../../../config/auth";
 import {
   ArrowLeft,
   Search,
@@ -18,10 +19,13 @@ const PersonalHistory: React.FC = () => {
   const { transactions } = useWallet();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 🌟 정산용 데이터(BUSINESS)를 제외한 순수 개인 거래만 노출
-  const personalTxs = transactions.filter((tx) => tx.category === "PERSONAL");
+  const isCorporate = hasRole("ROLE_COMPANY_USER") || hasRole("ROLE_COMPANY_ADMIN");
 
-  const filteredTxs = personalTxs.filter(
+  // 🌟 정산용 데이터(BUSINESS)와 순수 개인 거래(PERSONAL)를 권한에 따라 동적 노출
+  const targetCategory = isCorporate ? "BUSINESS" : "PERSONAL";
+  const displayTxs = transactions.filter((tx) => tx.category === targetCategory);
+
+  const filteredTxs = displayTxs.filter(
     (tx) =>
       tx.title.includes(searchTerm) ||
       tx.currency.includes(searchTerm.toUpperCase()),
@@ -40,10 +44,10 @@ const PersonalHistory: React.FC = () => {
               <ArrowLeft size={14} /> Dashboard
             </button>
             <h2 className="flex items-center gap-3 text-4xl italic font-black tracking-tighter uppercase text-slate-900">
-              <User className="text-teal-600" size={32} /> 개인 거래 장부
+              <User className="text-teal-600" size={32} /> {isCorporate ? "기업 거래 장부" : "개인 거래 장부"}
             </h2>
             <p className="text-sm italic font-bold tracking-widest uppercase text-slate-400">
-              개인용 거래 데이터 원천(Raw Data) 보기
+              {isCorporate ? "기업용" : "개인용"} 거래 데이터 원천(Raw Data) 보기
             </p>
           </div>
 
@@ -123,7 +127,7 @@ const PersonalHistory: React.FC = () => {
               ))
             ) : (
               <div className="py-24 italic font-black tracking-widest text-center text-slate-200">
-                개인 거래 데이터가 존재하지 않습니다.
+                {isCorporate ? "기업 거래 내역이" : "개인 거래 데이터가"} 존재하지 않습니다.
               </div>
             )}
           </div>

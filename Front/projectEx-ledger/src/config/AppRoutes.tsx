@@ -81,12 +81,12 @@ const AppRoutes = () => {
               <Route path="/settlement" element={<SettlementDashboard />} />
               <Route path="/mypage" element={<MyPage />} />
               <Route path="/corporate/wallet" element={<CorporateWallet />} />
+              <Route path="/seller/history" element={<PersonalHistory />} />
             </Route>
 
             {/* ----- 일반 개인 사용자(User) 전용 라우트 ----- */}
             <Route element={<ProtectedRoute allowedRoles={["ROLE_USER", "USER"]} />}>
               <Route path="/wallet/overview" element={<WalletOverview />} />
-              <Route path="/seller/history" element={<PersonalHistory />} />
             </Route>
 
           {/* ----- 기업 관리자(Company Admin) 전용 라우트 ----- */}

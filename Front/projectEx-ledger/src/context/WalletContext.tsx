@@ -103,7 +103,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
             const response = await axios.get(`${API_BASE_URL}/wallet/summary`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            const { personal, corporate, txs } = response.data;
+            const { personal, corporate, transactions: fetchedTxs } = response.data;
 
             if (personal) {
                 setPersonalAccountState(personal.accountNumber || "");
@@ -116,7 +116,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
                 setCompanyName(corporate.companyName || "");
             }
 
-            setTransactions(txs || []);
+            setTransactions(fetchedTxs || []);
         } catch (error) {
             console.error("WalletContext: 데이터 동기화 실패", error);
         } finally {

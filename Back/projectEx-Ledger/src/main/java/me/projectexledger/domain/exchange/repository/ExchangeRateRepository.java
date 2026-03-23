@@ -31,7 +31,7 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long
 
     List<ExchangeRate> findByCurUnitAndUpdatedAtBetweenOrderByUpdatedAtAsc(String curUnit, LocalDateTime start, LocalDateTime end);
 
-    @Query(value = "SELECT * FROM exchange_rates er1 WHERE er1.id IN (SELECT MAX(er2.id) FROM exchange_rates er2 WHERE DATE(er2.updated_at) = CURDATE() GROUP BY er2.cur_unit)", nativeQuery = true)
+    @Query(value = "SELECT * FROM exchange_rates er1 WHERE er1.id IN (SELECT MAX(er2.id) FROM exchange_rates er2 GROUP BY er2.cur_unit)", nativeQuery = true)
     List<ExchangeRate> findAllLatestRates();
 
     @Query("SELECT er FROM ExchangeRate er WHERE er.curUnit = :curUnit ORDER BY er.updatedAt DESC")
