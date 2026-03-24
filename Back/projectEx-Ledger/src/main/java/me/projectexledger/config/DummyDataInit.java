@@ -132,8 +132,6 @@ public class DummyDataInit implements CommandLineRunner {
                     .name("최고관리자")
                     .role(Member.Role.ROLE_INTEGRATED_ADMIN)
                     .build();
-            admin.updateAccountInfo("현대은행", "123-456-7890", "최고관리자");
-            admin.getOrCreateWallet().addBalance(10000000L); // 1,000만 원 보너스
             membersToSave.add(admin);
         }
 
@@ -147,7 +145,8 @@ public class DummyDataInit implements CommandLineRunner {
                     .build();
             personalUser.enableMfa(); // MFA 활성 상태 더미
             personalUser.updateTotpSecret("JBSWY3DPEHPK3PXP"); 
-            personalUser.updateAccountInfo("국민은행", "111-222-333333", "홍길동");
+            personalUser.updateAccountInfo("Ex-Ledger", "EX-1004-111222", "홍길동");
+            personalUser.getOrCreateWallet().updatePortOneInfo("imp_dummy_user_123");
             personalUser.getOrCreateWallet().addBalance(500000L); // 50만 원
             membersToSave.add(personalUser);
         }
@@ -174,7 +173,11 @@ public class DummyDataInit implements CommandLineRunner {
                     .company(companyApproved)
                     .build();
             corpAdmin.approveCompany(); // 기업 연동 승인 상태로 생성
-            corpAdmin.updateAccountInfo("신한은행", "999-888-777666", "이사장");
+            corpAdmin.enableMfa(); // MFA 활성
+            corpAdmin.updateTotpSecret("JBSWY3DPEHPK3PYQ"); // 기업 전용 시크릿
+            corpAdmin.updateAccountInfo("Ex-Ledger", "EX-2003-999888", "이사장");
+            companyApproved.activateAccount("EX-2003-999888");
+            corpAdmin.getOrCreateWallet().updatePortOneInfo("imp_dummy_boss_456");
             corpAdmin.getOrCreateWallet().addBalance(2500000L); // 250만 원
             membersToSave.add(corpAdmin);
         }

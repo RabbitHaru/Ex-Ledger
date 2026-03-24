@@ -119,8 +119,11 @@ public class Member extends BaseEntity {
         this.allowNotifications = allowNotifications;
     }
 
-    // 🌟 지갑 정보 업데이트를 Wallet 엔티티로 위임 (C담당 구조)
+    // 🌟 지갑 정보 업데이트를 Wallet 엔티티로 위임 (최고 관리자는 등록 불가 처리)
     public void updateAccountInfo(String bankName, String accountNumber, String accountHolder) {
+        if (this.role == Role.ROLE_INTEGRATED_ADMIN) {
+            throw new IllegalStateException("최고 관리자(운영사) 프로젝트는 환급 계좌를 등록할 수 없습니다.");
+        }
         this.getOrCreateWallet().updateAccountInfo(bankName, accountNumber, accountHolder);
     }
 
