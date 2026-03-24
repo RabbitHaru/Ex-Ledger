@@ -41,6 +41,7 @@ public class AuthService {
     private final PortOneVerificationService portOneVerificationService;
     private final SseEmitters sseEmitters;
     private final CompanyRepository companyRepository;
+    private final EmailService emailService;
 
     @Transactional(readOnly = true)
     public void checkEmailAvailability(String email) {
@@ -58,6 +59,13 @@ public class AuthService {
         if (memberRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
+
+        // 2.5 이메일 실소유 인증 확인 (B담당 추가 요청)
+        String verifiedKey = "EMAIL_VERIFIED:" + request.getEmail();
+        if (Boolean.FALSE.equals(redisTemplate.hasKey(verifiedKey))) {
+            throw new IllegalArgumentException("이메일 인증이 완료되지 않았습니다.");
+        }
+        redisTemplate.delete(verifiedKey); // 사용 후 삭제
 
         // 1. 포트원 실명 인증 및 대조 (B담당 로직)
         String verifiedRealName = null;
@@ -136,16 +144,17 @@ public class AuthService {
                 : Duration.ofMinutes(15);
         redisTemplate.opsForValue().set("MFA_VERIFIED:" + member.getEmail(), "true", sessionDuration);
 
-        // 5. 자동 로그인 처리 (DB 재조회 방지를 위해 수동으로 Authentication 생성)
         List<SimpleGrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(role.name()));
-        // 회원가입 시에는 이미 OTP를 검증했으므로 mfaVerified = true
+        String sid = java.util.UUID.randomUUID().toString().substring(0, 8);
         CustomUserDetails userDetails = new CustomUserDetails(member.getEmail(), member.getPassword(), authorities, member.isApproved(), true);
         Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
 
-        String jwt = jwtTokenProvider.createToken(authentication);
-        String refreshToken = jwtTokenProvider.createRefreshToken(authentication);
+        String jwt = jwtTokenProvider.createToken(authentication, sid);
+        String refreshToken = jwtTokenProvider.createRefreshToken(authentication, sid);
         try {
-            redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+            // RT 저장 시 세션 정보를 함께 저장
+            String rtKey = "RT:" + authentication.getName() + ":" + sid;
+            redisTemplate.opsForValue().set(rtKey, refreshToken, Duration.ofDays(7));
         } catch (Exception e) {
             log.error("⚠️ [Redis] 리프레시 토큰 저장 실패 (Redis 연결 확인 필요): {}", e.getMessage());
         }
@@ -169,11 +178,12 @@ public class AuthService {
                     request.getEmail(), request.getPassword());
             Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
 
-            String jwt = jwtTokenProvider.createToken(authentication);
-            String refreshToken = jwtTokenProvider.createRefreshToken(authentication);
+            String sid = java.util.UUID.randomUUID().toString().substring(0, 8);
+            String jwt = jwtTokenProvider.createToken(authentication, sid);
+            String refreshToken = jwtTokenProvider.createRefreshToken(authentication, sid);
 
             try {
-                redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+                redisTemplate.opsForValue().set("RT:" + authentication.getName() + ":" + sid, refreshToken, Duration.ofDays(7));
             } catch (Exception e) {
                 log.error("⚠️ [Redis] 리프레시 토큰 저장 실패 (Redis 연결 확인 필요): {}", e.getMessage());
             }
@@ -231,11 +241,12 @@ public class AuthService {
         CustomUserDetails userDetails = new CustomUserDetails(member.getEmail(), "", authorities, member.isApproved(), true);
         Authentication mfaAuthentication = new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
 
-        String jwt = jwtTokenProvider.createToken(mfaAuthentication);
-        String refreshToken = jwtTokenProvider.createRefreshToken(mfaAuthentication);
+        String sid = java.util.UUID.randomUUID().toString().substring(0, 8);
+        String jwt = jwtTokenProvider.createToken(mfaAuthentication, sid);
+        String refreshToken = jwtTokenProvider.createRefreshToken(mfaAuthentication, sid);
 
         try {
-            redisTemplate.opsForValue().set("RT:" + authentication.getName(), refreshToken, Duration.ofDays(7));
+            redisTemplate.opsForValue().set("RT:" + authentication.getName() + ":" + sid, refreshToken, Duration.ofDays(7));
         } catch (Exception e) {
             log.error("⚠️ [Redis] 리프레시 토큰 저장 실패 (Redis 연결 확인 필요): {}", e.getMessage());
         }
@@ -252,8 +263,13 @@ public class AuthService {
             throw new IllegalArgumentException("유효하지 않은 리프레시 토큰입니다.");
         }
         String email = jwtTokenProvider.getSubjectFromToken(refreshToken);
+        
+        // 리프레시 토큰에서 sid 추출
+        String sid = jwtTokenProvider.getClaimFromToken(refreshToken, claims -> claims.get("sid", String.class));
 
-        String savedToken = (String) redisTemplate.opsForValue().get("RT:" + email);
+        String rtKey = (sid != null) ? "RT:" + email + ":" + sid : "RT:" + email;
+        String savedToken = (String) redisTemplate.opsForValue().get(rtKey);
+        
         if (savedToken == null || !savedToken.equals(refreshToken)) {
             throw new IllegalArgumentException("만료된 세션입니다. 다시 로그인해주세요.");
         }
@@ -267,9 +283,12 @@ public class AuthService {
                 authorities
         );
 
-        String newAccessToken = jwtTokenProvider.createToken(authentication);
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(authentication);
-        redisTemplate.opsForValue().set("RT:" + email, newRefreshToken, Duration.ofDays(7));
+        String newSid = (sid != null) ? sid : java.util.UUID.randomUUID().toString().substring(0, 8);
+        String newAccessToken = jwtTokenProvider.createToken(authentication, newSid);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(authentication, newSid);
+        
+        redisTemplate.delete(rtKey);
+        redisTemplate.opsForValue().set("RT:" + email + ":" + newSid, newRefreshToken, Duration.ofDays(7));
 
         return new TokenResponse(newAccessToken, newRefreshToken, "Bearer", false, false);
     }
@@ -403,5 +422,69 @@ public class AuthService {
     public void cancelWithdrawal(String email) {
         Member member = memberRepository.findByEmail(email).orElseThrow();
         member.cancelWithdrawal();
+    }
+
+    // --- B담당: 추가 보안 기능 (이메일 인증, 비밀번호 재설정, 세션 관리) ---
+
+    @Transactional(readOnly = true)
+    public void sendEmailVerificationCode(String email) {
+        if (memberRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+        }
+        String code = String.valueOf((int)(Math.random() * 900000) + 100000); // 6자리 난수
+        redisTemplate.opsForValue().set("EMAIL_CODE:" + email, code, Duration.ofMinutes(10));
+        emailService.sendVerificationCode(email, code);
+    }
+
+    public void verifyEmailCode(String email, String code) {
+        String savedCode = (String) redisTemplate.opsForValue().get("EMAIL_CODE:" + email);
+        if (savedCode == null || !savedCode.equals(code)) {
+            throw new IllegalArgumentException("인증 코드가 만료되었거나 일치하지 않습니다.");
+        }
+        redisTemplate.opsForValue().set("EMAIL_VERIFIED:" + email, "true", Duration.ofMinutes(15));
+        redisTemplate.delete("EMAIL_CODE:" + email);
+    }
+
+    @Transactional(readOnly = true)
+    public void requestPasswordReset(String email) {
+        if (!memberRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("등록되지 않은 이메일입니다.");
+        }
+        String token = java.util.UUID.randomUUID().toString();
+        redisTemplate.opsForValue().set("PWD_RESET:" + token, email, Duration.ofHours(1));
+        emailService.sendPasswordResetLink(email, token);
+    }
+
+    @Transactional
+    public void confirmPasswordReset(PasswordResetConfirmRequest request) {
+        String email = (String) redisTemplate.opsForValue().get("PWD_RESET:" + request.getToken());
+        if (email == null) {
+            throw new IllegalArgumentException("유효하지 않거나 만료된 토큰입니다.");
+        }
+
+        Member member = memberRepository.findByEmail(email).orElseThrow();
+        member.updatePassword(passwordEncoder.encode(request.getNewPassword()));
+        redisTemplate.delete("PWD_RESET:" + request.getToken());
+    }
+
+    public List<SessionResponse> getActiveSessions(String email) {
+        var keys = redisTemplate.keys("RT:" + email + ":*");
+        if (keys == null) return Collections.emptyList();
+
+        return keys.stream().map(key -> {
+            String sid = key.substring(key.lastIndexOf(":") + 1);
+            // 실제 구현 시 Redis에 세션 메타데이터(IP 등)를 Hash로 저장하면 더 좋음
+            // 여기서는 단순 데모를 위해 기본 정보만 반환
+            return SessionResponse.builder()
+                    .sessionId(sid)
+                    .clientIp("Unknown") // 실제 HttpServletRequest에서 받아온 정보를 저장해야 함
+                    .loginTime(java.time.LocalDateTime.now())
+                    .isCurrentSession(false) // 프론트에서 자신의 현재 토큰과 대조 필요
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    public void revokeSession(String email, String sessionId) {
+        redisTemplate.delete("RT:" + email + ":" + sessionId);
     }
 }

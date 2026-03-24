@@ -11,6 +11,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
+import org.springframework.data.redis.core.RedisTemplate;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.time.Duration;
@@ -29,10 +30,13 @@ public class JwtTokenProvider {
     private final Key key;
     private final long tokenValidityInMilliseconds;
     private final long refreshTokenValidityInMilliseconds;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     public JwtTokenProvider(
             @Value("${jwt.secret}") String secretKey,
-            @Value("${jwt.token-validity-in-seconds}") long tokenValidityInSeconds) {
+            @Value("${jwt.token-validity-in-seconds}") long tokenValidityInSeconds,
+            @Value("${jwt.refresh-token-validity-in-seconds}") long refreshTokenValidityInSeconds,
+            RedisTemplate<String, Object> redisTemplate) {
         byte[] keyBytes;
         try {
             // Base64 디코딩 시도
@@ -52,10 +56,15 @@ public class JwtTokenProvider {
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.tokenValidityInMilliseconds = tokenValidityInSeconds * 1000;
-        this.refreshTokenValidityInMilliseconds = Duration.ofDays(7).toMillis();
+        this.refreshTokenValidityInMilliseconds = refreshTokenValidityInSeconds * 1000;
+        this.redisTemplate = redisTemplate;
     }
 
     public String createToken(Authentication authentication) {
+        return createToken(authentication, null);
+    }
+
+    public String createToken(Authentication authentication, String sessionId) {
         String authorities = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
@@ -72,39 +81,60 @@ public class JwtTokenProvider {
         }
 
         long now = (new Date()).getTime();
+        // B담당: 통합 관리자는 24시간, 일반 유저는 설정된 기본값(15분) 사용
         long validityMs = isIntegratedAdmin
                 ? Duration.ofHours(24).toMillis()
-                : Duration.ofMinutes(15).toMillis();
+                : this.tokenValidityInMilliseconds;
         Date validity = new Date(now + validityMs);
 
-        return Jwts.builder()
+        JwtBuilder builder = Jwts.builder()
                 .setSubject(authentication.getName())
                 .claim("auth", authorities)
                 .claim("isApproved", isApproved)
-                .claim("mfaVerified", mfaVerified)
+                .claim("mfaVerified", mfaVerified);
+        
+        if (sessionId != null) {
+            builder.claim("sid", sessionId);
+        }
+
+        return builder
                 .signWith(key, SignatureAlgorithm.HS256)
                 .setExpiration(validity)
                 .compact();
     }
 
     public String createRefreshToken(Authentication authentication) {
+        return createRefreshToken(authentication, null);
+    }
+
+    public String createRefreshToken(Authentication authentication, String sessionId) {
         long now = (new Date()).getTime();
         Date validity = new Date(now + this.refreshTokenValidityInMilliseconds);
 
-        return Jwts.builder()
-                .setSubject(authentication.getName())
+        JwtBuilder builder = Jwts.builder()
+                .setSubject(authentication.getName());
+        
+        if (sessionId != null) {
+            builder.claim("sid", sessionId);
+        }
+
+        return builder
                 .signWith(key, SignatureAlgorithm.HS256)
                 .setExpiration(validity)
                 .compact();
     }
 
     public String getSubjectFromToken(String token) {
-        return Jwts.parserBuilder()
+        return getClaimFromToken(token, Claims::getSubject);
+    }
+
+    public <T> T getClaimFromToken(String token, java.util.function.Function<Claims, T> claimsResolver) {
+        final Claims claims = Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
+                .getBody();
+        return claimsResolver.apply(claims);
     }
 
     public Authentication getAuthentication(String token) {
@@ -127,9 +157,31 @@ public class JwtTokenProvider {
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+            
+            // B담당: 세션 유효성 강제 확인 (Immediate Session Termination)
+            try {
+                String sid = getClaimFromToken(token, claims -> claims.get("sid", String.class));
+                String email = getClaimFromToken(token, Claims::getSubject);
+                if (sid != null && email != null) {
+                    String rtKey = "RT:" + email + ":" + sid;
+                    if (Boolean.FALSE.equals(redisTemplate.hasKey(rtKey))) {
+                        log.warn("⚠️ [Auth] Revoked session access attempt: {} (SID: {})", email, sid);
+                        return false;
+                    }
+                }
+            } catch (Exception e) {
+                // sid가 없는 토큰(예: 이전 버전)은 signature만 맞으면 일단 통과
+            }
+            
             return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            log.info("Invalid JWT token: {}", e.getMessage());
+        } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
+            log.info("잘못된 JWT 서명입니다.");
+        } catch (ExpiredJwtException e) {
+            log.info("만료된 JWT 토큰입니다.");
+        } catch (UnsupportedJwtException e) {
+            log.info("지원되지 않는 JWT 토큰입니다.");
+        } catch (IllegalArgumentException e) {
+            log.info("JWT 토큰이 잘못되었습니다.");
         }
         return false;
     }

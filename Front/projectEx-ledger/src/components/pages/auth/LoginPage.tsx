@@ -85,6 +85,11 @@ const LoginPage: React.FC = () => {
             />
             <PasswordStrength password={password} />
           </div>
+          <div className="flex justify-end mt-2 px-2">
+            <Link to="/forgot-password" title="sm" className="text-[12px] font-black text-slate-400 hover:text-teal-600 underline underline-offset-4 decoration-slate-200 transition-colors">
+                비밀번호를 잊으셨나요?
+            </Link>
+          </div>
         </div>
 
         <div className="flex justify-center my-8">

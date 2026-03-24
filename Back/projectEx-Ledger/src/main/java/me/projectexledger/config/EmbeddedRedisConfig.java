@@ -28,8 +28,12 @@ public class EmbeddedRedisConfig {
         }
 
         try {
-            if (isArmMac()) {
+            // 윈도우나 Mac ARM 환경에서는 단순 생성자가 더 안정적입니다.
+            boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+
+            if (isArmMac() || isWindows) {
                 redisServer = new RedisServer(redisPort);
+                log.info("ℹ️ Using simple RedisServer constructor for {}", isWindows ? "Windows" : "Mac ARM");
             } else {
                 redisServer = RedisServer.builder()
                         .port(redisPort)
@@ -40,7 +44,8 @@ public class EmbeddedRedisConfig {
             redisServer.start();
             log.info("✅ Embedded Redis Server started on port {}", redisPort);
         } catch (Exception e) {
-            log.warn("⚠️ Embedded Redis 시작 실패(외부 Redis 사용 권장): {}", e.getMessage());
+            log.error("❌ Embedded Redis 시작 실패: {}", e.getMessage());
+            log.error("💡 해결방법: 윈도우용 Redis(.msi)를 직접 설치하거나, WSL2에서 redis-server를 실행해 주세요.");
             redisServer = null;
         }
     }

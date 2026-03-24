@@ -8,6 +8,21 @@ import org.springframework.stereotype.Service;
 public class EmailService {
 
     // [TODO] 실제 SMTP 설정 전까지는 콘솔 로그 출력으로 작동을 대체합니다.
+    public void sendVerificationCode(String toAddress, String code) {
+        log.info("============== [EMAIL STUB: 인증 코드] ==============");
+        log.info("수신자: {}", toAddress);
+        log.info("내용: 귀하의 Ex-Ledger 가입 인증 코드는 [{}] 입니다.", code);
+        log.info("==========================================");
+    }
+
+    public void sendPasswordResetLink(String toAddress, String token) {
+        log.info("============== [EMAIL STUB: 비밀번호 재설정] ==============");
+        log.info("수신자: {}", toAddress);
+        log.info("내용: 비밀번호 재설정을 위해 다음 토큰을 사용하거나 링크를 클릭하세요: [{}]", token);
+        log.info("URL: http://localhost:5173/reset-password?token={}", token);
+        log.info("==========================================");
+    }
+
     public void sendApprovalEmail(String toAddress, String name, String role) {
         String subject = "";
         String body = "";

@@ -36,8 +36,8 @@ public class DummyDataInit implements CommandLineRunner {
     private final CompanyRepository companyRepository;
     private final ClientRepository clientRepository;
     private final SystemAuditLogRepository auditLogRepository;
-    private final PasswordEncoder passwordEncoder;
     private final TransactionRepository transactionRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional
@@ -126,22 +126,42 @@ public class DummyDataInit implements CommandLineRunner {
 
         // ========== 2. 사이트 관리자 (Integrated Admin) ==========
         if (!memberRepository.existsByEmail("admin@exledger.com")) {
-            membersToSave.add(Member.builder()
+            Member admin = Member.builder()
                     .email("admin@exledger.com")
                     .password(passwordEncoder.encode("admin123!"))
                     .name("최고관리자")
                     .role(Member.Role.ROLE_INTEGRATED_ADMIN)
-                    .build());
+                    .build();
+            admin.updateAccountInfo("현대은행", "123-456-7890", "최고관리자");
+            admin.getOrCreateWallet().addBalance(10000000L); // 1,000만 원 보너스
+            membersToSave.add(admin);
         }
 
         // ========== 3. 개인 유저 (Personal User) ==========
         if (!memberRepository.existsByEmail("user@example.com")) {
-            membersToSave.add(Member.builder()
+            Member personalUser = Member.builder()
                     .email("user@example.com")
                     .password(passwordEncoder.encode("user1234!"))
                     .name("홍길동")
                     .role(Member.Role.ROLE_USER)
-                    .build());
+                    .build();
+            personalUser.enableMfa(); // MFA 활성 상태 더미
+            personalUser.updateTotpSecret("JBSWY3DPEHPK3PXP"); 
+            personalUser.updateAccountInfo("국민은행", "111-222-333333", "홍길동");
+            personalUser.getOrCreateWallet().addBalance(500000L); // 50만 원
+            membersToSave.add(personalUser);
+        }
+
+        // [추가] 탈퇴 요청 중인 유저 (로그인 차단 및 유예 기간 UI 테스트용)
+        if (!memberRepository.existsByEmail("leaving@example.com")) {
+            Member leavingUser = Member.builder()
+                    .email("leaving@example.com")
+                    .password(passwordEncoder.encode("user1234!"))
+                    .name("탈퇴예정자")
+                    .role(Member.Role.ROLE_USER)
+                    .build();
+            leavingUser.requestWithdrawal(); // 현재 시간 기준 탈퇴 요청
+            membersToSave.add(leavingUser);
         }
 
         // ========== 4. [정상 기업] 관리자 및 직원 ==========
@@ -154,6 +174,8 @@ public class DummyDataInit implements CommandLineRunner {
                     .company(companyApproved)
                     .build();
             corpAdmin.approveCompany(); // 기업 연동 승인 상태로 생성
+            corpAdmin.updateAccountInfo("신한은행", "999-888-777666", "이사장");
+            corpAdmin.getOrCreateWallet().addBalance(2500000L); // 250만 원
             membersToSave.add(corpAdmin);
         }
 
@@ -165,8 +187,21 @@ public class DummyDataInit implements CommandLineRunner {
                     .role(Member.Role.ROLE_COMPANY_USER)
                     .company(companyApproved)
                     .build();
-            corpStaff.approveCompany();
+            corpStaff.approveCompany(); // 승인됨
             membersToSave.add(corpStaff);
+        }
+
+        // [추가] 미승인 기업 직원 (소속 승인 대기 UI 테스트용)
+        if (!memberRepository.existsByEmail("staff2@exglobal.com")) {
+            Member pendingStaff = Member.builder()
+                    .email("staff2@exglobal.com")
+                    .password(passwordEncoder.encode("test1234!"))
+                    .name("박대기")
+                    .role(Member.Role.ROLE_COMPANY_USER)
+                    .company(companyApproved)
+                    .build();
+            // approveCompany()를 호출하지 않아 isApproved = false 상태 유지
+            membersToSave.add(pendingStaff);
         }
 
         // ========== 5. [심사 대기/반려 기업] 관리자 ==========
@@ -198,6 +233,73 @@ public class DummyDataInit implements CommandLineRunner {
         log.info("더미 기업 및 멤버 데이터 생성 완료 (신규 생성: {}건)", membersToSave.size());
     }
 
+    private void initTransactions() {
+        if (transactionRepository.count() > 0) {
+            log.info("Transaction 데이터가 이미 존재합니다. 스킵.");
+            return;
+        }
+
+        List<Transaction> transactions = new ArrayList<>();
+        
+        // 1. 최고관리자 (최근 대액 충전 및 해외 송금 내역)
+        memberRepository.findByEmail("admin@exledger.com").ifPresent(admin -> {
+            transactions.add(Transaction.builder()
+                    .member(admin).amount(new BigDecimal("5000000"))
+                    .currency("KRW").type("CHARGE").title("지갑 잔액 충전")
+                    .status(TransactionStatus.SETTLED).build());
+            
+            transactions.add(Transaction.builder()
+                    .member(admin).amount(new BigDecimal("1500000"))
+                    .currency("USD").type("TRANSFER").title("글로벌 수출 결제")
+                    .description("미국 지사 송금").status(TransactionStatus.SETTLED).build());
+        });
+
+        // 2. 일반 유저 홍길동 (환전 및 개인 송금 내역)
+        memberRepository.findByEmail("user@example.com").ifPresent(user -> {
+            transactions.add(Transaction.builder()
+                    .member(user).amount(new BigDecimal("200000"))
+                    .currency("JPY").type("EXCHANGE").title("일본 여행 경비 환전")
+                    .appliedRate(new BigDecimal("9.05")).status(TransactionStatus.EXCHANGE_COMPLETED).build());
+
+            transactions.add(Transaction.builder()
+                    .member(user).amount(new BigDecimal("50000"))
+                    .currency("KRW").type("TRANSFER").title("지인 송금 (가족)")
+                    .status(TransactionStatus.SETTLED).build());
+        });
+
+        // 3. 기업 관리자 이사장 (정산금 입금 내역 및 기업 활동 내역)
+        memberRepository.findByEmail("boss@exglobal.com").ifPresent(boss -> {
+            // 정산금 입금
+            transactions.add(Transaction.builder()
+                    .member(boss).amount(new BigDecimal("15200000"))
+                    .currency("KRW").type("SETTLEMENT").title("2월 2주차 통합 정산금")
+                    .status(TransactionStatus.SETTLED).build());
+
+            // USD 환전
+            transactions.add(Transaction.builder()
+                    .member(boss).amount(new BigDecimal("5000000").negate())
+                    .currency("USD").appliedRate(new BigDecimal("1320.50"))
+                    .convertedAmount(new BigDecimal("3786.44"))
+                    .status(TransactionStatus.EXCHANGE_COMPLETED)
+                    .externalTransactionId("TX-DUMMY-1001")
+                    .title("비즈니스 USD 환전 (매수)")
+                    .type("EXCHANGE").category("BUSINESS").build());
+
+            // 해외 송금
+            transactions.add(Transaction.builder()
+                    .member(boss).amount(new BigDecimal("15000").negate())
+                    .currency("EUR").appliedRate(new BigDecimal("1450.20"))
+                    .convertedAmount(new BigDecimal("21753000"))
+                    .status(TransactionStatus.SETTLED)
+                    .externalTransactionId("TX-DUMMY-1002")
+                    .title("유럽 파트너사 대금 송금")
+                    .type("TRANSFER").category("BUSINESS").build());
+        });
+
+        transactionRepository.saveAll(transactions);
+        log.info("더미 거래 내역(Transaction) {}건 생성 완료", transactions.size());
+    }
+
     private void initAuditLogs() {
         if (auditLogRepository.count() > 0) return;
 
@@ -227,58 +329,5 @@ public class DummyDataInit implements CommandLineRunner {
 
         auditLogRepository.saveAll(List.of(log1, log2, log3));
         log.info("더미 AuditLog(감사로그) 생성 완료");
-    }
-
-    private void initTransactions() {
-        if (transactionRepository.count() > 0) return;
-
-        Member boss = memberRepository.findByEmail("boss@exglobal.com").orElse(null);
-        if (boss == null) return;
-
-        List<Transaction> transactions = new ArrayList<>();
-        transactions.add(Transaction.builder()
-                .member(boss)
-                .amount(new BigDecimal("50000000").negate())
-                .currency("USD")
-                .appliedRate(new BigDecimal("1320.50"))
-                .convertedAmount(new BigDecimal("37864.44"))
-                .status(TransactionStatus.EXCHANGE_COMPLETED)
-                .externalTransactionId("TX-DUMMY-1001")
-                .description("USD 환전 (매수)")
-                .title("USD 환전 (매수)")
-                .type("EXCHANGE")
-                .category("BUSINESS")
-                .build());
-
-        transactions.add(Transaction.builder()
-                .member(boss)
-                .amount(new BigDecimal("15000").negate())
-                .currency("EUR")
-                .appliedRate(new BigDecimal("1450.20"))
-                .convertedAmount(new BigDecimal("21753000"))
-                .status(TransactionStatus.EXCHANGE_COMPLETED)
-                .externalTransactionId("TX-DUMMY-1002")
-                .description("해외 파트너사 송금")
-                .title("해외 파트너사 송금")
-                .type("TRANSFER")
-                .category("BUSINESS")
-                .build());
-
-        transactions.add(Transaction.builder()
-                .member(boss)
-                .amount(new BigDecimal("100000000"))
-                .currency("KRW")
-                .appliedRate(BigDecimal.ONE)
-                .convertedAmount(new BigDecimal("100000000"))
-                .status(TransactionStatus.SETTLED)
-                .externalTransactionId("TX-DUMMY-1003")
-                .description("기업 운영 자금 충전")
-                .title("기업 운영 자금 충전")
-                .type("CHARGE")
-                .category("BUSINESS")
-                .build());
-
-        transactionRepository.saveAll(transactions);
-        log.info("정산(Settlement) 테스트용 더미 거래 내역 3건 생성 완료");
     }
 }

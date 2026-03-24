@@ -11,6 +11,8 @@ import LandingPage from "../components/pages/common/LandingPage";
 import LoginPage from "../components/pages/auth/LoginPage";
 import SignupPage from "../components/pages/auth/SignupPage";
 import MFASetup from "../components/pages/auth/MFASetup";
+import ForgotPasswordPage from "../components/pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "../components/pages/auth/ResetPasswordPage";
 
 // Admin System Pages
 import AdminLogList from "../components/pages/admin/system/AdminLogList";
@@ -69,6 +71,8 @@ const AppRoutes = () => {
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/auth/mfa" element={<MFASetup />} />
         </Route>
 

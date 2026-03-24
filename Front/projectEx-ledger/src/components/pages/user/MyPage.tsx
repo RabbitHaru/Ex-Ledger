@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { UserCircle, ShieldCheck, Key, RefreshCw, CheckCircle2, AlertCircle, Building2, UserMinus, LogOut, Shield, BarChart3, Users, CheckSquare } from "lucide-react";
+import { UserCircle, ShieldCheck, Key, RefreshCw, CheckCircle2, AlertCircle, Building2, UserMinus, LogOut, Shield, BarChart3, Users, CheckSquare, Monitor, Activity } from "lucide-react";
 import http from "../../../config/http";
 import { useToast } from "../../notification/ToastProvider";
 import { QRCodeSVG } from "qrcode.react";
@@ -55,10 +55,44 @@ const MyPage: React.FC = () => {
         realName: string | null;
         withdrawalRequestedAt: string | null;
     } | null>(null);
+ 
+    // 세션 관리 상태
+    const [sessions, setSessions] = useState<any[]>([]);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
 
     useEffect(() => {
         fetchProfile();
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'security') {
+            fetchSessions();
+        }
+    }, [activeTab]);
+
+    const fetchSessions = async () => {
+        setSessionsLoading(true);
+        try {
+            const res = await http.get('/auth/sessions');
+            if (res.data && res.data.data) {
+                setSessions(res.data.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch sessions');
+        } finally {
+            setSessionsLoading(false);
+        }
+    };
+
+    const handleRevokeSession = async (sessionId: string) => {
+        try {
+            await http.delete(`/auth/sessions/${sessionId}`);
+            toast.success('세션이 로그아웃 되었습니다.');
+            fetchSessions();
+        } catch (err) {
+            toast.error('세션 로그아웃에 실패했습니다.');
+        }
+    };
 
     const fetchProfile = async () => {
         try {
@@ -722,6 +756,68 @@ const MyPage: React.FC = () => {
                                 </div>
                             </section>
                         </div>
+
+                        {/* 최근 로그인 세션 관리 섹션 추가 */}
+                        <section className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-10 lg:col-span-2 mt-10">
+                            <div className="flex gap-4 items-center">
+                                <div className="p-4 text-slate-900 bg-slate-50 rounded-2xl">
+                                    <Activity size={24} className="text-teal-500" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-black tracking-tight text-slate-800">최근 로그인 세션 관리</h2>
+                                    <p className="text-[12px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Active Login Sessions</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {sessionsLoading ? (
+                                    <div className="col-span-2 py-20 text-center animate-pulse text-slate-300 font-black text-xs uppercase tracking-[0.3em]">
+                                        Checking your active security sessions...
+                                    </div>
+                                ) : sessions.length > 0 ? (
+                                    sessions.map((session, idx) => (
+                                        <div key={idx} className="flex items-center justify-between p-6 bg-slate-50/50 rounded-[32px] border border-slate-100 hover:border-teal-200 hover:bg-white transition-all group">
+                                            <div className="flex items-center gap-5">
+                                                <div className="p-4 bg-white rounded-2xl text-slate-400 border border-slate-100 shadow-sm group-hover:text-teal-500 transition-colors">
+                                                    <Monitor size={22} />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-[14px] font-black text-slate-700">{session.clientIp === 'Unknown' ? '웹 브라우저 (데스크탑)' : session.clientIp}</p>
+                                                        {session.isCurrentSession && (
+                                                            <span className="px-2 py-0.5 bg-teal-100 text-teal-600 rounded-md text-[9px] font-black uppercase tracking-tighter">현재 기기</span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-tight">
+                                                        {session.loginTime ? new Date(session.loginTime).toLocaleString() : 'Recently active'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {!session.isCurrentSession && (
+                                                <button 
+                                                    onClick={() => handleRevokeSession(session.sessionId)} 
+                                                    className="px-5 py-3 rounded-2xl text-[11px] font-black text-rose-500 hover:bg-rose-50 border border-rose-100/50 transition-all active:scale-95"
+                                                >
+                                                    세션 종료
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-2 py-16 text-center bg-slate-50/50 rounded-[40px] border border-slate-100 border-dashed">
+                                        <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">No other active sessions found</p>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex items-center gap-3 p-6 bg-teal-50/30 rounded-3xl border border-teal-100/50">
+                                <ShieldCheck size={18} className="text-teal-600 shrink-0" />
+                                <p className="text-[11px] font-bold text-teal-700/80 leading-relaxed italic">
+                                    다른 기기에서의 비정상적인 로그인이 확인될 경우 즉시 세션을 종료하고 비밀번호를 변경하시기 바랍니다. <br/>
+                                    모든 세션 데이터는 보안 정책에 따라 암호화되어 관리됩니다.
+                                </p>
+                            </div>
+                        </section>
                     </div>
                 )}
 

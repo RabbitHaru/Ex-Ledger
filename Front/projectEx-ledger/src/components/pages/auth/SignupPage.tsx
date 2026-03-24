@@ -40,7 +40,13 @@ const SignupPage: React.FC = () => {
     const [otpCode, setOtpCode] = useState('');
     const [otpError, setOtpError] = useState('');
     const [otpLoading, setOtpLoading] = useState(false);
-
+ 
+    // 이메일 인증 관련 상태
+    const [isEmailSent, setIsEmailSent] = useState(false);
+    const [isEmailVerified, setIsEmailVerified] = useState(false);
+    const [emailCode, setEmailCode] = useState('');
+    const [emailVerifying, setEmailVerifying] = useState(false);
+ 
     // 스텝 관리
     const [currentStep, setCurrentStep] = useState(1);
     const isCompany = activeTab === 'COMPANY_ADMIN' || activeTab === 'COMPANY_USER';
@@ -155,12 +161,47 @@ const SignupPage: React.FC = () => {
             setVerifying(false);
         }
     };
+ 
+    const handleSendEmailCode = async () => {
+        if (!email || !email.includes('@')) {
+            setError('올바른 이메일 주소를 입력해주세요.');
+            return;
+        }
+        setEmailVerifying(true);
+        try {
+            await http.post('/auth/email-verification/send', { email });
+            setIsEmailSent(true);
+            toast.success('인증 코드가 발송되었습니다.');
+        } catch (err: any) {
+            setError(err.response?.data?.message || '인증 코드 발송에 실패했습니다.');
+        } finally {
+            setEmailVerifying(false);
+        }
+    };
+ 
+    const handleVerifyEmailCode = async () => {
+        if (!emailCode || emailCode.length !== 6) {
+            setError('6자리 인증 코드를 입력해주세요.');
+            return;
+        }
+        setEmailVerifying(true);
+        try {
+            await http.post('/auth/email-verification/verify', { email, code: emailCode });
+            setIsEmailVerified(true);
+            toast.success('이메일 인증이 완료되었습니다.');
+        } catch (err: any) {
+            setError(err.response?.data?.message || '인증 코드가 올바르지 않습니다.');
+        } finally {
+            setEmailVerifying(false);
+        }
+    };
 
     // 스텝 유효성 검사
     const validateStep = (step: number): boolean => {
         setError('');
         if (step === 1) {
             if (!email) { setError('이메일을 입력해주세요.'); emailRef.current?.focus(); return false; }
+            if (!isEmailVerified) { setError('이메일 인증을 완료해주세요.'); return false; }
             if (!password) { setError('비밀번호를 입력해주세요.'); passwordRef.current?.focus(); return false; }
             if (!isPasswordStrong(password)) { setError('비밀번호가 보안 요건을 충족하지 않습니다.'); passwordRef.current?.focus(); return false; }
             if (password !== confirmPassword) { setError('비밀번호가 일치하지 않습니다.'); return false; }
@@ -360,7 +401,33 @@ const SignupPage: React.FC = () => {
                     </div>
 
                     <div className="space-y-5 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
-                        <Input ref={emailRef} label="이메일" type="email" placeholder="example@exledger.com" value={email} onChange={(e) => setEmail(e.target.value)} className="text-[16px]" required autoFocus />
+                        <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                                <Input ref={emailRef} label="이메일" type="email" placeholder="example@exledger.com" value={email} onChange={(e) => setEmail(e.target.value)} className="text-[16px]" required autoFocus disabled={isEmailVerified} />
+                            </div>
+                            {!isEmailVerified && (
+                                <Button type="button" onClick={handleSendEmailCode} disabled={emailVerifying || !email} className="h-14 px-6 rounded-2xl bg-slate-100 text-slate-600 font-bold text-sm mb-0.5 whitespace-nowrap">
+                                    {isEmailSent ? '재전송' : '인증 요청'}
+                                </Button>
+                            )}
+                        </div>
+                        
+                        {isEmailSent && !isEmailVerified && (
+                            <div className="flex gap-2 items-end p-4 bg-slate-50 rounded-3xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
+                                <div className="flex-1">
+                                    <Input label="인증 코드" type="text" placeholder="6자리 코드" value={emailCode} onChange={(e) => setEmailCode(e.target.value.replace(/[^0-9]/g, ''))} maxLength={6} required />
+                                </div>
+                                <Button type="button" onClick={handleVerifyEmailCode} disabled={emailVerifying || emailCode.length !== 6} className="h-14 px-6 rounded-2xl bg-teal-600 text-white font-bold text-sm mb-0.5 whitespace-nowrap">
+                                    확인
+                                </Button>
+                            </div>
+                        )}
+
+                        {isEmailVerified && (
+                            <div className="px-4 py-3 bg-teal-50 border border-teal-100 rounded-2xl text-teal-600 text-xs font-bold flex items-center gap-2">
+                                <Check size={14} /> 이메일 인증이 완료되었습니다.
+                            </div>
+                        )}
                         <div>
                             <Input ref={passwordRef} label="비밀번호" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handlePasswordKeyEvent} onKeyUp={handlePasswordKeyEvent} className="text-[16px]" required />
                             {capsLockOn && (

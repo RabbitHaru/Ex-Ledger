@@ -9,6 +9,8 @@ import me.projectexledger.domain.auth.dto.SignupRequest;
 import me.projectexledger.domain.auth.dto.TokenResponse;
 import me.projectexledger.domain.auth.service.AuthService;
 import me.projectexledger.domain.auth.service.BusinessVerificationService;
+import me.projectexledger.domain.auth.dto.EmailVerificationRequest;
+import me.projectexledger.domain.auth.dto.SessionResponse;
 import me.projectexledger.domain.auth.dto.BusinessVerificationResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +28,9 @@ import me.projectexledger.domain.auth.dto.TokenRefreshRequest;
 import me.projectexledger.domain.auth.dto.MfaSessionResponse;
 import me.projectexledger.domain.auth.dto.UserProfileResponse;
 import me.projectexledger.domain.auth.dto.MfaVerifyRequest;
+import me.projectexledger.domain.auth.dto.PasswordResetConfirmRequest;
+import org.springframework.web.bind.annotation.PathVariable;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -68,6 +73,30 @@ public class AuthController {
     public ApiResponse<Void> checkEmail(@jakarta.validation.constraints.Email String email) {
         authService.checkEmailAvailability(email);
         return ApiResponse.success("사용 가능한 이메일입니다.", null);
+    }
+
+    @PostMapping("/email-verification/send")
+    public ApiResponse<Void> sendEmailVerification(@Valid @RequestBody EmailVerificationRequest request) {
+        authService.sendEmailVerificationCode(request.getEmail());
+        return ApiResponse.success("인증 코드가 발송되었습니다.", null);
+    }
+
+    @PostMapping("/email-verification/verify")
+    public ApiResponse<Void> verifyEmail(@Valid @RequestBody EmailVerificationRequest request) {
+        authService.verifyEmailCode(request.getEmail(), request.getCode());
+        return ApiResponse.success("이메일 인증이 완료되었습니다.", null);
+    }
+
+    @PostMapping("/password-reset/request")
+    public ApiResponse<Void> requestPasswordReset(@Valid @RequestBody EmailVerificationRequest request) {
+        authService.requestPasswordReset(request.getEmail());
+        return ApiResponse.success("비밀번호 재설정 링크가 발송되었습니다.", null);
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ApiResponse<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        authService.confirmPasswordReset(request);
+        return ApiResponse.success("비밀번호가 성공적으로 재설정되었습니다.", null);
     }
 
     @AuditLog(action = "MFA 로그인")
@@ -227,5 +256,18 @@ public class AuthController {
         if (principal == null) return ApiResponse.fail("로그인이 필요합니다.");
         authService.cancelWithdrawal(principal.getName());
         return ApiResponse.success("회원 탈퇴 요청이 철회되었습니다.", null);
+    }
+
+    @GetMapping("/sessions")
+    public ApiResponse<List<SessionResponse>> getSessions(Principal principal) {
+        if (principal == null) return ApiResponse.fail("로그인이 필요합니다.");
+        return ApiResponse.success("활성 세션 목록 조회 성공", authService.getActiveSessions(principal.getName()));
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    public ApiResponse<Void> revokeSession(Principal principal, @PathVariable String sessionId) {
+        if (principal == null) return ApiResponse.fail("로그인이 필요합니다.");
+        authService.revokeSession(principal.getName(), sessionId);
+        return ApiResponse.success("해당 세션이 로그아웃 처리되었습니다.", null);
     }
 }
