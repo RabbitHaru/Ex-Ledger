@@ -42,5 +42,6 @@ export const hasRole = (role: string) => {
     const payload = parseJwt(token);
     if (!payload?.auth) return false;
     const roles: string[] = payload.auth.split(',');
-    return roles.includes(role);
+    const baseRole = role.startsWith('ROLE_') ? role.substring(5) : role;
+    return roles.some(r => r.trim() === role || r.trim() === baseRole || r.trim() === `ROLE_${baseRole}`);
 };
