@@ -1,5 +1,6 @@
 package me.projectexledger.domain.auth.controller;
  
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import me.projectexledger.common.annotation.AuditLog;
@@ -49,8 +50,8 @@ public class AuthController {
 
     @AuditLog(action = "로그인")
     @PostMapping("/login")
-    public ApiResponse<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        TokenResponse tokenResponse = authService.login(request);
+    public ApiResponse<TokenResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        TokenResponse tokenResponse = authService.login(request, httpRequest);
         return ApiResponse.success("로그인 성공", tokenResponse);
     }
 
@@ -93,6 +94,7 @@ public class AuthController {
         return ApiResponse.success("비밀번호 재설정 링크가 발송되었습니다.", null);
     }
 
+    @AuditLog(action = "비밀번호 재설정 확정")
     @PostMapping("/password-reset/confirm")
     public ApiResponse<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
         authService.confirmPasswordReset(request);
@@ -101,8 +103,8 @@ public class AuthController {
 
     @AuditLog(action = "MFA 로그인")
     @PostMapping("/login/mfa")
-    public ApiResponse<TokenResponse> loginWithMfa(@Valid @RequestBody MfaLoginRequest request) {
-        TokenResponse tokenResponse = authService.loginWithMfa(request);
+    public ApiResponse<TokenResponse> loginWithMfa(@Valid @RequestBody MfaLoginRequest request, HttpServletRequest httpRequest) {
+        TokenResponse tokenResponse = authService.loginWithMfa(request, httpRequest);
         return ApiResponse.success("MFA 로그인 성공", tokenResponse);
     }
 
