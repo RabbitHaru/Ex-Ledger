@@ -12,16 +12,19 @@ export const removeToken = () => {
 export const getRefreshToken = () => localStorage.getItem('refresh_token');
 export const setRefreshToken = (token: string) => localStorage.setItem('refresh_token', token);
 export const isAuthenticated = () => !!getToken();
-export const parseJwt = (token: string) => {
+export const parseJwt = (token: string | null) => {
+    if (!token) return null;
     try {
-        const base64Url = token.split('.')[1];
+        const parts = token.split('.');
+        if (parts.length < 2) return null;
+        const base64Url = parts[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
         const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         }).join(''));
         return JSON.parse(jsonPayload);
     } catch (e) {
-        console.error('JWT Parse Error:', e);
+        // Silently fail for malformed tokens to avoid log spam in UI
         return null;
     }
 };

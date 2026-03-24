@@ -78,14 +78,19 @@ const AppRoutes = () => {
 
         {/* 3. 보안/인증 필요 라우트 영역 */}
         <Route element={<ProtectedRoute />}>
+            {/* 🛡️ 공통 보호 경로 (마이페이지, 송금 대시보드 등) - 모든 로그인 사용자 허용 */}
             <Route element={<ProtectedRoute allowedRoles={["ROLE_USER", "USER", "ROLE_COMPANY_USER", "COMPANY_USER", "ROLE_COMPANY_ADMIN", "COMPANY_ADMIN", "ROLE_INTEGRATED_ADMIN", "INTEGRATED_ADMIN"]} />}>
+              <Route path="/mypage" element={<MyPage />} />
               <Route path="/seller/dashboard" element={<SellerDashboard />} />
+              <Route path="/seller/history" element={<PersonalHistory />} />
               <Route path="/company/join" element={<CompanyJoin />} />
+            </Route>
+
+            {/* 🏢 기업 전용 보호 경로 (정산, 기업 지갑) - 개인 유저(ROLE_USER) 접근 불가 */}
+            <Route element={<ProtectedRoute allowedRoles={["ROLE_COMPANY_USER", "COMPANY_USER", "ROLE_COMPANY_ADMIN", "COMPANY_ADMIN", "ROLE_INTEGRATED_ADMIN", "INTEGRATED_ADMIN"]} />}>
               <Route path="/list" element={<MySettlementList />} />
               <Route path="/settlement" element={<SettlementDashboard />} />
-              <Route path="/mypage" element={<MyPage />} />
               <Route path="/corporate/wallet" element={<CorporateWallet />} />
-              <Route path="/seller/history" element={<PersonalHistory />} />
             </Route>
 
             {/* ----- 일반 개인 사용자(User) 전용 라우트 ----- */}

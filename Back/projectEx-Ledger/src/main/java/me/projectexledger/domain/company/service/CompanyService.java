@@ -61,9 +61,11 @@ public class CompanyService {
         Member user = memberRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("승인 대상 사용자를 찾을 수 없습니다."));
 
-        if (admin.getCompany() == null || !admin.getCompany().getId().equals(
-                user.getCompany() != null ? user.getCompany().getId() : null)) {
-            throw new IllegalArgumentException("권한이 없는 사업자(기업)의 사용자입니다.");
+        if (admin.getRole() != Member.Role.ROLE_INTEGRATED_ADMIN) {
+            if (admin.getCompany() == null || !admin.getCompany().getId().equals(
+                    user.getCompany() != null ? user.getCompany().getId() : null)) {
+                throw new IllegalArgumentException("권한이 없는 사업자(기업)의 사용자입니다.");
+            }
         }
 
         if (user.isApproved()) {
@@ -71,6 +73,14 @@ public class CompanyService {
         }
 
         user.approveCompany();
+        
+        // 🌟 역할 업데이트 추가: 일반 유저에서 기업 실무자로 전환
+        if (user.getRole() == Member.Role.ROLE_USER) {
+            user.updateRole(Member.Role.ROLE_COMPANY_USER);
+        }
+
+        memberRepository.saveAndFlush(user); // 🌟 상태 즉시 반영 보장
+
         emailService.sendApprovalEmail(user.getEmail(), user.getName(), "COMPANY_USER");
     }
 
@@ -101,12 +111,15 @@ public class CompanyService {
         Member user = memberRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("권한 박탈 대상 사용자를 찾을 수 없습니다."));
 
-        if (admin.getCompany() == null || !admin.getCompany().getId().equals(
-                user.getCompany() != null ? user.getCompany().getId() : null)) {
-            throw new IllegalArgumentException("권한이 없는 사업자(기업)의 사용자입니다.");
+        if (admin.getRole() != Member.Role.ROLE_INTEGRATED_ADMIN) {
+            if (admin.getCompany() == null || !admin.getCompany().getId().equals(
+                    user.getCompany() != null ? user.getCompany().getId() : null)) {
+                throw new IllegalArgumentException("권한이 없는 사업자(기업)의 사용자입니다.");
+            }
         }
 
         user.revokeCompany();
+        memberRepository.saveAndFlush(user);
     }
 
     @Transactional

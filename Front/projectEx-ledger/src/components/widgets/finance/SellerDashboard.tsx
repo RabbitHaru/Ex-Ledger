@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import RemittanceTracking from "../../pages/remittance/Tracking/RemittanceTracking";
 import ReceiptModal from "../../pages/remittance/ReceiptModal";
+import MfaModal from "../../pages/common/MfaModal";
 
 const SellerDashboard: React.FC = () => {
     const { showToast } = useToast();
@@ -19,7 +20,7 @@ const SellerDashboard: React.FC = () => {
         personalAccount, corporateAccount,
         personalBalances, corporateBalances,
         executeTransfer, activatePersonalWallet,
-        isLoading
+        isLoading, isIdentityVerified, fetchWalletData
     } = useWallet();
 
     const isIndividual = hasRole("ROLE_USER");
@@ -42,6 +43,8 @@ const SellerDashboard: React.FC = () => {
     const [isReceiptOpen, setIsReceiptOpen] = useState(false);
     const [receiptData, setReceiptData] = useState<any>(null);
     const [trackingStatus, setTrackingStatus] = useState<string>("READY");
+    const [isMfaModalOpen, setIsMfaModalOpen] = useState(false);
+    const [mfaError, setMfaError] = useState("");
 
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -80,9 +83,27 @@ const SellerDashboard: React.FC = () => {
     }, [targetCurrency, currencyMode]);
 
     // 🌟 [C담당 실결합] KG 이니시스 본인인증
-    const handleCertification = () => {
+    const handleCertification = async () => {
+        // [수정] 이미 본인인증이 완료된 사용자라면 바로 활성화 API만 호출
+        if (isIdentityVerified) {
+            setIsProcessing(true);
+            try {
+                await activatePersonalWallet("ALREADY_VERIFIED");
+                await fetchWalletData();
+                showToast("지갑이 즉시 활성화되었습니다!", "SUCCESS");
+            } catch (e) {
+                showToast("인증 데이터 처리 중 오류가 발생했습니다.", "ERROR");
+            } finally {
+                setIsProcessing(false);
+            }
+            return;
+        }
+
         const { IMP } = window as any;
-        if (!IMP) return;
+        if (!IMP) {
+            showToast("인증 모듈을 불러올 수 없습니다.", "ERROR");
+            return;
+        }
         IMP.init(import.meta.env.VITE_PORTONE_STORE_ID);
 
         IMP.certification({
@@ -121,7 +142,7 @@ const SellerDashboard: React.FC = () => {
         }, 800);
     };
 
-    const handleExecuteTransfer = async () => {
+    const handleExecuteTransfer = async (mfaCode?: string) => {
         if (currentBalances.KRW < totalRequiredKrw) {
             showToast("잔액이 부족합니다.", "ERROR");
             return;
@@ -129,19 +150,14 @@ const SellerDashboard: React.FC = () => {
 
         setIsConfirmModalOpen(false);
         setIsProcessing(true);
+        setMfaError("");
 
         try {
-            // 1단계: 검토 중 (4초)
+            // 1단계: 검토 중 (심리적 안정감을 위한 시뮬레이션)
             setTrackingStatus("REVIEWING");
-            await delay(4000);
+            if (!mfaCode) await delay(2000);
 
-            // 2단계: 승인 완료 (4초)
-            setTrackingStatus("APPROVED");
-            await delay(4000);
-
-            // 3단계: 이체 진행 (4초 - 실제 API 호출 포함)
-            setTrackingStatus("TRANSFERRING");
-            
+            // 🌟 실제 API 호출 (Context의 executeTransfer 사용)
             await executeTransfer(
                 recipientAccount,
                 Number(transferAmount),
@@ -150,10 +166,15 @@ const SellerDashboard: React.FC = () => {
                 totalRequiredKrw,
                 baseKrw,
                 recipientName,
-                activeTab
+                activeTab,
+                mfaCode // OTP 코드 전달
             );
-            
-            await delay(4000);
+
+            // 2단계: 승인 및 이체 완료 처리
+            setTrackingStatus("APPROVED");
+            await delay(2000);
+            setTrackingStatus("TRANSFERRING");
+            await delay(2000);
 
             // 4단계: 완료
             setTrackingStatus("COMPLETED");
@@ -172,17 +193,29 @@ const SellerDashboard: React.FC = () => {
             });
 
             setIsReceiptOpen(true);
+            setMfaCode(""); // Reset if any
+            setIsMfaModalOpen(false);
             setTransferAmount("");
             setRecipientAccount("");
             setIsAccountVerified(false);
             showToast(`${activeTab === "BUSINESS" ? "기업 거래" : "개인 이체"} 성공!`, "SUCCESS");
         } catch (error: any) {
-            showToast(error.message, "ERROR");
-            setTrackingStatus("READY");
+            const msg = error.response?.data?.message || error.message;
+            
+            // MFA 인증이 필요한 경우 (세션 만료 등)
+            if (msg.includes("MFA_") || msg.includes("OTP")) {
+                setIsMfaModalOpen(true);
+                if (mfaCode) setMfaError("잘못된 OTP 번호입니다.");
+            } else {
+                showToast(msg, "ERROR");
+                setTrackingStatus("READY");
+            }
         } finally {
             setIsProcessing(false);
         }
     };
+
+    const [mfaCode, setMfaCode] = useState(""); // Dummy state for flow
 
     if (isLoading) return (
         <>
@@ -221,7 +254,19 @@ const SellerDashboard: React.FC = () => {
                                 <div className="w-24 h-24 bg-emerald-50 rounded-[32px] flex items-center justify-center mb-8 shadow-inner"><ShieldCheck className="w-12 h-12 text-emerald-500" /></div>
                                 <h2 className="text-4xl font-black italic tracking-tighter text-slate-900 mb-4 uppercase">본인 인증 필요</h2>
                                 <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest leading-relaxed mb-12">보안을 위해 본인인증 후<br/>개인 지갑을 활성화할 수 있습니다.</p>
-                                <button onClick={handleCertification} className="w-full max-w-sm py-6 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] hover:scale-105 transition-all shadow-2xl active:scale-95">본인인증 후 지갑 활성화</button>
+                                <button 
+                                    onClick={handleCertification} 
+                                    className="w-full max-w-sm py-6 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] hover:scale-105 transition-all shadow-2xl active:scale-95 flex items-center justify-center gap-2"
+                                    disabled={isProcessing}
+                                >
+                                    {isProcessing ? (
+                                        <Loader2 className="animate-spin" size={18} />
+                                    ) : isIdentityVerified ? (
+                                        "본인인증 완료 👉 계좌 바로 발급하기"
+                                    ) : (
+                                        "본인인증 후 지갑 활성화"
+                                    )}
+                                </button>
                             </div>
                         ) : (
                             <div className="max-w-4xl py-32 text-center space-y-8 bg-slate-50 rounded-[48px] border border-dashed border-slate-200">
@@ -323,7 +368,7 @@ const SellerDashboard: React.FC = () => {
                         </div>
                         <div className="flex gap-4 pt-6">
                             <button onClick={() => setIsConfirmModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase text-slate-400 hover:text-slate-900 transition-colors">취소</button>
-                            <button onClick={handleExecuteTransfer} className={`flex-[2] text-white py-5 rounded-[20px] font-black text-xs uppercase shadow-xl tracking-[0.1em] ${activeTab === "BUSINESS" ? "bg-blue-600" : "bg-teal-600"}`}>확인 및 송금</button>
+                            <button onClick={() => handleExecuteTransfer()} className={`flex-[2] text-white py-5 rounded-[20px] font-black text-xs uppercase shadow-xl tracking-[0.1em] ${activeTab === "BUSINESS" ? "bg-blue-600" : "bg-teal-600"}`}>확인 및 송금</button>
                         </div>
                     </div>
                 </div>
@@ -333,6 +378,15 @@ const SellerDashboard: React.FC = () => {
             {isReceiptOpen && receiptData && (
                 <ReceiptModal isOpen={isReceiptOpen} onClose={() => setIsReceiptOpen(false)} data={receiptData} />
             )}
+
+            {/* MFA(OTP) 인증 모달 */}
+            <MfaModal 
+                isOpen={isMfaModalOpen} 
+                onClose={() => setIsMfaModalOpen(false)} 
+                onVerify={(code) => handleExecuteTransfer(code)}
+                isLoading={isProcessing}
+                error={mfaError}
+            />
         </>
     );
 };

@@ -7,20 +7,37 @@ interface Props {
 }
 
 const IdentityVerificationCard: React.FC<Props> = ({ onSuccess }) => {
-  const { activatePersonalWallet } = useWallet();
+  const { activatePersonalWallet, isIdentityVerified, fetchWalletData } = useWallet();
+  const [isProcessing, setIsProcessing] = React.useState(false);
 
-  const handleVerification = () => {
-    // PortOne 본인인증 연동 로직
+  const handleVerification = async () => {
+    if (isIdentityVerified) {
+      setIsProcessing(true);
+      try {
+        await activatePersonalWallet("ALREADY_VERIFIED");
+        await fetchWalletData();
+        alert('본인인증 정보가 확인되어 지갑이 즉시 활성화되었습니다!');
+      } catch (e) {
+        alert('지갑 활성화 중 오류가 발생했습니다.');
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
     const { IMP } = window as any;
-    IMP.init('가맹점_식별코드'); // 실제 코드로 변경 필요
+    if (!IMP) {
+      alert('인증 모듈을 불러올 수 없습니다.');
+      return;
+    }
+    IMP.init(import.meta.env.VITE_PORTONE_STORE_ID);
 
     IMP.certification({
       merchant_uid: `cert_${new Date().getTime()}`,
-      m_redirect_url: '/', // 모바일 환경 리다이렉트
+      m_redirect_url: '/',
       popup: true
     }, async (rsp: any) => {
       if (rsp.success) {
-        // 성공 시 백엔드 동기화 및 상태 업데이트
         await activatePersonalWallet(rsp.imp_uid);
         if (onSuccess) onSuccess();
         alert('본인인증 및 지갑 활성화가 완료되었습니다!');
@@ -47,9 +64,16 @@ const IdentityVerificationCard: React.FC<Props> = ({ onSuccess }) => {
 
       <button
         onClick={handleVerification}
-        className="w-full max-w-xs py-4 bg-[#0f172a] text-white rounded-2xl font-bold hover:bg-slate-800 transition-colors"
+        disabled={isProcessing}
+        className="w-full max-w-xs py-4 bg-[#0f172a] text-white rounded-2xl font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
       >
-        본인인증 후 지갑 활성화
+        {isProcessing ? (
+          <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        ) : isIdentityVerified ? (
+          "본인확인 완료 👉 지갑 활성화"
+        ) : (
+          "본인인증 후 지갑 활성화"
+        )}
       </button>
     </div>
   );

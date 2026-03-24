@@ -92,7 +92,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const isFinanceTarget = !hasRole("ROLE_INTEGRATED_ADMIN") && (hasRole("ROLE_USER") || isCorporate);
 
   // 현재 활성 계좌 결정 (동기화 로직)
-  const activeAccountId = isCorporateApproved ? businessNumber : (parseJwt(getToken() || '')?.sub || '');
+  const activeAccountId = isCorporateApproved 
+    ? businessNumber 
+    : (parseJwt(getToken())?.sub || '');
   const walletData = getWalletDataById(activeAccountId || '');
 
   const currentAccount = isCorporate
@@ -190,13 +192,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <SendHorizontal size={18} /> {isCorporate ? "기업 송금" : "개인/기업 송금"}
             </Link>
 
-            <Link
-              to="/settlement"
-              onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/settlement") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
-            >
-              <Coins size={18} /> 정산 관리 (Settlement)
-            </Link>
+            {isCorporate && (
+              <Link
+                to="/settlement"
+                onClick={onClose}
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-black transition-all rounded-xl ${isActive("/settlement") ? "bg-teal-50 text-teal-600" : "text-slate-400 hover:bg-slate-50"}`}
+              >
+                <Coins size={18} /> 정산 관리 (Settlement)
+              </Link>
+            )}
 
             <Link
               to="/seller/history"

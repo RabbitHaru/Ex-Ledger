@@ -41,7 +41,9 @@ const WalletOverview: React.FC = () => {
         setPersonalAccount,
         chargeKrw,
         transactions,
-        isLoading
+        isLoading,
+        isIdentityVerified,
+        fetchWalletData
     } = useWallet();
 
     const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
@@ -55,6 +57,25 @@ const WalletOverview: React.FC = () => {
 
     // 🌟 [C담당 실결합] 본인인증 및 지갑 활성화 로직
     const handleVerifyAndActivate = async () => {
+        // [수정] 이미 본인인증이 완료된 사용자라면 바로 활성화 API만 호출
+        if (isIdentityVerified) {
+            setIsActivating(true);
+            try {
+                await axios.post(
+                    `${import.meta.env.VITE_API_BASE_URL}/wallet/verify-identity`,
+                    { impUid: "ALREADY_VERIFIED" }, // 백엔드에서 무시하거나 기존 UID 사용하도록 처리 (현재 백엔드 로직은 impUid를 단순히 덮어씌움)
+                    { headers: { Authorization: `Bearer ${getToken()}` } }
+                );
+                await fetchWalletData();
+                showToast(`지갑이 즉시 활성화되었습니다!`, "SUCCESS");
+            } catch (error) {
+                showToast("지갑 활성화 중 오류가 발생했습니다.", "ERROR");
+            } finally {
+                setIsActivating(false);
+            }
+            return;
+        }
+
         if (!window.PortOne) {
             showToast("인증 모듈을 불러올 수 없습니다.", "ERROR");
             return;
@@ -132,7 +153,13 @@ const WalletOverview: React.FC = () => {
                         disabled={isActivating}
                         className="px-12 py-6 bg-slate-900 text-white rounded-[24px] font-black uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95"
                     >
-                        {isActivating ? <Loader2 className="animate-spin mx-auto" size={24} /> : "본인인증 후 지갑 활성화"}
+                        {isActivating ? (
+                            <Loader2 className="animate-spin mx-auto" size={24} />
+                        ) : isIdentityVerified ? (
+                            "본인확인 완료 👉 지갑 바로 활성화하기"
+                        ) : (
+                            "본인인증 후 지갑 활성화"
+                        )}
                     </button>
                 </div>
             </>

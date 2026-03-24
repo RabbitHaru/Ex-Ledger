@@ -94,8 +94,6 @@ public class DummyDataInit implements CommandLineRunner {
 
     private void initCompaniesAndMembers() {
         // ========== 1. Company 생성 (정상/대기/반려) ==========
-
-        // [정상] 승인된 우량 기업
         Company companyApproved = companyRepository.findByBusinessNumber("9876543210")
                 .orElseGet(() -> companyRepository.save(Company.builder()
                         .businessNumber("9876543210")
@@ -104,7 +102,6 @@ public class DummyDataInit implements CommandLineRunner {
                         .adminApprovalStatus(AdminApprovalStatus.APPROVED)
                         .build()));
 
-        // [대기] 신규 가입 심사 중인 스타트업
         Company companyPending = companyRepository.findByBusinessNumber("1234567890")
                 .orElseGet(() -> companyRepository.save(Company.builder()
                         .businessNumber("1234567890")
@@ -113,7 +110,6 @@ public class DummyDataInit implements CommandLineRunner {
                         .adminApprovalStatus(AdminApprovalStatus.PENDING)
                         .build()));
 
-        // [반려] 서류 미비로 거절된 기업
         Company companyRejected = companyRepository.findByBusinessNumber("1112233333")
                 .orElseGet(() -> companyRepository.save(Company.builder()
                         .businessNumber("1112233333")
@@ -122,118 +118,66 @@ public class DummyDataInit implements CommandLineRunner {
                         .adminApprovalStatus(AdminApprovalStatus.REJECTED)
                         .build()));
 
-        List<Member> membersToSave = new ArrayList<>();
+        // ========== 2. 핵심 계정 강제 업데이트 (존재 여부 상관없이 정보 동기화) ==========
+        
+        // [개인] 홍길동
+        Member user = memberRepository.findByEmail("user@example.com").orElseGet(() -> 
+            memberRepository.save(Member.builder()
+                .email("user@example.com").password(passwordEncoder.encode("user1234!"))
+                .name("홍길동").role(Member.Role.ROLE_USER).build()));
+        
+        user.updateAccountInfo("Ex-Ledger", "EX-1004-111222", "홍길동");
+        user.getOrCreateWallet().updatePortOneInfo("imp_dummy_user_123");
+        user.getOrCreateWallet().addBalance(500000L - user.getOrCreateWallet().getBalanceKrw()); // 50만 원 맞춤
+        user.enableMfa();
+        user.updateTotpSecret("JBSWY3DPEHPK3PXP");
+        memberRepository.save(user);
 
-        // ========== 2. 사이트 관리자 (Integrated Admin) ==========
-        if (!memberRepository.existsByEmail("admin@exledger.com")) {
-            Member admin = Member.builder()
-                    .email("admin@exledger.com")
-                    .password(passwordEncoder.encode("admin123!"))
-                    .name("최고관리자")
-                    .role(Member.Role.ROLE_INTEGRATED_ADMIN)
-                    .build();
-            membersToSave.add(admin);
-        }
+        // [기업대표] 이사장
+        Member boss = memberRepository.findByEmail("boss@exglobal.com").orElseGet(() ->
+            memberRepository.save(Member.builder()
+                .email("boss@exglobal.com").password(passwordEncoder.encode("test1234!"))
+                .name("이사장").role(Member.Role.ROLE_COMPANY_ADMIN).company(companyApproved).build()));
+        
+        boss.approveCompany();
+        boss.updateAccountInfo("Ex-Ledger", "EX-2003-999888", "이사장");
+        boss.getOrCreateWallet().updatePortOneInfo("imp_dummy_boss_456");
+        boss.getOrCreateWallet().addBalance(2500000L - boss.getOrCreateWallet().getBalanceKrw()); // 250만 원 맞춤
+        boss.enableMfa();
+        boss.updateTotpSecret("JBSWY3DPEHPK3PYQ");
+        companyApproved.activateAccount("EX-2003-999888");
+        memberRepository.save(boss);
 
-        // ========== 3. 개인 유저 (Personal User) ==========
-        if (!memberRepository.existsByEmail("user@example.com")) {
-            Member personalUser = Member.builder()
-                    .email("user@example.com")
-                    .password(passwordEncoder.encode("user1234!"))
-                    .name("홍길동")
-                    .role(Member.Role.ROLE_USER)
-                    .build();
-            personalUser.enableMfa(); // MFA 활성 상태 더미
-            personalUser.updateTotpSecret("JBSWY3DPEHPK3PXP"); 
-            personalUser.updateAccountInfo("Ex-Ledger", "EX-1004-111222", "홍길동");
-            personalUser.getOrCreateWallet().updatePortOneInfo("imp_dummy_user_123");
-            personalUser.getOrCreateWallet().addBalance(500000L); // 50만 원
-            membersToSave.add(personalUser);
-        }
+        // [최고관리자]
+        Member admin = memberRepository.findByEmail("admin@exledger.com").orElseGet(() ->
+            memberRepository.save(Member.builder()
+                .email("admin@exledger.com").password(passwordEncoder.encode("admin123!"))
+                .name("최고관리자").role(Member.Role.ROLE_INTEGRATED_ADMIN).build()));
+        memberRepository.save(admin);
 
-        // [추가] 탈퇴 요청 중인 유저 (로그인 차단 및 유예 기간 UI 테스트용)
+        // ========== 3. 기타 보조 계정들 (기존 로직 유지) ==========
+        List<Member> others = new ArrayList<>();
         if (!memberRepository.existsByEmail("leaving@example.com")) {
-            Member leavingUser = Member.builder()
-                    .email("leaving@example.com")
-                    .password(passwordEncoder.encode("user1234!"))
-                    .name("탈퇴예정자")
-                    .role(Member.Role.ROLE_USER)
-                    .build();
-            leavingUser.requestWithdrawal(); // 현재 시간 기준 탈퇴 요청
-            membersToSave.add(leavingUser);
+            Member m = Member.builder().email("leaving@example.com").password(passwordEncoder.encode("user1234!"))
+                    .name("탈퇴예정자").role(Member.Role.ROLE_USER).build();
+            m.requestWithdrawal(); others.add(m);
         }
-
-        // ========== 4. [정상 기업] 관리자 및 직원 ==========
-        if (!memberRepository.existsByEmail("boss@exglobal.com")) {
-            Member corpAdmin = Member.builder()
-                    .email("boss@exglobal.com")
-                    .password(passwordEncoder.encode("test1234!"))
-                    .name("이사장")
-                    .role(Member.Role.ROLE_COMPANY_ADMIN)
-                    .company(companyApproved)
-                    .build();
-            corpAdmin.approveCompany(); // 기업 연동 승인 상태로 생성
-            corpAdmin.enableMfa(); // MFA 활성
-            corpAdmin.updateTotpSecret("JBSWY3DPEHPK3PYQ"); // 기업 전용 시크릿
-            corpAdmin.updateAccountInfo("Ex-Ledger", "EX-2003-999888", "이사장");
-            companyApproved.activateAccount("EX-2003-999888");
-            corpAdmin.getOrCreateWallet().updatePortOneInfo("imp_dummy_boss_456");
-            corpAdmin.getOrCreateWallet().addBalance(2500000L); // 250만 원
-            membersToSave.add(corpAdmin);
-        }
-
         if (!memberRepository.existsByEmail("staff1@exglobal.com")) {
-            Member corpStaff = Member.builder()
-                    .email("staff1@exglobal.com")
-                    .password(passwordEncoder.encode("test1234!"))
-                    .name("김직원")
-                    .role(Member.Role.ROLE_COMPANY_USER)
-                    .company(companyApproved)
-                    .build();
-            corpStaff.approveCompany(); // 승인됨
-            membersToSave.add(corpStaff);
+            Member m = Member.builder().email("staff1@exglobal.com").password(passwordEncoder.encode("test1234!"))
+                    .name("김직원").role(Member.Role.ROLE_COMPANY_USER).company(companyApproved).build();
+            m.approveCompany(); others.add(m);
         }
-
-        // [추가] 미승인 기업 직원 (소속 승인 대기 UI 테스트용)
-        if (!memberRepository.existsByEmail("staff2@exglobal.com")) {
-            Member pendingStaff = Member.builder()
-                    .email("staff2@exglobal.com")
-                    .password(passwordEncoder.encode("test1234!"))
-                    .name("박대기")
-                    .role(Member.Role.ROLE_COMPANY_USER)
-                    .company(companyApproved)
-                    .build();
-            // approveCompany()를 호출하지 않아 isApproved = false 상태 유지
-            membersToSave.add(pendingStaff);
-        }
-
-        // ========== 5. [심사 대기/반려 기업] 관리자 ==========
         if (!memberRepository.existsByEmail("ceo@startup.com")) {
-            Member pendingAdmin = Member.builder()
-                    .email("ceo@startup.com")
-                    .password(passwordEncoder.encode("test1234!"))
-                    .name("최스타")
-                    .role(Member.Role.ROLE_COMPANY_ADMIN)
-                    .company(companyPending)
-                    .build();
-            membersToSave.add(pendingAdmin);
+            others.add(Member.builder().email("ceo@startup.com").password(passwordEncoder.encode("test1234!"))
+                    .name("최스타").role(Member.Role.ROLE_COMPANY_ADMIN).company(companyPending).build());
         }
-
         if (!memberRepository.existsByEmail("fail@trade.com")) {
-            Member rejectedAdmin = Member.builder()
-                    .email("fail@trade.com")
-                    .password(passwordEncoder.encode("test1234!"))
-                    .name("강실패")
-                    .role(Member.Role.ROLE_COMPANY_ADMIN)
-                    .company(companyRejected)
-                    .build();
-            membersToSave.add(rejectedAdmin);
+            others.add(Member.builder().email("fail@trade.com").password(passwordEncoder.encode("test1234!"))
+                    .name("강실패").role(Member.Role.ROLE_COMPANY_ADMIN).company(companyRejected).build());
         }
-
-        if (!membersToSave.isEmpty()) {
-            memberRepository.saveAll(membersToSave);
-        }
-        log.info("더미 기업 및 멤버 데이터 생성 완료 (신규 생성: {}건)", membersToSave.size());
+        memberRepository.saveAll(others);
+        
+        log.info("더미 데이터 동기화 완료 (Fast-Path 적용 계정 포함)");
     }
 
     private void initTransactions() {

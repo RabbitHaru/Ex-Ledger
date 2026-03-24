@@ -72,6 +72,7 @@ public class WalletServiceImpl implements WalletService {
 
         Map<String, Object> personalInfo = new HashMap<>();
         personalInfo.put("accountNumber", (wallet != null && wallet.getAccountNumber() != null) ? wallet.getAccountNumber() : "");
+        personalInfo.put("isVerified", wallet != null && wallet.getPortoneImpUid() != null);
 
         Map<String, Object> pBalances = new HashMap<>();
         pBalances.put("KRW", (wallet != null && wallet.getBalanceKrw() != null) ? wallet.getBalanceKrw() : 0);

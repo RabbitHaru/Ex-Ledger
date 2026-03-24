@@ -2,6 +2,7 @@ package me.projectexledger.domain.wallet.controller;
 
 import lombok.RequiredArgsConstructor;
 import me.projectexledger.domain.wallet.service.WalletService;
+import me.projectexledger.common.annotation.RequireMfa;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -30,11 +31,13 @@ public class WalletController {
         return ResponseEntity.ok(walletService.chargeSuccess(request));
     }
 
+    @RequireMfa
     @PostMapping("/transfer")
     public ResponseEntity<Map<String, Object>> executeTransfer(@RequestBody Map<String, Object> request) {
         return ResponseEntity.ok(walletService.executeTransfer(request));
     }
 
+    @RequireMfa
     @PostMapping("/exchange")
     public ResponseEntity<Map<String, Object>> exchangeCurrency(@RequestBody Map<String, Object> request) {
         return ResponseEntity.ok(walletService.exchangeCurrency(request));

@@ -36,9 +36,9 @@ http.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // MFA 세션 만료 에러 처리
+        // MFA 세션 만료 에러 처리 (로그아웃 대신 컴포넌트에서 OTP 재입력을 유도하도록 에러만 반환)
         if (error.response?.data?.message?.includes("MFA_SESSION_EXPIRED")) {
-            logout();
+            // 더 이상 무조건 로그아웃시키지 않음
             return Promise.reject(error);
         }
 

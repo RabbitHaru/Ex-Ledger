@@ -19,6 +19,7 @@ public class UserProfileResponse {
     private String name;
     private String realName;
     private String role;
+    @com.fasterxml.jackson.annotation.JsonProperty("isApproved")
     private boolean isApproved;
     private String companyName;
     private String businessNumber;
@@ -28,7 +29,9 @@ public class UserProfileResponse {
     private String accountNumber;
     private String accountHolder;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("allowNotifications")
     private boolean allowNotifications;
+    @com.fasterxml.jackson.annotation.JsonProperty("mfaEnabled")
     private boolean mfaEnabled;
     private String adminApprovalStatus;
 

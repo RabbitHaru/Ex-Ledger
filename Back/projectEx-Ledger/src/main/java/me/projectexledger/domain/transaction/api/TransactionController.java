@@ -8,6 +8,7 @@ import me.projectexledger.domain.transaction.dto.MyDashboardResponse;
 import me.projectexledger.domain.transaction.dto.TransactionRequest;
 import me.projectexledger.domain.transaction.entity.Transaction;
 import me.projectexledger.domain.transaction.service.TransactionService;
+import me.projectexledger.common.annotation.RequireMfa;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ public class TransactionController {
     private final TransactionService transactionService;
     private final ExchangeRateService exchangeRateService;
 
+    @RequireMfa
     @PostMapping
     public ApiResponse<Long> createTransaction(
             @RequestBody TransactionRequest request,

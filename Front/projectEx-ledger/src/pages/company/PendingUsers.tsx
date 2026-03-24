@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, UserMinus, ShieldCheck, AlertCircle, Search } from 'lucide-react';
+import { Users, UserPlus, UserMinus, ShieldCheck, AlertCircle, Search, X } from 'lucide-react';
 import http from '../../config/http';
 import { toast } from 'sonner';
 
@@ -16,6 +16,20 @@ const CompanyMemberManagement: React.FC = () => {
     const [approvedUsers, setApprovedUsers] = useState<Member[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
+
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'APPROVE' | 'REVOKE' | 'REJECT';
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: "",
+        message: "",
+        type: 'APPROVE',
+        onConfirm: () => {}
+    });
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -40,31 +54,67 @@ const CompanyMemberManagement: React.FC = () => {
     }, []);
 
     const handleApprove = async (userId: number, userName: string) => {
-        if (!window.confirm(`${userName} 님의 소속 승인을 진행하시겠습니까?`)) return;
-
-        try {
-            const res: any = await http.post(`/company/users/${userId}/approve`);
-            if (res.data?.status === 'SUCCESS') {
-                toast.success(`${userName} 님이 승인되었습니다.`);
-                fetchData();
+        setConfirmModal({
+            isOpen: true,
+            title: "소속 승인 확인",
+            message: `${userName} 님의 기업 소속 승인을 진행하시겠습니까?`,
+            type: 'APPROVE',
+            onConfirm: async () => {
+                try {
+                    const res: any = await http.post(`/company/users/${userId}/approve`);
+                    if (res.data?.status === 'SUCCESS') {
+                        toast.success(`${userName} 님이 승인되었습니다.`);
+                        fetchData();
+                    }
+                } catch (error) {
+                    toast.error("승인 처리 중 오류가 발생했습니다.");
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
             }
-        } catch (error) {
-            toast.error("승인 처리 중 오류가 발생했습니다.");
-        }
+        });
+    };
+
+    const handleReject = async (userId: number, userName: string) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "소속 요청 반려",
+            message: `${userName} 님의 기업 소속 요청을 반려하시겠습니까? 해당 사용자의 기업 연결 정보가 삭제됩니다.`,
+            type: 'REJECT',
+            onConfirm: async () => {
+                try {
+                    // 기능적으로는 권한 박탈(revoke)과 동일하되 메시지만 반려로 처리
+                    const res: any = await http.post(`/company/users/${userId}/revoke`);
+                    if (res.data?.status === 'SUCCESS') {
+                        toast.error(`${userName} 님의 요청이 반려되었습니다.`);
+                        fetchData();
+                    }
+                } catch (error) {
+                    toast.error("반려 처리 중 오류가 발생했습니다.");
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     const handleRevoke = async (userId: number, userName: string) => {
-        if (!window.confirm(`${userName} 님의 기업 소속 권한을 박탈하시겠습니까? 승인 대기 상태로 변경됩니다.`)) return;
-
-        try {
-            const res: any = await http.post(`/company/users/${userId}/revoke`);
-            if (res.data?.status === 'SUCCESS') {
-                toast.warning(`${userName} 님의 권한이 박탈되었습니다.`);
-                fetchData();
+        setConfirmModal({
+            isOpen: true,
+            title: "권한 박탈 확인",
+            message: `${userName} 님의 기업 소속 권한을 박탈하시겠습니까? 승인 대기 상태로 변경됩니다.`,
+            type: 'REVOKE',
+            onConfirm: async () => {
+                try {
+                    const res: any = await http.post(`/company/users/${userId}/revoke`);
+                    if (res.data?.status === 'SUCCESS') {
+                        toast.warning(`${userName} 님의 권한이 박탈되었습니다.`);
+                        fetchData();
+                    }
+                } catch (error) {
+                    toast.error("권한 박탈 처리 중 오류가 발생했습니다.");
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
             }
-        } catch (error) {
-            toast.error("권한 박탈 처리 중 오류가 발생했습니다.");
-        }
+        });
     };
 
     const filteredApproved = approvedUsers.filter(u => 
@@ -120,12 +170,20 @@ const CompanyMemberManagement: React.FC = () => {
                                     <p className="text-[12px] font-bold text-slate-400 truncate">{user.email}</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => handleApprove(user.id, user.name)}
-                                className="w-full py-3 bg-amber-500 text-white rounded-2xl font-black text-[13px] hover:bg-amber-600 active:scale-95 transition-all shadow-lg shadow-amber-200"
-                            >
-                                소속 승인하기
-                            </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => handleReject(user.id, user.name)}
+                                    className="px-4 py-3 bg-white border border-rose-100 text-rose-500 rounded-2xl font-black text-[13px] hover:bg-rose-50 active:scale-95 transition-all"
+                                >
+                                    반려
+                                </button>
+                                <button
+                                    onClick={() => handleApprove(user.id, user.name)}
+                                    className="flex-1 py-3 bg-amber-500 text-white rounded-2xl font-black text-[13px] hover:bg-amber-600 active:scale-95 transition-all shadow-lg shadow-amber-200"
+                                >
+                                    소속 승인하기
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -189,6 +247,50 @@ const CompanyMemberManagement: React.FC = () => {
                     </table>
                 </div>
             </section>
+
+            {/* Premium Confirm Modal */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                    <div 
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" 
+                        onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                    />
+                    <div className="relative w-full max-w-md bg-white rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-500">
+                        <div className="p-10 space-y-8">
+                            <div className="flex justify-center">
+                                <div className={`p-6 rounded-[32px] ${confirmModal.type === 'APPROVE' ? 'bg-amber-50 text-amber-500' : 'bg-rose-50 text-rose-500'}`}>
+                                    {confirmModal.type === 'APPROVE' ? <UserPlus size={48} /> : 
+                                     confirmModal.type === 'REJECT' ? <X size={48} /> : <UserMinus size={48} />}
+                                </div>
+                            </div>
+                            
+                            <div className="text-center space-y-3">
+                                <h3 className="text-2xl font-black text-slate-900">{confirmModal.title}</h3>
+                                <p className="text-[15px] font-bold text-slate-500 leading-relaxed px-4">
+                                    {confirmModal.message}
+                                </p>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="flex-1 py-5 bg-slate-50 text-slate-500 rounded-2xl font-black text-[14px] hover:bg-slate-100 transition-all"
+                                >
+                                    취소
+                                </button>
+                                <button 
+                                    onClick={confirmModal.onConfirm}
+                                    className={`flex-1 py-5 text-white rounded-2xl font-black text-[14px] transition-all shadow-xl ${
+                                        confirmModal.type === 'APPROVE' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-200'
+                                    }`}
+                                >
+                                    {confirmModal.type === 'APPROVE' ? '승인 확정' : confirmModal.type === 'REJECT' ? '반려 확정' : '권한 박탈'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 };

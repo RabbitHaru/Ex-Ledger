@@ -33,6 +33,7 @@ interface WalletContextType {
     isLoading: boolean;
 
     // 개인 지갑 (C구조 + B호환)
+    isIdentityVerified: boolean;
     hasPersonalAccount: boolean;
     personalAccount: string;
     personalBalances: Record<string, number>;
@@ -57,14 +58,16 @@ interface WalletContextType {
     setCorporateAccount: (acc: string, name: string) => void;
     executeTransfer: (
         toAcc: string, amt: number, cur: string, rate: number,
-        debit: number, credit: number, title: string, category: "PERSONAL" | "BUSINESS"
+        debit: number, credit: number, title: string, category: "PERSONAL" | "BUSINESS",
+        mfaCode?: string
     ) => Promise<void>;
     exchangeCurrency: (
         category: "PERSONAL" | "BUSINESS",
         currency: string,
         type: "BUY" | "SELL",
         krwAmount: number,
-        foreignAmount: number
+        foreignAmount: number,
+        mfaCode?: string
     ) => Promise<void>;
     chargeKrw: (amount: number, category: "PERSONAL" | "BUSINESS") => Promise<void>;
     activatePersonalWallet: (impUid: string) => Promise<void>;
@@ -79,6 +82,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080
 export const WalletProvider = ({ children }: { children: ReactNode }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [businessNumber, setBusinessNumberState] = useState("");
+    const [isIdentityVerified, setIsIdentityVerified] = useState(false);
 
     // 개인 지갑 상태
     const [personalAccount, setPersonalAccountState] = useState("");
@@ -108,6 +112,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
             if (personal) {
                 setPersonalAccountState(personal.accountNumber || "");
                 setPersonalBalances(personal.balances || { KRW: 0 });
+                setIsIdentityVerified(personal.isVerified || false);
             }
 
             if (corporate) {
@@ -179,12 +184,16 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     // 실제 서버 송금 실행
     const executeTransfer = async (
         toAccount: string, amount: number, currency: string, rate: number,
-        debitAmount: number, creditAmount: number, title: string, category: "PERSONAL" | "BUSINESS"
+        debitAmount: number, creditAmount: number, title: string, category: "PERSONAL" | "BUSINESS",
+        mfaCode?: string
     ) => {
         const token = getToken();
+        const headers: any = { Authorization: `Bearer ${token}` };
+        if (mfaCode) headers['X-MFA-Code'] = mfaCode;
+
         await axios.post(`${API_BASE_URL}/wallet/transfer`,
             { toAccount, amount, currency, rate, debitAmount, creditAmount, title, category },
-            { headers: { Authorization: `Bearer ${token}` } }
+            { headers }
         );
         await fetchWalletData();
     };
@@ -194,12 +203,16 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         currency: string,
         type: "BUY" | "SELL",
         krwAmount: number,
-        foreignAmount: number
+        foreignAmount: number,
+        mfaCode?: string
     ) => {
         const token = getToken();
+        const headers: any = { Authorization: `Bearer ${token}` };
+        if (mfaCode) headers['X-MFA-Code'] = mfaCode;
+
         await axios.post(`${API_BASE_URL}/wallet/exchange`,
             { category, currency, type, krwAmount, foreignAmount },
-            { headers: { Authorization: `Bearer ${token}` } }
+            { headers }
         );
         await fetchWalletData();
     };
@@ -213,6 +226,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         <WalletContext.Provider
             value={{
                 isLoading,
+                isIdentityVerified,
 
                 // 개인 (C구조 + B호환)
                 hasPersonalAccount: !!personalAccount,
@@ -247,9 +261,10 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
                 resetAccount,
                 setBusinessNumber: setBusinessNumberState,
                 getWalletDataById: (id: string) => {
+                    const isEmail = id.includes("@");
                     return {
-                        userAccount: id.length > 5 ? corporateAccount : personalAccount,
-                        balances: id.length > 5 ? corporateBalances : personalBalances
+                        userAccount: isEmail ? personalAccount : corporateAccount,
+                        balances: isEmail ? personalBalances : corporateBalances
                     };
                 }
             }}

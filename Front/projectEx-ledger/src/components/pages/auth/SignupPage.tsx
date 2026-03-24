@@ -4,18 +4,15 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import http from '../../../config/http';
-import { Turnstile } from '@marsidev/react-turnstile';
 import { PasswordStrength } from '../common/PasswordStrength';
 import { toast } from 'sonner';
-import { ArrowRight, ArrowLeft, Check, User, Building2, ShieldCheck, FileCheck, KeyRound, ShieldAlert, Mail } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, User, Building2, ShieldCheck, FileCheck, KeyRound, ShieldAlert, Mail, RefreshCw, Upload, FileText } from 'lucide-react';
 import { setRefreshToken, setToken } from '../../../config/auth';
 import { QRCodeSVG } from 'qrcode.react';
 import { OtpInput } from '../common/OtpInput';
 
 const SignupPage: React.FC = () => {
     const navigate = useNavigate();
-    const turnstileRef = useRef<any>(null);
-    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'USER' | 'COMPANY_USER' | 'COMPANY_ADMIN'>('USER');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -24,6 +21,8 @@ const SignupPage: React.FC = () => {
     const [businessNumber, setBusinessNumber] = useState('');
     const [isBusinessVerified, setIsBusinessVerified] = useState(false);
     const [licenseFile, setLicenseFile] = useState<File | null>(null);
+    const [licenseFileUuid, setLicenseFileUuid] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
     const [isPortoneVerified, setIsPortoneVerified] = useState(false);
     const [portoneImpUid, setPortoneImpUid] = useState('');
     const [verifying, setVerifying] = useState(false);
@@ -41,11 +40,6 @@ const SignupPage: React.FC = () => {
     const [otpError, setOtpError] = useState('');
     const [otpLoading, setOtpLoading] = useState(false);
  
-    // 이메일 인증 관련 상태
-    const [isEmailSent, setIsEmailSent] = useState(false);
-    const [isEmailVerified, setIsEmailVerified] = useState(false); 
-    const [emailCode, setEmailCode] = useState('');
-    const [emailVerifying, setEmailVerifying] = useState(false);
  
     // 스텝 관리
     const [currentStep, setCurrentStep] = useState(1);
@@ -123,43 +117,33 @@ const SignupPage: React.FC = () => {
         }
     };
 
-    const handleSendEmailCode = async () => {
-        if (!email || !email.includes('@')) {
-            setError('올바른 이메일 주소를 입력해주세요.');
-            return;
-        }
-        setEmailVerifying(true);
-        try {
-            await http.post('/auth/email-verification/send', { email });
-            setIsEmailSent(true);
-            toast.success('인증 코드가 발송되었습니다.');
-        } catch (err: any) {
-            setError(err.response?.data?.message || '인증 코드 발송 실패');
-        } finally {
-            setEmailVerifying(false);
-        }
-    };
 
-    const handleVerifyEmailCode = async () => {
-        if (!emailCode || emailCode.length !== 6) {
-            setError('6자리 코드를 입력해주세요.');
-            return;
-        }
-        setEmailVerifying(true);
-        try {
-            await http.post('/auth/email-verification/verify', { email, code: emailCode });
-            setIsEmailVerified(true);
-            toast.success('이메일 인증 완료!');
-        } catch (err: any) {
-            setError(err.response?.data?.message || '인증 실패');
-        } finally {
-            setEmailVerifying(false);
-        }
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            setLicenseFile(e.target.files[0]);
+            const file = e.target.files[0];
+            setLicenseFile(file);
+            setError('');
+
+            // 즉시 전송하여 UUID 획득
+            const formData = new FormData();
+            formData.append('file', file);
+
+            setIsUploading(true);
+            try {
+                const res = await http.post('/file/upload-license', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (res.data && res.data.uuid) {
+                    setLicenseFileUuid(res.data.uuid);
+                    toast.success('사업자등록증이 안전하게 업로드되었습니다.');
+                }
+            } catch (err: any) {
+                console.error('File upload error:', err);
+                toast.error('파일 업로드 중 오류가 발생했습니다. 다시 시도해 주세요.');
+                setLicenseFile(null);
+            } finally {
+                setIsUploading(false);
+            }
         }
     };
 
@@ -168,7 +152,6 @@ const SignupPage: React.FC = () => {
         setError('');
         if (step === 1) {
             if (!email) { setError('이메일을 입력해주세요.'); emailRef.current?.focus(); return false; }
-            if (!isEmailVerified) { setError('이메일 인증을 완료해주세요.'); return false; }
             if (!password) { setError('비밀번호를 입력해주세요.'); passwordRef.current?.focus(); return false; }
             if (!isPasswordStrong(password)) { setError('비밀번호가 보안 요건을 충족하지 않습니다.'); passwordRef.current?.focus(); return false; }
             if (password !== confirmPassword) { setError('비밀번호가 일치하지 않습니다.'); return false; }
@@ -251,10 +234,6 @@ const SignupPage: React.FC = () => {
 
     const handleFinalSignup = async (providedCode?: string) => {
         const finalCode = providedCode || otpCode;
-        if (!turnstileToken) {
-            setOtpError('보안 인증(Turnstile)을 완료해 주세요.');
-            return;
-        }
         if (!finalCode || finalCode.length !== 6) {
             setOtpError('OTP 코드를 입력해 주세요.');
             return;
@@ -265,8 +244,8 @@ const SignupPage: React.FC = () => {
                 email, password, name, roleType: activeTab,
                 businessNumber: isCompany ? businessNumber : undefined,
                 portoneImpUid: portoneImpUid || undefined,
-                licenseFileUuid: activeTab === 'COMPANY_ADMIN' ? 'file-uuid' : undefined,
-                turnstileToken, mfaSecret: otpSecret, mfaCode: finalCode
+                licenseFileUuid: activeTab === 'COMPANY_ADMIN' ? licenseFileUuid : undefined,
+                mfaSecret: otpSecret, mfaCode: finalCode
             });
             if (signupRes.data && signupRes.data.data) {
                 const { accessToken, refreshToken } = signupRes.data.data;
@@ -277,8 +256,6 @@ const SignupPage: React.FC = () => {
             }
         } catch (err: any) {
             setOtpError(err.response?.data?.message || '회원가입 실패');
-            setTurnstileToken(null);
-            if (turnstileRef.current) turnstileRef.current.reset();
         } finally {
             setOtpLoading(false);
         }
@@ -316,32 +293,8 @@ const SignupPage: React.FC = () => {
                         ))}
                     </div>
                     
-                    <div className="space-y-5 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
-                        <div className="flex gap-2 items-end">
-                            <div className="flex-1">
-                                <Input ref={emailRef} label="이메일" value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" required disabled={isEmailVerified} />
-                            </div>
-                            {!isEmailVerified && (
-                                <Button type="button" onClick={handleSendEmailCode} disabled={emailVerifying || !email} className="h-14 px-6 rounded-2xl bg-slate-100 text-slate-600 font-bold text-sm mb-0.5">
-                                    {isEmailSent ? '재전송' : '인증 요청'}
-                                </Button>
-                            )}
-                        </div>
-
-                        {isEmailSent && !isEmailVerified && (
-                            <div className="flex gap-2 items-end p-4 bg-slate-50 rounded-3xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
-                                <div className="flex-1">
-                                    <Input label="인증 코드" value={emailCode} onChange={e => setEmailCode(e.target.value.replace(/[^0-9]/g, ''))} maxLength={6} required />
-                                </div>
-                                <Button type="button" onClick={handleVerifyEmailCode} disabled={emailVerifying || emailCode.length !== 6} className="h-14 px-6 rounded-2xl bg-teal-600 text-white font-bold text-sm mb-0.5">확인</Button>
-                            </div>
-                        )}
-
-                        {isEmailVerified && (
-                            <div className="px-4 py-3 bg-teal-50 border border-teal-100 rounded-2xl text-teal-600 text-xs font-bold flex items-center gap-2">
-                                <Check size={14} /> 이메일 인증이 완료되었습니다.
-                            </div>
-                        )}
+                        <div className="space-y-5 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+                            <Input ref={emailRef} label="이메일" value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" required />
 
                         <div className="h-[1px] bg-slate-50 my-2" />
 
@@ -366,7 +319,26 @@ const SignupPage: React.FC = () => {
                         {activeTab === 'COMPANY_ADMIN' && (
                              <div className="p-6 bg-indigo-50/50 rounded-[32px] border border-indigo-100/50 space-y-4">
                                 <label className="block text-[13px] font-black text-indigo-900 uppercase">사업자등록증 업로드 (필수)</label>
-                                <input ref={fileRef} type="file" onChange={handleFileChange} className="block w-full text-xs" />
+                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-indigo-200 rounded-[24px] cursor-pointer hover:border-indigo-500 hover:bg-white transition-all group overflow-hidden relative">
+                                    {isUploading ? (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
+                                            <span className="text-[11px] font-bold text-indigo-600">업로드 중...</span>
+                                        </div>
+                                    ) : licenseFile ? (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <FileCheck className="w-8 h-8 text-green-500" />
+                                            <span className="text-[11px] font-bold text-slate-600 truncate max-w-[200px]">{licenseFile.name}</span>
+                                            <span className="text-[9px] text-indigo-400 font-bold">변경하려면 클릭</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Upload className="w-8 h-8 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                                            <span className="text-[11px] font-bold text-slate-400 group-hover:text-indigo-600">파일(이미지, PDF) 선택</span>
+                                        </div>
+                                    )}
+                                    <input type="file" ref={fileRef} className="hidden" onChange={handleFileChange} accept="image/*,.pdf" disabled={isUploading} />
+                                </label>
                              </div>
                         )}
                     </div>
@@ -382,7 +354,7 @@ const SignupPage: React.FC = () => {
                                 <p className="text-[12px] font-bold text-slate-400">안전한 자금 거래를 위해 본인인증이 필요합니다.</p>
                             </div>
                         </div>
-                        <Button type="button" onClick={handlePortoneVerification} className="w-full h-20 rounded-[32px] text-lg font-black shadow-xl shadow-teal-50" variant={isPortoneVerified ? 'outline' : 'primary'}>
+                        <Button type="button" onClick={handlePortoneVerification} className="w-full h-20 rounded-[32px] text-lg font-black shadow-xl shadow-teal-50" variant={isPortoneVerified ? 'ghost' : 'primary'}>
                             {isPortoneVerified ? <><Check className="mr-2" /> 본인인증 완료</> : '실명 본인인증 시작하기'}
                         </Button>
                     </div>
@@ -437,9 +409,6 @@ const SignupPage: React.FC = () => {
                         <div className="p-4 bg-slate-100 rounded-2xl font-mono text-xs text-slate-500">{otpSecret}</div>
                         <OtpInput value={otpCode} onChange={setOtpCode} onComplete={handleFinalSignup} />
                         
-                        <div className="flex justify-center py-4 bg-white border border-slate-50 rounded-3xl mt-4">
-                            <Turnstile ref={turnstileRef} siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY} onSuccess={setTurnstileToken} />
-                        </div>
                         {otpError && (
                              <div className="p-3 bg-red-50 text-red-500 rounded-xl text-xs font-bold border border-red-100"><ShieldAlert size={14} className="inline mr-1" />{otpError}</div>
                         )}

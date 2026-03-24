@@ -49,7 +49,7 @@ public class IntegratedAdminController {
 
     // 사업자등록증 이미지 보안 다운로드 API
     @PreAuthorize("hasRole('INTEGRATED_ADMIN')")
-    @GetMapping("/license/{uuidFile}")
+    @GetMapping("/license/{uuidFile:.+}")
     public ResponseEntity<Resource> downloadLicenseFile(@PathVariable String uuidFile) {
         Resource resource = integratedAdminService.loadLicenseFileAsResource(uuidFile);
         String contentType = "application/octet-stream";

@@ -16,6 +16,19 @@ const CompanyReview: React.FC = () => {
     const [pendingList, setPendingList] = useState<PendingCompany[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type: 'approve' | 'reject';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {},
+        type: 'approve'
+    });
 
     const fetchPendingCompanies = async () => {
         try {
@@ -36,26 +49,42 @@ const CompanyReview: React.FC = () => {
         fetchPendingCompanies();
     }, []);
 
-    const handleApprove = async (userId: number) => {
-        if (!window.confirm("이 기업 회원을 승인하시겠습니까?")) return;
-        try {
-            await http.post(`/admin/companies/${userId}/approve`, {});
-            toast.success("성공적으로 승인되었습니다.");
-            fetchPendingCompanies();
-        } catch (err: any) {
-            toast.error("승인 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
-        }
+    const handleApprove = (userId: number) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "기업 회원 승인",
+            message: "이 기업 회원의 가맹점 신청을 승인하시겠습니까? 승인 즉시 기업 서비스 이용이 가능해집니다.",
+            type: 'approve',
+            onConfirm: async () => {
+                try {
+                    await http.post(`/admin/companies/${userId}/approve`, {});
+                    toast.success("성공적으로 승인되었습니다.");
+                    fetchPendingCompanies();
+                } catch (err: any) {
+                    toast.error("승인 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
-    const handleReject = async (userId: number) => {
-        if (!window.confirm("정말로 이 기업 가입을 반려하시겠습니까? (복구 불가)")) return;
-        try {
-            await http.post(`/admin/companies/${userId}/reject`, {});
-            toast.info("가입 요청이 반려되었습니다.");
-            fetchPendingCompanies();
-        } catch (err: any) {
-            toast.error("반려 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
-        }
+    const handleReject = (userId: number) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "기업 가입 반려",
+            message: "정말로 이 기업의 가입 요청을 반려하시겠습니까? 반려 처리된 요청은 복구가 불가능합니다.",
+            type: 'reject',
+            onConfirm: async () => {
+                try {
+                    await http.post(`/admin/companies/${userId}/reject`, {});
+                    toast.info("가입 요청이 반려되었습니다.");
+                    fetchPendingCompanies();
+                } catch (err: any) {
+                    toast.error("반려 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     const handleViewLicense = async (uuid: string) => {
@@ -63,11 +92,29 @@ const CompanyReview: React.FC = () => {
             const response = await http.get(`/admin/companies/license/${uuid}`, {
                 responseType: "blob"
             });
-            const imageUrl = URL.createObjectURL(response.data);
-            setSelectedImage(imageUrl);
-        } catch (err) {
-            console.error("Failed to load license image:", err);
-            toast.error("이미지를 불러오는데 실패했습니다.");
+            const blob = response.data;
+            
+            // 만약 서버에서 에러가 발생하여 JSON을 Blob으로 보낸 경우 처리
+            if (blob.type === "application/json") {
+                const text = await blob.text();
+                const errorData = JSON.parse(text);
+                toast.error(errorData.message || "이미지를 불러오는데 실패했습니다.");
+                return;
+            }
+
+            const contentUrl = URL.createObjectURL(blob);
+            
+            // PDF 파일인 경우 새 창에서 열기
+            if (blob.type === "application/pdf") {
+                window.open(contentUrl, "_blank");
+                toast.success("PDF 파일을 새 탭에서 열었습니다.");
+            } else {
+                // 이미지 파일인 경우 모달에서 열기
+                setSelectedImage(contentUrl);
+            }
+        } catch (err: any) {
+            console.error("Failed to load license file:", err);
+            toast.error("파일을 불러오는 중 오류가 발생했습니다. (파일이 서버에 없거나 권한이 부족할 수 있습니다)");
         }
     };
 
@@ -152,29 +199,68 @@ const CompanyReview: React.FC = () => {
 
             {/* 이미지 열람 모달 */}
             {selectedImage && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-                    <div className="relative w-full max-w-4xl bg-white rounded-3xl overflow-hidden shadow-2xl">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-                            <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                                <FileImage className="w-5 h-5 text-indigo-500" />
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="relative w-full max-w-4xl bg-white rounded-[40px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+                        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-white">
+                            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                                    <FileImage className="w-6 h-6" />
+                                </div>
                                 사업자 등록증 보안 열람
                             </h3>
                             <button
                                 onClick={() => {
                                     setSelectedImage(null);
-                                    URL.revokeObjectURL(selectedImage);
+                                    if (selectedImage) URL.revokeObjectURL(selectedImage);
                                 }}
-                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
                             >
-                                <XCircle className="w-6 h-6" />
+                                <XCircle className="w-8 h-8" />
                             </button>
                         </div>
-                        <div className="p-6 flex items-center justify-center bg-slate-100/50 min-h-[50vh] max-h-[80vh] overflow-auto">
+                        <div className="p-8 flex items-center justify-center bg-slate-50 min-h-[50vh] max-h-[75vh] overflow-auto">
                             <img
                                 src={selectedImage}
                                 alt="License File"
-                                className="max-w-full h-auto rounded-xl shadow-sm border border-slate-200"
+                                className="max-w-full h-auto rounded-3xl shadow-2xl border-4 border-white"
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 프리미엄 컨펌 모달 */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white w-full max-w-md rounded-[48px] p-10 shadow-2xl animate-in zoom-in-95 duration-300 border border-white/20">
+                        <div className="flex flex-col items-center text-center space-y-6">
+                            <div className={`w-20 h-20 rounded-[32px] flex items-center justify-center shadow-inner ${confirmModal.type === 'approve' ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500'}`}>
+                                {confirmModal.type === 'approve' ? <CheckCircle className="w-10 h-10" /> : <XCircle className="w-10 h-10" />}
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <h3 className="text-2xl font-black tracking-tight text-slate-900">
+                                    {confirmModal.title}
+                                </h3>
+                                <p className="text-sm font-bold text-slate-400 leading-relaxed px-4">
+                                    {confirmModal.message}
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 w-full pt-4">
+                                <button
+                                    onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="py-4 px-6 rounded-3xl font-black text-slate-400 hover:bg-slate-50 transition-all border border-slate-100"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={confirmModal.onConfirm}
+                                    className={`py-4 px-6 rounded-3xl font-black text-white shadow-lg active:scale-95 transition-all ${confirmModal.type === 'approve' ? 'bg-green-500 hover:bg-green-600 shadow-green-200' : 'bg-red-500 hover:bg-red-600 shadow-red-200'}`}
+                                >
+                                    {confirmModal.type === 'approve' ? '승인하기' : '반려하기'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -5,13 +5,13 @@ import { useToast } from "../../notification/ToastProvider";
 import { QRCodeSVG } from "qrcode.react";
 import { useWallet } from "../../../context/WalletContext";
 import { useNavigate } from "react-router-dom";
-import { Wallet, ArrowRight, CreditCard, Landmark, AlertTriangle, XCircle, RotateCcw } from "lucide-react";
+import { Wallet, ArrowRight, CreditCard, Landmark, AlertTriangle, XCircle, RotateCcw, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 const MyPage: React.FC = () => {
     const { showToast } = useToast();
     const navigate = useNavigate();
-    const { getWalletDataById, setBusinessNumber: setWalletBNo } = useWallet();
+    const { getWalletDataById, personalAccount: ctxPersonalAccount, setBusinessNumber: setWalletBNo } = useWallet();
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -98,6 +98,12 @@ const MyPage: React.FC = () => {
         try {
             const response = await http.get("/auth/me");
             const data = response.data.data;
+            
+            // 데이터 직렬화 이슈(approved vs isApproved) 프론트엔드 강제 보정
+            if (data && typeof data.isApproved === 'undefined' && typeof data.approved !== 'undefined') {
+                data.isApproved = data.approved;
+            }
+
             setProfile(data);
             
             if (data.businessNumber) {
@@ -109,6 +115,11 @@ const MyPage: React.FC = () => {
             setAccountNumber(data.accountNumber || "");
             setAccountHolder(data.accountHolder || "");
             setAllowNoti(data.allowNotifications);
+
+            // [추가] 본인인증 여부 동기화 (이미 된 경우 context에 반영을 돕기 위해)
+            if (data.realName) {
+                // 필요시 context 등에 전달 가능
+            }
 
             // 관리자라면 요약 데이터 가져오기
             if (data.role === 'ROLE_INTEGRATED_ADMIN') {
@@ -308,10 +319,26 @@ const MyPage: React.FC = () => {
         },
     ].filter(tab => tab.show !== false);
 
-    // 개인 가상계좌 정보
-    const personalWallet = getWalletDataById(profile?.email || '');
-    const personalAccount = personalWallet?.userAccount || '';
-    const personalKrw = personalWallet?.balances?.KRW || 0;
+    // 개인 가상계좌 정보 (Context에서 직접 받아온 정보 우선)
+    const personalAccount = ctxPersonalAccount || getWalletDataById(profile?.email || '')?.userAccount || '';
+    const personalKrw = getWalletDataById(profile?.email || '')?.balances?.KRW || 0;
+
+    const [activatingPersonal, setActivatingPersonal] = useState(false);
+    const { activatePersonalWallet, fetchWalletData: fetchContextWallet } = useWallet();
+
+    const handleIssuePersonalAccount = async () => {
+        setActivatingPersonal(true);
+        try {
+            await activatePersonalWallet('REGISTRATION_FLOW_COMPLEMENT');
+            await fetchContextWallet();
+            showToast("개인 가상계좌가 즉시 발급되었습니다.", "SUCCESS");
+            fetchProfile(); // 갱신
+        } catch (err: any) {
+            showToast("계좌 발급에 실패했습니다. 고객센터에 문의해주세요.", "ERROR");
+        } finally {
+            setActivatingPersonal(false);
+        }
+    };
 
     return (
         <>
@@ -1013,27 +1040,39 @@ const MyPage: React.FC = () => {
                                             <CreditCard size={28} />
                                         </div>
                                         <div className="space-y-2">
-                                            <h3 className="text-xl font-black text-slate-900">가상계좌 미발급</h3>
-                                            <p className="text-[12px] font-bold text-slate-400">발급을 진행해 주세요.</p>
+                                            <h3 className="text-xl font-black text-slate-900">개인 활동 계좌 미발급</h3>
+                                            <p className="text-[12px] font-bold text-slate-400">즉시 계좌를 발급받아 송금 및 환전을 시작하세요.</p>
                                         </div>
                                         <button
-                                            onClick={() => navigate('/seller/dashboard')}
-                                            className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[13px] hover:bg-black transition-all flex items-center gap-2"
+                                            onClick={handleIssuePersonalAccount}
+                                            disabled={activatingPersonal}
+                                            className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-[13px] hover:bg-black transition-all flex items-center gap-2 shadow-xl shadow-slate-200 disabled:opacity-50"
                                         >
-                                            계좌 발급 페이지로 이동
-                                            <ArrowRight size={16} />
+                                            {activatingPersonal ? <RefreshCw className="animate-spin" size={16} /> : <CreditCard size={16} />}
+                                            개인 가상계좌 즉시 발급하기
                                         </button>
                                     </div>
                                 )}
 
                                 {/* 기업 공금 계좌 카드 (기업 사용자만) */}
                                 {(profile?.role === 'ROLE_COMPANY_ADMIN' || profile?.role === 'ROLE_COMPANY_USER') && getWalletDataById(profile?.businessNumber || '')?.userAccount ? (
-                                    <div className="p-10 bg-indigo-50/50 rounded-[40px] border border-indigo-100 space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-indigo-100 hover:-translate-y-2 hover:border-indigo-100 lg:col-span-2">
+                                    <div className="p-10 bg-indigo-50/50 rounded-[40px] border border-indigo-100 space-y-8 group transition-all hover:bg-white hover:shadow-2xl hover:shadow-indigo-100 hover:-translate-y-2 hover:border-indigo-100 lg:col-span-2 relative overflow-hidden">
+                                        {((profile?.role === 'ROLE_COMPANY_ADMIN' && profile?.adminApprovalStatus !== 'APPROVED') || 
+                                          (profile?.role === 'ROLE_COMPANY_USER' && !profile?.isApproved)) && (
+                                            <div className="absolute inset-0 z-10 bg-white/40 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-500">
+                                                <div className="p-4 bg-white rounded-3xl shadow-xl shadow-indigo-100/50 text-indigo-500 mb-4">
+                                                    <Lock size={32} />
+                                                </div>
+                                                <h4 className="text-xl font-black text-slate-800">소속 승인 대기 중</h4>
+                                                <p className="text-xs font-bold text-slate-500 mt-2">보안을 위해 승인 완료 전까지 계좌 정보가 보호됩니다.</p>
+                                            </div>
+                                        )}
+                                        
                                         <div className="flex justify-between items-start">
                                             <div className="space-y-2">
                                                 <div className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-lg w-fit uppercase tracking-widest">Corporate Account</div>
-                                            <h3 className="text-xl font-black text-slate-900">{profile?.companyName || '소속 기업 계좌'}</h3>
-                                        </div>
+                                                <h3 className="text-xl font-black text-slate-900">{profile?.companyName || '소속 기업 계좌'}</h3>
+                                            </div>
                                             <div className="p-3 text-indigo-400 bg-white rounded-2xl shadow-sm transition-colors group-hover:text-indigo-600">
                                                 <Building2 size={20} />
                                             </div>
@@ -1043,20 +1082,28 @@ const MyPage: React.FC = () => {
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">공용 계좌 번호</label>
                                                 <p className="font-mono text-xl font-bold text-slate-900">
-                                                    {getWalletDataById(profile?.businessNumber || '')?.userAccount || '미발급 (관리자 확인 필요)'}
+                                                    {((profile?.role === 'ROLE_COMPANY_ADMIN' && profile?.adminApprovalStatus !== 'APPROVED') || 
+                                                      (profile?.role === 'ROLE_COMPANY_USER' && !profile?.isApproved)) 
+                                                      ? '••••-••••-••••••' 
+                                                      : (getWalletDataById(profile?.businessNumber || '')?.userAccount || '미발급 (관리자 확인 필요)')}
                                                 </p>
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">공금 잔액</label>
                                                 <p className="text-3xl italic font-black text-slate-900">
-                                                    ₩ {(getWalletDataById(profile?.businessNumber || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
+                                                    ₩ {((profile?.role === 'ROLE_COMPANY_ADMIN' && profile?.adminApprovalStatus !== 'APPROVED') || 
+                                                       (profile?.role === 'ROLE_COMPANY_USER' && !profile?.isApproved)) 
+                                                       ? '---,---' 
+                                                       : (getWalletDataById(profile?.businessNumber || '')?.balances.KRW || 0).toLocaleString()} <span className="text-xs not-italic opacity-30">KRW</span>
                                                 </p>
                                             </div>
                                         </div>
 
                                         <button 
                                             onClick={() => navigate('/corporate/wallet')}
-                                            className="w-full py-5 bg-white border border-indigo-100 rounded-2xl font-black text-[13px] text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 group/btn"
+                                            disabled={((profile?.role === 'ROLE_COMPANY_ADMIN' && profile?.adminApprovalStatus !== 'APPROVED') || 
+                                                      (profile?.role === 'ROLE_COMPANY_USER' && !profile?.isApproved))}
+                                            className="w-full py-5 bg-white border border-slate-100 rounded-2xl font-black text-[13px] text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 group/btn disabled:opacity-30 disabled:cursor-not-allowed"
                                         >
                                             기업 자산관리 바로가기
                                             <ArrowRight size={16} className="transition-transform group-hover/btn:translate-x-1" />
