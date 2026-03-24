@@ -17,6 +17,8 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isMfaStep, setIsMfaStep] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
 
   const navigate = useNavigate();
 
@@ -27,26 +29,47 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    if (isMfaStep && mfaCode.length !== 6) {
+      setError("MFA 코드를 정확히 입력해주세요.");
+      return;
+    }
+
     setError("");
     setLoading(true);
     try {
-      const response = await http.post('/auth/login', { email, password, turnstileToken });
+      let response;
+      if (isMfaStep) {
+        response = await http.post('/auth/login/mfa', { email, password, code: mfaCode, turnstileToken });
+      } else {
+        response = await http.post('/auth/login', { email, password, turnstileToken });
+      }
+
       if (response.data && response.data.data) {
+        if (response.data.data.mfaRequired && !isMfaStep) {
+          setIsMfaStep(true);
+          setLoading(false);
+          return;
+        }
+
         const { accessToken, refreshToken } = response.data.data;
-        
-        setToken(accessToken);
-        if (refreshToken) setRefreshToken(refreshToken);
-        window.location.href = "/";
+        if (accessToken) {
+          setToken(accessToken);
+          if (refreshToken) setRefreshToken(refreshToken);
+          window.location.href = "/";
+        } else {
+          throw new Error("토큰 발급에 실패했습니다.");
+        }
       }
     } catch (err: any) {
       const msg = err.response?.data?.message || err.response?.data?.data || '로그인에 실패했습니다.';
       setError(msg);
       toast.error(msg);
-      // Reset Turnstile on failure
+      
+      // Reset Turnstile on failure and if we are not moving to MFA
       setTurnstileToken(null);
       turnstileRef.current?.reset();
     } finally {
-      setLoading(false);
+      if (!isMfaStep) setLoading(false);
     }
   };
 
@@ -65,31 +88,44 @@ const LoginPage: React.FC = () => {
 
       <form onSubmit={handleLogin} className="space-y-6">
         <div className="space-y-5 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative">
-          <Input
-            label="이메일"
-            type="email"
-            placeholder="example@exledger.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoFocus
-          />
-          <div>
-            <Input
-              label="비밀번호"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <PasswordStrength password={password} />
-          </div>
-          <div className="flex justify-end mt-2 px-2">
-            <Link to="/forgot-password" title="sm" className="text-[12px] font-black text-slate-400 hover:text-teal-600 underline underline-offset-4 decoration-slate-200 transition-colors">
-                비밀번호를 잊으셨나요?
-            </Link>
-          </div>
+          {!isMfaStep ? (
+            <>
+              <Input
+                label="이메일"
+                type="email"
+                placeholder="example@exledger.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoFocus
+              />
+              <div>
+                <Input
+                  label="비밀번호"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <PasswordStrength password={password} />
+              </div>
+              <div className="flex justify-end mt-2 px-2">
+                <Link to="/forgot-password" title="sm" className="text-[12px] font-black text-slate-400 hover:text-teal-600 underline underline-offset-4 decoration-slate-200 transition-colors">
+                    비밀번호를 잊으셨나요?
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <label className="block text-center text-sm font-bold text-slate-700">구글 OTP 앱 6자리 코드</label>
+              <OtpInput
+                value={mfaCode}
+                onChange={setMfaCode}
+                onComplete={() => {}}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-center my-8">
@@ -102,10 +138,10 @@ const LoginPage: React.FC = () => {
 
         <Button 
           type="submit" 
-          disabled={loading || !turnstileToken}
+          disabled={loading || !turnstileToken || (isMfaStep && mfaCode.length !== 6)}
           className="w-full py-5 bg-slate-900 hover:bg-slate-800 text-white rounded-[24px] font-black text-[16px] transition-all shadow-xl shadow-slate-200 active:scale-[0.98] disabled:opacity-50"
         >
-          {loading ? "확인 중..." : "들어가기"}
+          {loading ? "확인 중..." : (isMfaStep ? "인증하기" : "들어가기")}
         </Button>
       </form>
 

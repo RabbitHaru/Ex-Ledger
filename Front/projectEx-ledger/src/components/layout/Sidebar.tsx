@@ -42,7 +42,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   // 🌟 WalletContext 데이터 구독
   const {
-    hasAccount,
     userAccount,
     balances,
     resetAccount,
@@ -83,7 +82,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const hasRole = (role: string) => {
     if (!userRole) return false;
-    return userRole.includes(role);
+    const roles = Array.isArray(userRole) ? userRole : String(userRole).split(',');
+    const baseRole = role.startsWith('ROLE_') ? role.substring(5) : role;
+    return roles.some(r => r.trim() === role || r.trim() === baseRole || r.trim() === `ROLE_${baseRole}`);
   };
 
   const isCorporate = hasRole("ROLE_COMPANY_USER") || hasRole("ROLE_COMPANY_ADMIN");
